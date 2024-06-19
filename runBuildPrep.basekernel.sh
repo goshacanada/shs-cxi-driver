@@ -14,6 +14,7 @@ if [[ -v SHS_NEW_BUILD_SYSTEM ]]; then  # new build system
   add_repository "${ARTI_URL}/asicfwdg-rpm-${quality_stream}-local/${target_branch}/${TARGET_OS}" "asicfwdg-${quality_stream}"
   add_repository "${ARTI_URL}/${PRODUCT}-rpm-${quality_stream}-local/${target_branch}/${TARGET_OS}" "${PRODUCT}-${quality_stream}"
   
+  generate_local_rpmmacros
   install_dependencies "cray-cxi-driver.spec"
 else  # START old build system
 

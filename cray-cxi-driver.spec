@@ -36,7 +36,7 @@ License:        GPL-2.0
 Source0:        %{name}-%{version}.tar.gz
 Prefix:         /usr
 
-BuildRequires:  cray-cassini-headers-user
+BuildRequires:  cray-cassini-headers-user kernel-devel
 BuildRequires:  cray-slingshot-base-link-devel
 BuildRequires:  cassini2-firmware-devel
 BuildRequires:  sl-driver-devel
@@ -47,11 +47,7 @@ BuildRequires:  sl-driver-devel
 # successfully
 BuildRequires: nvidia-gpu-build
 %endif
-%if 0%{?sle_version}
 BuildRequires: cuda-drivers
-%else
-BuildRequires: nvidia-kmod-headers nvidia-driver-devel
-%endif
 %endif
 
 %if %{with amdgpu}
