@@ -19,6 +19,24 @@
 
 #include "test_ucxi_common.h"
 
+static int write_device(struct cass_dev *dev,
+			const void *addr,
+			size_t len)
+{
+	if (!dev)
+		return -EINVAL;
+	if (len && !addr)
+		return -EINVAL;
+
+	ssize_t  nwritten = write(dev->fd, addr, len);
+
+	if (nwritten == len)  /* full write */
+		return 0;     /* good */
+	if (nwritten >= 0)    /* partial write */
+		return -1;    /* not supported */
+	return -errno;        /* error during write */
+}
+
 struct cass_dev *open_device(const char *name)
 {
 	struct cass_dev *dev;
@@ -239,6 +257,418 @@ void destroy_cq(struct cass_dev *dev, struct ucxi_cq *cq)
 		perror("free cq");
 
 	free(cq);
+}
+
+int alloc_rgroup(struct cass_dev *dev,
+		 const struct ucxi_rgroup_attr *attr,
+		 unsigned int *rgroup_id)
+{
+	int rc;
+	struct cxi_dev_alloc_rgroup_resp resp = {};
+	struct cxi_dev_alloc_rgroup_cmd cmd = {
+		.common.op   = CXI_OP_DEV_ALLOC_RGROUP,
+		.common.resp = &resp,
+	};
+
+	if (!attr)
+		return -EINVAL;
+
+	cmd.attr.cntr_pool_id   = attr->cntr_pool_id;
+	cmd.attr.system_service = attr->system_service;
+	strncpy(cmd.attr.name, attr->name, sizeof(cmd.attr.name));
+
+	rc = write_device(dev, &cmd, sizeof(cmd));
+	if (rc)
+		return rc;
+
+	if (!rgroup_id)
+		return -EINVAL;
+
+	*rgroup_id = resp.rgroup_id;
+	return 0;
+}
+
+int release_rgroup(struct cass_dev *dev,
+		   unsigned int rgroup_id)
+{
+	const struct cxi_rgroup_release_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_RELEASE,
+		.common.resp = NULL,
+		.rgroup_id   = rgroup_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int enable_rgroup(struct cass_dev *dev,
+		  unsigned int rgroup_id)
+{
+	const struct cxi_rgroup_enable_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_ENABLE,
+		.common.resp = NULL,
+		.rgroup_id   = rgroup_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int disable_rgroup(struct cass_dev *dev,
+		   unsigned int rgroup_id)
+{
+	const struct cxi_rgroup_disable_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_DISABLE,
+		.common.resp = NULL,
+		.rgroup_id   = rgroup_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int get_rgroup_ids(struct cass_dev *dev,
+		   size_t max_ids,
+		   unsigned int *rgroup_ids,
+		   size_t *num_ids)
+{
+	struct cxi_dev_get_rgroup_ids_resp   resp;
+	struct cxi_dev_get_rgroup_ids_cmd    cmd = {
+		.common.op   = CXI_OP_DEV_GET_RGROUP_IDS,
+		.common.resp = &resp,
+		.max_ids     = max_ids,
+		.rgroup_ids  = rgroup_ids,
+	};
+
+	int   ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (!num_ids)
+		return -EINVAL;
+
+	switch (ret) {
+	case 0:
+	case -ENOSPC:
+		*num_ids = resp.num_ids;
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+int get_rgroup_info(struct cass_dev *dev,
+		    unsigned int rgroup_id,
+		    struct ucxi_rgroup_attr *attr,
+		    struct ucxi_rgroup_state *state)
+{
+	struct cxi_rgroup_get_info_resp   resp;
+	struct cxi_rgroup_get_info_cmd    cmd = {
+		.common.op   = CXI_OP_RGROUP_GET_INFO,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	if (!attr || !state)
+		return -EINVAL;
+
+	attr->cntr_pool_id = resp.attr.cntr_pool_id;
+	attr->system_service = resp.attr.system_service;
+	strncpy(attr->name, resp.attr.name, ARRAY_SIZE(attr->name));
+
+	state->enabled  = resp.state.enabled;
+	state->released = resp.state.released;
+	state->refcount = resp.state.refcount;
+
+	return 0;
+}
+
+int rgroup_add_resource(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_resource_type resource_type,
+			const struct ucxi_resource_limits *limits)
+{
+	struct cxi_rgroup_add_resource_cmd cmd = {
+		.common.op     = CXI_OP_RGROUP_ADD_RESOURCE,
+		.common.resp   = NULL,
+		.rgroup_id     = rgroup_id,
+		.resource_type = resource_type,
+	};
+
+	if (!limits)
+		return -EINVAL;
+
+	cmd.limits.reserved = limits->reserved;
+	cmd.limits.max      = limits->max;
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int rgroup_delete_resource(struct cass_dev *dev,
+			   unsigned int rgroup_id,
+			   enum ucxi_resource_type resource_type)
+{
+	struct cxi_rgroup_delete_resource_cmd cmd = {
+		.common.op     = CXI_OP_RGROUP_DELETE_RESOURCE,
+		.common.resp   = NULL,
+		.rgroup_id     = rgroup_id,
+		.resource_type = resource_type,
+	};
+
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int rgroup_get_resource_types(struct cass_dev *dev,
+			      unsigned int rgroup_id,
+			      size_t max_types,
+			      enum ucxi_resource_type *resource_types,
+			      size_t *num_types)
+{
+	struct cxi_rgroup_get_resource_types_resp  resp;
+	struct cxi_rgroup_get_resource_types_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_GET_RESOURCE_TYPES,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+		.max_types   = max_types,
+	};
+
+	unsigned int   *types = (max_types) ? calloc(max_types, sizeof(*types)) : NULL;
+
+	cmd.resource_types = types;
+
+	int   ret = write_device(dev, &cmd, sizeof(cmd));
+
+	*num_types = resp.num_types;
+
+	if (!ret) {
+		for (size_t i = 0; i < *num_types; i++)
+			resource_types[i] = types[i];
+	}
+	free(types);
+
+	return ret;
+}
+
+int rgroup_get_resource(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_resource_type resource_type,
+			struct ucxi_resource_limits *limits)
+{
+	struct cxi_rgroup_get_resource_resp  resp;
+	struct cxi_rgroup_get_resource_cmd   cmd = {
+		.common.op     = CXI_OP_RGROUP_GET_RESOURCE,
+		.common.resp   = &resp,
+		.rgroup_id     = rgroup_id,
+		.resource_type = resource_type,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	limits->reserved = resp.limits.reserved;
+	limits->max      = resp.limits.max;
+
+	return 0;
+}
+
+int rgroup_add_ac_entry(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_ac_type ac_type,
+			const union ucxi_ac_data *data,
+			unsigned int *id)
+{
+	struct cxi_rgroup_add_ac_entry_resp  resp;
+	struct cxi_rgroup_add_ac_entry_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_ADD_AC_ENTRY,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+		.ac_type     = ac_type,
+	};
+
+	if (!data)
+		return -EINVAL;
+
+	switch (ac_type) {
+	case UCXI_AC_UID:
+		cmd.uid = data->uid;
+		break;
+	case UCXI_AC_GID:
+		cmd.gid = data->gid;
+		break;
+	default:
+		break;
+	}
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	if (!id)
+		return -EINVAL;
+
+	*id = resp.ac_entry_id;
+	return 0;
+}
+
+int rgroup_delete_ac_entry(struct cass_dev *dev,
+			   unsigned int rgroup_id,
+			   unsigned int ac_entry_id)
+{
+	struct cxi_rgroup_delete_ac_entry_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_DELETE_AC_ENTRY,
+		.common.resp = NULL,
+		.rgroup_id   = rgroup_id,
+		.ac_entry_id = ac_entry_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int rgroup_get_ac_entry_ids(struct cass_dev *dev,
+			    unsigned int rgroup_id,
+			    size_t max_ids,
+			    unsigned int *ids,
+			    size_t *num_ids)
+{
+	struct cxi_rgroup_get_ac_entry_ids_resp  resp;
+	struct cxi_rgroup_get_ac_entry_ids_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_GET_AC_ENTRY_IDS,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+		.max_ids     = max_ids,
+		.ids         = ids,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (!num_ids)
+		return -EINVAL;
+
+	switch (ret) {
+	case 0:
+	case -ENOSPC:
+		*num_ids = resp.num_ids;
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+
+int rgroup_get_ac_entry_by_id(struct cass_dev *dev,
+			      unsigned int rgroup_id,
+			      unsigned int ac_entry_id,
+			      enum ucxi_ac_type *type,
+			      union ucxi_ac_data *data)
+{
+	struct cxi_rgroup_get_ac_entry_data_by_id_resp  resp;
+	struct cxi_rgroup_get_ac_entry_data_by_id_cmd   cmd = {
+		.common.op   = CXI_OP_RGROUP_GET_AC_ENTRY_DATA_BY_ID,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+		.ac_entry_id = ac_entry_id,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	if (!type || !data)
+		return -EINVAL;
+
+	switch (resp.ac_type) {
+	case UCXI_AC_UID:
+		data->uid = resp.uid;
+		break;
+	case UCXI_AC_GID:
+		data->gid = resp.gid;
+		break;
+	case UCXI_AC_OPEN:
+		break;
+	default:
+		return -EFAULT;
+	}
+
+	*type = resp.ac_type;
+	return 0;
+}
+
+int rgroup_get_ac_entry_id_by_data(struct cass_dev *dev,
+				   unsigned int rgroup_id,
+				   enum ucxi_ac_type type,
+				   const union ucxi_ac_data *data,
+				   unsigned int *id)
+{
+	struct cxi_rgroup_get_ac_entry_id_by_data_resp   resp = {};
+	struct cxi_rgroup_get_ac_entry_id_by_data_cmd    cmd = {
+		.common.op   = CXI_OP_RGROUP_GET_AC_ENTRY_ID_BY_DATA,
+		.common.resp = &resp,
+		.rgroup_id   = rgroup_id,
+		.ac_type     = type,
+	};
+
+	switch (type) {
+	case UCXI_AC_UID:
+		if (!data)
+			return -EINVAL;
+		cmd.uid = data->uid;
+		break;
+	case UCXI_AC_GID:
+		if (!data)
+			return -EINVAL;
+		cmd.gid = data->gid;
+		break;
+	case UCXI_AC_OPEN:
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	int  ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	if (!id)
+		return -EINVAL;
+
+	*id = resp.ac_entry_id;
+	return 0;
+}
+
+int rgroup_get_ac_entry_id_by_user(struct cass_dev *dev,
+				   unsigned int rgroup_id,
+				   uid_t uid,
+				   gid_t gid,
+				   unsigned int *id)
+{
+	struct cxi_rgroup_get_ac_entry_id_by_user_resp   resp = {};
+	struct cxi_rgroup_get_ac_entry_id_by_user_cmd    cmd = {
+		.common.op     = CXI_OP_RGROUP_GET_AC_ENTRY_ID_BY_USER,
+		.common.resp   = &resp,
+		.rgroup_id     = rgroup_id,
+		.uid           = uid,
+		.gid           = gid,
+		.desired_types = UCXI_AC_ANY,
+	};
+
+	int  ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	if (!id)
+		return -EINVAL;
+
+	*id = resp.ac_entry_id;
+	return 0;
 }
 
 int svc_alloc(struct cass_dev *dev, struct cxi_svc_desc *svc_desc)
@@ -687,3 +1117,75 @@ void unmap_pte(struct cass_dev *dev, unsigned int pte_index)
 		perror("unmap pte");
 }
 
+/* If the code is known, returns the name as a string.
+ * If unknown, returns a string containing the numeric value.
+ * Preserves the sign, in either case.
+ * Uses a list of 16 static buffers, so that more than one value
+ * can be referred to at a time, as in:
+ * printf("Error %s is not %s.\n", errstr(-EBUSY), errstr(-EIO));
+ */
+
+const char *errstr(int error_code)
+{
+#define CTS(_x)    { _x, #_x }
+	static struct {
+		int           value;
+		const char    *str;
+	} code_to_str[] = {
+		CTS(EADDRINUSE),
+		CTS(EAGAIN),
+		CTS(EBADRQC),
+		CTS(EBADE),
+		CTS(EBADR),
+		CTS(EBUSY),
+		CTS(ECANCELED),
+		CTS(EDOM),
+		CTS(EEXIST),
+		CTS(EFAULT),
+		CTS(EHOSTDOWN),
+		CTS(EINPROGRESS),
+		CTS(EINTR),
+		CTS(EINVAL),
+		CTS(EIO),
+		CTS(EKEYREVOKED),
+		CTS(EMEDIUMTYPE),
+		CTS(ENODATA),
+		CTS(ENODEV),
+		CTS(ENOENT),
+		CTS(ENOLINK),
+		CTS(ENOMEDIUM),
+		CTS(ENOMEM),
+		CTS(ENOSPC),
+		/* CTS(ENOTSUP), */
+		/* CTS(ENOTSUPP), */
+		CTS(EOPNOTSUPP),
+		CTS(EOVERFLOW),
+		CTS(EPERM),
+		/* CTS(ERESTARTSYS), */
+		CTS(ESTALE),
+		CTS(ETIMEDOUT),
+		CTS(EUCLEAN),
+		CTS(E2BIG),
+	};
+#undef CTS
+
+	static char   buf[16][64];
+	static int    buf_num;
+	bool          negative = (error_code < 0);
+	int           code     = (negative) ? -error_code : error_code;
+
+	if (buf_num >= ARRAY_SIZE(buf))
+		buf_num = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(code_to_str); i++) {
+		if (code_to_str[i].value == code) {
+			sprintf(buf[buf_num], "%s%s",
+				(negative) ? "-" : "",
+				code_to_str[i].str);
+			return buf[buf_num++];
+		}
+	}
+
+	sprintf(buf[buf_num], "%i", error_code);
+	return buf[buf_num++];
+}

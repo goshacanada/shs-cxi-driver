@@ -219,14 +219,15 @@ static void resource_entry_list_destroy(struct cxi_resource_entry_list *list)
 	unsigned long               index = resource_entry_id_limits.min;
 	struct cxi_resource_entry   *resource_entry;
 
-	xa_lock(&list->xarray);
+	resource_entry_list_lock(list);
 
 	xa_for_each(&list->xarray, index, resource_entry) {
 		__xa_erase(&list->xarray, resource_entry->type);
 		kfree(resource_entry);
 	}
 
-	xa_unlock(&list->xarray);
+	resource_entry_list_unlock(list);
+
 	xa_destroy(&list->xarray);
 }
 
@@ -828,7 +829,7 @@ EXPORT_SYMBOL(cxi_rgroup_get_resource_types);
  * * 0       - success
  * * -EBADR  - invalid type value
  * * -ENOMEM - unable to allocate memory for request
- * * -EEXIST - access control entry already exists
+ * * -EBUSY  - access control entry already exists
  */
 int cxi_rgroup_add_ac_entry(struct cxi_rgroup *rgroup,
 			    enum cxi_ac_type type,
@@ -1257,8 +1258,8 @@ EXPORT_SYMBOL(cxi_dev_rgroup_disable);
  *
  * @dev: CXI Device
  * @rgroup_id: ID of Resource Group to be queried.
- * @attr: location to store attributes
- * @state: location to store state
+ * @attr: location to store attributes (may be NULL)
+ * @state: location to store state (may be NULL)
  *
  * Return:
  * * 0         - success
@@ -1279,6 +1280,13 @@ int cxi_dev_rgroup_get_info(struct cxi_dev *dev,
 	cxi_rgroup_get_info(rgroup, attr, state);
 
 	cxi_rgroup_dec_refcount(rgroup);
+
+	/* This routine got a reference in order to get the state.
+	 * Reduce the refcount to the current value.
+	 */
+	if (state)
+		refcount_dec(&state->refcount);
+
 	return 0;
 }
 EXPORT_SYMBOL(cxi_dev_rgroup_get_info);

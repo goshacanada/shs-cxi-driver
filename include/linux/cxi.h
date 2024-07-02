@@ -232,9 +232,9 @@ int cxi_dev_info_get(struct cxi_dev *dev,
 /* Access Control Entries */
 
 enum cxi_ac_type {
-	CXI_AC_UID  = BIT(1),
-	CXI_AC_GID  = BIT(2),
-	CXI_AC_OPEN = BIT(3),
+	CXI_AC_UID  = BIT(0),
+	CXI_AC_GID  = BIT(1),
+	CXI_AC_OPEN = BIT(2),
 };
 
 typedef unsigned int __bitwise cxi_ac_typeset_t;

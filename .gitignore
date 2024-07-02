@@ -16,9 +16,11 @@
 /cxi/modules.order
 /cxi/.tmp_versions
 /ucxi/*.o
+/ucxi/test_csr_access
+/ucxi/test_nlmsg
+/ucxi/test_rgroup
 /ucxi/test_ucxi
 /ucxi/test_ucxi_atu
-/ucxi/test_nlmsg
 /tests/output/*
 /tests/*.dbg
 /tests/test_cmd.sh

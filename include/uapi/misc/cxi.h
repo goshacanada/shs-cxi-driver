@@ -1328,6 +1328,18 @@ struct cxi_rgroup_get_resource_types_resp {
 	size_t                  num_types;
 };
 
+#ifndef BIT
+#define BIT(_x) (1UL << (_x))
+#endif
+
+enum ucxi_ac_type {
+	UCXI_AC_UID  = BIT(0),
+	UCXI_AC_GID  = BIT(1),
+	UCXI_AC_OPEN = BIT(2),
+};
+
+#define UCXI_AC_ANY (UCXI_AC_UID | UCXI_AC_GID | UCXI_AC_OPEN)
+
 struct cxi_rgroup_add_ac_entry_cmd {
 	struct cxi_common_cmd   common;
 	unsigned int            rgroup_id;

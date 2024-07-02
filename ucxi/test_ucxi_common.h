@@ -7,6 +7,16 @@
 #include "cxi_prov_hw.h"
 #include "uapi/misc/cxi.h"
 
+/*
+ * We don't have ARRAY_SIZE in user-space.  But
+ * checkpatch.pl insists we do, and that we should use it.
+ * So to define ARRAY_SIZE, and fool checkpatch.pl, we
+ * add extra parens.
+ */
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(_a)   ((sizeof(_a))/(sizeof(_a[0])))
+#endif
+
 struct cass_dev {
 	int fd;
 	char name[5];
@@ -56,6 +66,116 @@ struct ucxi_ct {
 
 int svc_alloc(struct cass_dev *dev, struct cxi_svc_desc *svc_desc);
 void svc_destroy(struct cass_dev *dev, unsigned int svc_id);
+
+enum ucxi_resource_type {
+	UCXI_RESOURCE_PTLTE = 1,
+	UCXI_RESOURCE_TXQ,
+	UCXI_RESOURCE_TGQ,
+	UCXI_RESOURCE_EQ,
+	UCXI_RESOURCE_CT,
+	UCXI_RESOURCE_PE0_LE,
+	UCXI_RESOURCE_PE1_LE,
+	UCXI_RESOURCE_PE2_LE,
+	UCXI_RESOURCE_PE3_LE,
+	UCXI_RESOURCE_TLE,
+	UCXI_RESOURCE_AC,
+};
+
+struct ucxi_resource_limits {
+	size_t     reserved;
+	size_t     max;
+};
+
+struct ucxi_rgroup_attr {
+	unsigned int    cntr_pool_id;
+	bool            system_service;
+	char            name[50];
+};
+
+struct ucxi_rgroup_state {
+	bool            enabled;
+	bool            released;
+	int             refcount;
+};
+
+union ucxi_ac_data {
+	uid_t    uid;
+	gid_t    gid;
+};
+
+int alloc_rgroup(struct cass_dev *dev,
+		 const struct ucxi_rgroup_attr *attr,
+		 unsigned int *rgroup_id);
+int release_rgroup(struct cass_dev *dev,
+		  unsigned int rgroup_id);
+int enable_rgroup(struct cass_dev *dev,
+		  unsigned int rgroup_id);
+int disable_rgroup(struct cass_dev *dev,
+		   unsigned int rgroup_id);
+
+int get_rgroup_ids(struct cass_dev *dev,
+		   size_t max_ids,
+		   unsigned int *rgroup_ids,
+		   size_t *num_ids);
+
+int get_rgroup_info(struct cass_dev *dev,
+		    unsigned int rgroup_id,
+		    struct ucxi_rgroup_attr *attr,
+		    struct ucxi_rgroup_state *state);
+
+int rgroup_add_resource(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_resource_type resource_type,
+			const struct ucxi_resource_limits *limits);
+
+int rgroup_delete_resource(struct cass_dev *dev,
+			   unsigned int rgroup_id,
+			   enum ucxi_resource_type resource_type);
+
+int rgroup_get_resource_types(struct cass_dev *dev,
+			      unsigned int rgroup_id,
+			      size_t max_types,
+			      enum ucxi_resource_type *resource_types,
+			      size_t *num_types);
+
+int rgroup_get_resource(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_resource_type resource_type,
+			struct ucxi_resource_limits *limits);
+
+int rgroup_add_ac_entry(struct cass_dev *dev,
+			unsigned int rgroup_id,
+			enum ucxi_ac_type ac_type,
+			const union ucxi_ac_data *data,
+			unsigned int *id);
+
+int rgroup_delete_ac_entry(struct cass_dev *dev,
+			   unsigned int rgroup_id,
+			   unsigned int id);
+
+int rgroup_get_ac_entry_ids(struct cass_dev *dev,
+			    unsigned int rgroup_id,
+			    size_t max_ids,
+			    unsigned int *ids,
+			    size_t *num_ids);
+
+int rgroup_get_ac_entry_by_id(struct cass_dev *dev,
+			      unsigned int rgroup_id,
+			      unsigned int id,
+			      enum ucxi_ac_type *type,
+			      union ucxi_ac_data *data);
+
+int rgroup_get_ac_entry_id_by_data(struct cass_dev *dev,
+				   unsigned int rgroup_id,
+				   enum ucxi_ac_type type,
+				   const union ucxi_ac_data *data,
+				   unsigned int *ac_entry_id);
+
+int rgroup_get_ac_entry_id_by_user(struct cass_dev *dev,
+				   unsigned int rgroup_id,
+				   uid_t uid,
+				   gid_t gid,
+				   unsigned int *ac_entry_id);
 
 int tc_cfg(struct cass_dev *dev, enum cxi_traffic_class tc,
 	   unsigned int rdscp, unsigned int udscp,
@@ -126,5 +246,7 @@ extern void unmap_pte(struct cass_dev *dev, unsigned int pte_index);
 struct ucxi_wait *create_wait_obj(struct cass_dev *dev, unsigned int lni,
 				  void (*acllback)(void *data));
 void destroy_wait_obj(struct cass_dev *dev, struct ucxi_wait *wait);
+
+const char *errstr(int error_code);
 
 #endif /* __TEST_UCXI_COMMON_H__ */

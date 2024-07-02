@@ -221,17 +221,25 @@ bool cxi_ac_entry_list_empty(struct cxi_ac_entry_list *list)
  * * -ENOMEM - unable to allocate memory
  * * -EBUSY  - no free entries available
  * * -EBADR  - invalid type or data
- * * -EBUSY  - entry with same data exists
+ * * -EEXIST - entry with same data exists
  */
 int cxi_ac_entry_list_insert(struct cxi_ac_entry_list *list,
 			     enum cxi_ac_type ac_type,
 			     const union cxi_ac_data *ac_data,
 			     unsigned int *id)
 {
+	int   ret;
+
 	if (!validate_ac_data(ac_type, ac_data))
 		return -EBADR;
 
-	return ac_entry_list_insert_entry(list, ac_type, ac_data, id);
+	ret = ac_entry_list_insert_entry(list, ac_type, ac_data, id);
+	switch (ret) {
+	case -EBUSY:   /* translate xarray EBUSY to EEXIST */
+		return -EEXIST;
+	default:
+		return ret;
+	}
 }
 
 /**
