@@ -718,7 +718,7 @@ struct cass_dev {
 	atomic_t plec_count;
 
 	/* LE pool allocation bitmap */
-	struct ida le_pool_ids;
+	struct ida le_pool_ids[C_PE_COUNT];
 	struct ida tle_pool_ids;
 
 	/* Ethernet Set List */
@@ -1338,8 +1338,10 @@ void cass_phy_link_up(struct cass_dev *hw);
 void cass_phy_link_down(struct cass_dev *hw);
 
 extern unsigned int pe_total_les;
-void cass_cfg_le_pools(struct cass_dev *hw, int pool_id,
+void cass_cfg_le_pools(struct cass_dev *hw, int pool_id, int pe,
 		       const struct cxi_limits *les, bool release);
+void cass_cfg_tle_pool(struct cass_dev *hw, int pool_id,
+		       const struct cxi_limits *tles, bool release);
 void cass_tle_init(struct cass_dev *hw);
 
 int cass_dmac_init(struct cass_dev *hw);

@@ -73,10 +73,9 @@ static void init_le_pools(struct cass_dev *hw)
 }
 
 /* Do necessary CSR updates to reserve or release(share) LEs */
-void cass_cfg_le_pools(struct cass_dev *hw, int pool_id,
+void cass_cfg_le_pools(struct cass_dev *hw, int pool_id, int pe,
 		       const struct cxi_limits *les, bool release)
 {
-	int pe;
 	int sign = 1;
 	union c_lpe_cfg_pe_le_shared le_shared;
 	union c_lpe_cfg_pe_le_pools le_pool = {
@@ -90,24 +89,22 @@ void cass_cfg_le_pools(struct cass_dev *hw, int pool_id,
 		sign = -1;
 	}
 
-	for (pe = 0; pe < C_PE_COUNT; pe++) {
-		cass_read(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
-			  sizeof(le_shared));
-		le_shared.num_shared -= (les->res * sign);
+	cass_read(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
+		  sizeof(le_shared));
+	le_shared.num_shared -= (les->res * sign);
 
-		/*
-		 * NUM_SHARED should be reduced before
-		 * dedicating entries to pools.
-		 */
-		if (release) {
-			cass_config_lpe_reserve_pool(hw, pe, pool_id, &le_pool);
-			cass_write(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
-				   sizeof(le_shared));
-		} else {
-			cass_write(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
-				   sizeof(le_shared));
-			cass_config_lpe_reserve_pool(hw, pe, pool_id, &le_pool);
-		}
+	/*
+	 * NUM_SHARED should be reduced before
+	 * dedicating entries to pools.
+	 */
+	if (release) {
+		cass_config_lpe_reserve_pool(hw, pe, pool_id, &le_pool);
+		cass_write(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
+			   sizeof(le_shared));
+	} else {
+		cass_write(hw, C_LPE_CFG_PE_LE_SHARED(pe), &le_shared,
+			   sizeof(le_shared));
+		cass_config_lpe_reserve_pool(hw, pe, pool_id, &le_pool);
 	}
 }
 

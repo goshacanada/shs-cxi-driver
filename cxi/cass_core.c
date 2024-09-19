@@ -803,6 +803,7 @@ static const struct file_operations tc_cfg_fops = {
 
 static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
+	int i;
 	int rc = 0;
 	struct cass_dev *hw;
 	bool is_physfn = pdev->is_physfn || !pdev->is_virtfn;
@@ -867,7 +868,9 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	ida_init(&hw->md_index_table);
 
-	ida_init(&hw->le_pool_ids);
+	for (i = 0; i < C_PE_COUNT; i++)
+		ida_init(&hw->le_pool_ids[i]);
+
 	ida_init(&hw->tle_pool_ids);
 	mutex_init(&hw->msg_relay_lock);
 	mutex_init(&hw->msg_to_pf_lock);

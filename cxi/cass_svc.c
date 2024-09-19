@@ -202,8 +202,8 @@ static const struct file_operations svc_debug_fops = {
 	.release = single_release,
 };
 
-static void cass_cfg_tle_pool(struct cass_dev *hw, int pool_id,
-			      const struct cxi_limits *tles, bool release)
+void cass_cfg_tle_pool(struct cass_dev *hw, int pool_id,
+		       const struct cxi_limits *tles, bool release)
 {
 	union c_cq_cfg_tle_pool tle_pool;
 
@@ -400,10 +400,15 @@ static void free_rsrcs(struct cass_dev *hw,
 
 			if ((i == CXI_RSRC_TYPE_LE) &&
 			    (limits->type[i].res)) {
-				cass_cfg_le_pools(hw, svc_priv->le_pool_id,
-						  &limits->type[i], true);
+				int pe;
+
+				for (pe = 0; pe < C_PE_COUNT; pe++)
+					cass_cfg_le_pools(hw,
+							  svc_priv->le_pool_id,
+							  pe, &limits->type[i],
+							  true);
 				if (svc_priv->le_pool_id != DEFAULT_LE_POOL_ID)
-					ida_simple_remove(&hw->le_pool_ids,
+					ida_simple_remove(&hw->le_pool_ids[0],
 							  svc_priv->le_pool_id);
 			}
 		}
@@ -483,7 +488,7 @@ static int reserve_rsrcs(struct cass_dev *hw,
 		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_LE, fail_info))
 			rc = -ENOSPC;
 		if (!rc && svc_priv->svc_desc.svc_id != CXI_DEFAULT_SVC_ID) {
-			svc_priv->le_pool_id = ida_simple_get(&hw->le_pool_ids,
+			svc_priv->le_pool_id = ida_simple_get(&hw->le_pool_ids[0],
 							      DEFAULT_LE_POOL_ID + 1,
 							      CASS_NUM_LE_POOLS,
 							      GFP_KERNEL);
@@ -509,9 +514,15 @@ static int reserve_rsrcs(struct cass_dev *hw,
 			if (i == CXI_RSRC_TYPE_TLE)
 				cass_cfg_tle_pool(hw, svc_priv->tle_pool_id,
 						  &limits->tles, false);
-			if (i == CXI_RSRC_TYPE_LE)
-				cass_cfg_le_pools(hw, svc_priv->le_pool_id,
-						  &limits->les, false);
+			if (i == CXI_RSRC_TYPE_LE) {
+				int pe;
+
+				for (pe = 0; pe < C_PE_COUNT; pe++)
+					cass_cfg_le_pools(hw,
+							  svc_priv->le_pool_id,
+							  pe, &limits->les,
+							  false);
+			}
 		}
 	}
 	return 0;
@@ -520,7 +531,7 @@ err:
 	if (limits->type[CXI_RSRC_TYPE_TLE].res && got_tle_pool)
 		ida_simple_remove(&hw->tle_pool_ids, svc_priv->tle_pool_id);
 	if (limits->type[CXI_RSRC_TYPE_LE].res && got_le_pool)
-		ida_simple_remove(&hw->le_pool_ids, svc_priv->le_pool_id);
+		ida_simple_remove(&hw->le_pool_ids[0], svc_priv->le_pool_id);
 	return rc;
 }
 
@@ -845,6 +856,7 @@ void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	spin_unlock(&hw->svc_lock);
 }
 
+/* used to allocate ACs, etc. */
 int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		       enum cxi_rsrc_type type)
 {
