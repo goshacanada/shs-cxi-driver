@@ -5,7 +5,6 @@
 #define _CASS_RX_TX_PROFILE_H_
 
 struct cass_dev;
-struct cxi_vni_entry;
 
 void cass_dev_rx_tx_profiles_init(struct cass_dev *hw);
 void cass_dev_rx_tx_profiles_fini(struct cass_dev *hw);
