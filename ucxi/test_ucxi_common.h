@@ -180,6 +180,69 @@ int rgroup_get_ac_entry_id_by_user(struct cass_dev *dev,
 				   gid_t gid,
 				   unsigned int *ac_entry_id);
 
+struct ucxi_vni_attr {
+	uint16_t     match;
+	uint16_t     ignore;
+	char         name[CXI_VNI_NAME_LEN];
+};
+
+struct ucxi_rxtx_state {
+	bool         released;
+	bool         revoked;
+	int          refcount;
+};
+
+struct ucxi_rx_attr {
+	struct ucxi_vni_attr   vni_attr;
+	/* TODO: other RX attributes */
+};
+
+int alloc_rx_profile(struct cass_dev *dev,
+		     const struct ucxi_rx_attr *rx_attr,
+		     unsigned int *rx_profile_id);
+int get_rx_profile_ids(struct cass_dev *dev,
+		       size_t max_entries,
+		       unsigned int *rx_profile_ids,
+		       size_t *num_entries);
+int get_rx_profile_info(struct cass_dev *dev,
+			unsigned int rx_profile_id,
+			struct ucxi_rx_attr *rx_attr,
+			struct ucxi_rxtx_state *state);
+int release_rx_profile(struct cass_dev *dev,
+		       unsigned int rx_profile_id);
+int revoke_rx_profile(struct cass_dev *dev,
+		      unsigned int rx_profile_id);
+
+int rx_profile_add_ac(struct cass_dev *dev,
+		      unsigned int rx_profile_id,
+		      enum ucxi_ac_type type,
+		      const union ucxi_ac_data *data,
+		      unsigned int *ac_entry_id);
+int rx_profile_remove_ac(struct cass_dev *dev,
+			 unsigned int rx_profile_id,
+			 unsigned int ac_entry_id);
+int rx_profile_get_ac_ids(struct cass_dev *dev,
+			  unsigned int rx_profile_id,
+			  size_t max_ids,
+			  unsigned int *ids,
+			  size_t *num_ids);
+int rx_profile_get_ac_data(struct cass_dev *dev,
+			   unsigned int rx_profile_id,
+			   unsigned int ac_entry_id,
+			   enum ucxi_ac_type *type,
+			   union ucxi_ac_data *data);
+int rx_profile_get_ac_id_by_data(struct cass_dev *dev,
+				 unsigned int rx_profile_id,
+				 enum ucxi_ac_type type,
+				 union ucxi_ac_data *data,
+				 unsigned int *ac_entry_id);
+int rx_profile_get_ac_id_by_user(struct cass_dev *dev,
+				 unsigned int rx_profile_id,
+				 uid_t uid,
+				 gid_t gid,
+				 unsigned int desired_types,
+				 unsigned int *ac_entry_id);
+
 int tc_cfg(struct cass_dev *dev, enum cxi_traffic_class tc,
 	   unsigned int rdscp, unsigned int udscp,
 	   unsigned int ocu_set_idx, unsigned int *tc_id);

@@ -14,11 +14,13 @@
 /cxi/tests/modules.order
 /cxi/Module.symvers
 /cxi/modules.order
+/cxi/modules.livepatch
 /cxi/.tmp_versions
 /ucxi/*.o
 /ucxi/test_csr_access
 /ucxi/test_nlmsg
 /ucxi/test_rgroup
+/ucxi/test_rx_profile
 /ucxi/test_ucxi
 /ucxi/test_ucxi_atu
 /tests/output/*
