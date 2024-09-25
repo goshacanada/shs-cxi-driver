@@ -1407,4 +1407,8 @@ struct cxi_rgroup_get_ac_entry_id_by_user_resp {
 	unsigned int            ac_entry_id;
 };
 
+/* RX Profile API */
+
+#define CXI_VNI_NAME_LEN    64
+
 #endif	/* __UAPI_CXI_H */

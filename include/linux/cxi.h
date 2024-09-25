@@ -310,12 +310,10 @@ struct cxi_rxtx_profile_list {
 
 /* Common parts of RX and TX Profiles */
 
-#define CXI_VNI_NAME_LENGTH   64
-
 struct cxi_rxtx_vni_attr {
 	uint16_t         match;
 	uint16_t         ignore;
-	char             name[CXI_VNI_NAME_LENGTH];
+	char             name[CXI_VNI_NAME_LEN];
 };
 
 struct cxi_rxtx_profile_state {
@@ -333,13 +331,21 @@ struct cxi_rxtx_profile {
 
 /* RX Profile */
 
+/* Struct to hold HW configuration */
 struct cxi_rx_config {
 	int              rmu_index;
+};
+
+/* Struct for creation and listing */
+struct cxi_rx_attr {
+	struct cxi_rxtx_vni_attr        vni_attr;
+	/* TODO: other RX specific attributes */
 };
 
 struct cxi_rx_profile {
 	struct cxi_rxtx_profile         profile_common;
 	struct cxi_rx_config            config;
+	/* TODO: other RX parameters */
 };
 
 /* TX Profile */
@@ -354,7 +360,7 @@ struct cxi_tx_profile {
 };
 
 int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
-			     const struct cxi_rxtx_vni_attr *vni_attr,
+			     const struct cxi_rx_attr *rx_attr,
 			     unsigned int *rx_profile_id);
 int cxi_dev_get_rx_profile_ids(struct cxi_dev *dev,
 			       size_t max_entries,
@@ -374,7 +380,7 @@ int cxi_rx_profile_revoke(struct cxi_dev *dev,
 
 int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    unsigned int rx_profile_id,
-			    struct cxi_rxtx_vni_attr *vni_attr,
+			    struct cxi_rx_attr *rx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
 int cxi_rx_profile_add_ac_entry(struct cxi_rx_profile *rx_profile,

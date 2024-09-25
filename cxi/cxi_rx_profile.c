@@ -25,6 +25,16 @@ static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
 	return overlap ? -EEXIST : 0;
 }
 
+static void rx_profile_init(struct cxi_rx_profile *rx_profile,
+			    struct cass_dev *hw,
+			    const struct cxi_rx_attr *rx_attr)
+{
+	cxi_rxtx_profile_init(&rx_profile->profile_common,
+			      hw, &rx_attr->vni_attr);
+
+	/* TODO: extract additional parameters */
+}
+
 static int rx_profile_find_inc_refcount(struct cass_dev *hw,
 					unsigned int rx_profile_id,
 					struct cxi_rx_profile **rx_profile)
@@ -47,13 +57,13 @@ static int rx_profile_find_inc_refcount(struct cass_dev *hw,
  * cxi_dev_alloc_rx_profile() - Allocate a RX Profile
  *
  * @dev: Cassini Device
- * @vni_attr: Attributes of the VNI Entry Requested
+ * @rx_attr: Attributes of the RX Profile
  * @rx_profile_id: set to id value on success
  *
  * Return: 0 on success, or a negative errno value.
  */
 int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
-			     const struct cxi_rxtx_vni_attr *vni_attr,
+			     const struct cxi_rx_attr *rx_attr,
 			     unsigned int *rx_profile_id)
 {
 	int                    ret = 0;
@@ -62,7 +72,7 @@ int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 
 	hw = get_cass_dev(dev);
 
-	if (!vni_well_formed(vni_attr))
+	if (!vni_well_formed(&rx_attr->vni_attr))
 		return -EDOM;
 
 	/* Allocate memory */
@@ -71,8 +81,7 @@ int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 		return -ENOMEM;
 
 	/* initialize common profile and cassini config members */
-	cxi_rxtx_profile_init(&rx_profile->profile_common,
-			      hw, vni_attr);
+	rx_profile_init(rx_profile, hw, rx_attr);
 	cass_rx_profile_init(hw, rx_profile);
 
 	/* make sure the VNI space is unique */
@@ -283,10 +292,10 @@ EXPORT_SYMBOL(cxi_rx_profile_revoke);
  *
  * @dev: Cassini Device
  * @rx_profile_id: ID of the Profile
- * @vni_attr: location to place attributes
+ * @rx_attr: location to place attributes
  * @state: location to put state
  *
- * Note: vni_attr and/or state may be NULL.  If both are NULL,
+ * Note: rx_attr and/or state may be NULL.  If both are NULL,
  * this return value indicates whether the Profile exists
  * with the given Id value.
  *
@@ -296,7 +305,7 @@ EXPORT_SYMBOL(cxi_rx_profile_revoke);
  */
 int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    unsigned int rx_profile_id,
-			    struct cxi_rxtx_vni_attr *vni_attr,
+			    struct cxi_rx_attr *rx_attr,
 			    struct cxi_rxtx_profile_state *state)
 {
 	struct cass_dev        *hw;
@@ -310,7 +319,10 @@ int cxi_rx_profile_get_info(struct cxi_dev *dev,
 		return ret;
 
 	cxi_rxtx_profile_get_info(&rx_profile->profile_common,
-				  vni_attr, state);
+				  (rx_attr) ? &rx_attr->vni_attr : NULL,
+				  state);
+
+	/* TODO: other rx_attr values */
 
 	return cxi_rx_profile_dec_refcount(dev, rx_profile);
 }
