@@ -521,6 +521,7 @@ static void rgroup_destroy(struct cxi_rgroup *rgroup)
 {
 	cxi_ac_entry_list_destroy(&rgroup->ac_entry_list);
 	resource_entry_list_destroy(&rgroup->resource_entry_list);
+	refcount_dec(&rgroup->hw->refcount);
 	kfree(rgroup);
 }
 
@@ -686,6 +687,7 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	resource_entry->rgroup = rgroup;
 	resource_entry->type   = type;
 	resource_entry->limits = *limits;
+	resource_entry->limits.in_use = 0;
 
 	/* Try to insert into the list */
 	ret = resource_entry_list_add_resource_entry(list, resource_entry);
@@ -744,6 +746,28 @@ unlock_return:
 	return ret;
 }
 EXPORT_SYMBOL(cxi_rgroup_delete_resource);
+
+/**
+ * cxi_rgroup_get_resource_entry() - retrieve a resource entry
+ *
+ * @rgroup: resource group pointer
+ * @type: resource type to retrieve parameters for
+ * @entry: the resource entry
+ *
+ * Returns:
+ * 0: success
+ * * -EINVAL  - bad rgroup pointer
+ * * -EINVAL  - invalid limits value
+ * * -ENOENT  - resource not found within group
+ */
+int cxi_rgroup_get_resource_entry(struct cxi_rgroup *rgroup,
+				  enum cxi_resource_type type,
+				  struct cxi_resource_entry **entry)
+{
+	struct cxi_resource_entry_list *list = &rgroup->resource_entry_list;
+
+	return resource_entry_list_retrieve_resource_entry(list, type, entry);
+}
 
 /**
  * cxi_rgroup_get_resource() - retrieve limits for a resource
@@ -971,6 +995,16 @@ int cxi_rgroup_get_ac_entry_by_user(struct cxi_rgroup *rgroup,
 EXPORT_SYMBOL(cxi_rgroup_get_ac_entry_by_user);
 
 /**
+ * cxi_rgroup_inc_refcount() - take a reference to an rgroup
+ *
+ * @rgroup: rgroup pointer
+ */
+void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup)
+{
+	refcount_inc(&rgroup->state.refcount);
+}
+
+/**
  * cxi_rgroup_dec_refcount() - release reference to rgroup
  *
  * @rgroup: pointer to rgroup
@@ -1022,10 +1056,8 @@ void cxi_dev_rgroup_fini(struct cxi_dev *dev)
 
 	dev_lock_rgroup_list(hw);
 
-	xa_for_each(&hw->rgroup_list.xarray, id, rgroup) {
-		refcount_dec(&hw->refcount);
+	for_each_rgroup(id, rgroup)
 		rgroup_destroy(rgroup);
-	}
 
 	dev_unlock_rgroup_list(hw);
 

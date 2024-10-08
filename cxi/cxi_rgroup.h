@@ -32,5 +32,18 @@ struct cxi_rgroup_list {
 
 void cxi_dev_rgroup_init(struct cxi_dev *dev);
 void cxi_dev_rgroup_fini(struct cxi_dev *dev);
+void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup);
+
+/**
+ * for_each_rgroup() - Iterate over rgroup_list
+ *
+ * @list: rgroup list
+ * @index: index of @entry
+ * @entry: rgroup retrieved from array
+ *
+ * Return: first non-zero return value of operator or 0
+ */
+#define for_each_rgroup(index, entry) \
+	xa_for_each(&hw->rgroup_list.xarray, index, entry)
 
 #endif /* _CXI_RGROUP_H_ */

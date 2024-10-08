@@ -466,12 +466,44 @@ enum cxi_resource_type {
 	CXI_RESOURCE_PE3_LE,
 	CXI_RESOURCE_TLE,
 	CXI_RESOURCE_AC,
+	CXI_RESOURCE_MAX,
 };
+
+static const char * const cxi_resource_type_strs[] = {
+	[CXI_RESOURCE_PTLTE] = "PTLTE",
+	[CXI_RESOURCE_TXQ] = "TXQ",
+	[CXI_RESOURCE_TGQ] = "TGQ",
+	[CXI_RESOURCE_EQ] = "EQ",
+	[CXI_RESOURCE_CT] = "CT",
+	[CXI_RESOURCE_PE0_LE] = "PE0_LE",
+	[CXI_RESOURCE_PE1_LE] = "PE1_LE",
+	[CXI_RESOURCE_PE2_LE] = "PE2_LE",
+	[CXI_RESOURCE_PE3_LE] = "PE3_LE",
+	[CXI_RESOURCE_TLE] = "TLE",
+	[CXI_RESOURCE_AC] = "AC",
+};
+
+static inline
+const char *cxi_resource_type_to_str(enum cxi_resource_type type)
+{
+	if (type >= CXI_RESOURCE_PTLTE && type < CXI_RESOURCE_MAX)
+		return cxi_resource_type_strs[type];
+
+	return "(invalid)";
+}
 
 struct cxi_resource_limits {
 	size_t     reserved;
 	size_t     max;
 	size_t     in_use;
+};
+
+struct cxi_resource_use {
+	size_t     reserved;
+	size_t     shared;
+	size_t     shared_use;
+	size_t     in_use;
+	size_t     max;
 };
 
 struct cxi_resource_entry {
@@ -526,6 +558,10 @@ int cxi_rgroup_delete_resource(struct cxi_rgroup *rgroup,
 int cxi_rgroup_get_resource(struct cxi_rgroup *rgroup,
 			    enum cxi_resource_type resource_type,
 			    struct cxi_resource_limits *limits);
+
+int cxi_rgroup_get_resource_entry(struct cxi_rgroup *rgroup,
+				  enum cxi_resource_type type,
+				  struct cxi_resource_entry **entry);
 
 int cxi_rgroup_get_resource_types(struct cxi_rgroup *rgroup,
 				  size_t max_resources,
