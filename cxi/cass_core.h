@@ -888,6 +888,8 @@ struct cass_dev {
 	struct list_head svc_list;
 	unsigned int svc_count;
 	struct cass_rsrc_info rsrc_use[CXI_RSRC_TYPE_MAX];
+	struct cxi_resource_use resource_use[CXI_RESOURCE_MAX];
+	spinlock_t rgrp_lock;
 
 	/* Resource Groups */
 	struct cxi_rgroup_list rgroup_list;

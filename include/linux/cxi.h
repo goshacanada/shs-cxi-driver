@@ -517,6 +517,11 @@ struct cxi_resource_entry_list {
 	struct xarray       xarray;
 };
 
+struct cxi_rgroup_pools {
+	int            le_pool_id[C_PE_COUNT];
+	int            tle_pool_id;
+};
+
 /* Resource Group */
 
 struct cxi_rgroup_attr {
@@ -538,6 +543,7 @@ struct cxi_rgroup {
 	struct cxi_rgroup_state        state;
 	struct cxi_resource_entry_list resource_entry_list;
 	struct cxi_ac_entry_list       ac_entry_list;
+	struct cxi_rgroup_pools        pools;
 };
 
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);

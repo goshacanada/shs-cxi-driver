@@ -437,6 +437,13 @@ static void rgroup_init(struct cxi_dev *dev,
 			struct cxi_rgroup *rgroup,
 			const struct cxi_rgroup_attr *attr)
 {
+	int i;
+
+	for (i = 0; i < C_PE_COUNT; i++)
+		rgroup->pools.le_pool_id[i] = -1;
+
+	rgroup->pools.tle_pool_id = -1;
+
 	rgroup->hw             = get_cass_dev(dev);
 	rgroup->attr           = *attr;
 	rgroup->state.enabled  = false;
