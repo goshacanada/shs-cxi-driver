@@ -108,6 +108,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	atomic_inc(&hw->stats.lni);
 	spin_unlock(&hw->lni_lock);
 
+	cxi_rgroup_inc_refcount(lni_priv->svc_priv->rgroup);
 	refcount_inc(&hw->refcount);
 
 	idr_init(&lni_priv->lcid_table);
@@ -173,7 +174,7 @@ static bool try_cleanup_lni(struct cxi_lni_priv *lni, bool force)
 	spin_lock(&hw->svc_lock);
 	refcount_dec(&lni->svc_priv->refcount);
 	spin_unlock(&hw->svc_lock);
-
+	cxi_rgroup_dec_refcount(lni->svc_priv->rgroup);
 	refcount_dec(&hw->refcount);
 	atomic_dec(&hw->stats.lni);
 	ida_free(&hw->lni_table, lni->lni.id);
