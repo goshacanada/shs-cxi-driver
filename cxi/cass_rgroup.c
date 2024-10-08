@@ -41,22 +41,15 @@ void cass_dev_rgroup_fini(struct cass_dev *hw)
 	cxi_dev_rgroup_fini(get_cxi_dev(hw));
 }
 
-int cass_rgroup_enable_resource(struct cxi_rgroup *rgroup,
+int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
+			     struct cxi_resource_entry *resource)
+{
+	/* TODO: implement */
+	return 0;
+}
+
+int cass_rgroup_remove_resource(struct cxi_rgroup *rgroup,
 				struct cxi_resource_entry *resource)
-{
-	/* TODO: implement */
-	return 0;
-}
-
-int cass_rgroup_disable_resource(struct cxi_rgroup *rgroup,
-				 struct cxi_resource_entry *resource)
-{
-	/* TODO: implement */
-	return 0;
-}
-
-int cass_rgroup_modify_resource(struct cxi_rgroup *rgroup,
-				struct cxi_resource_entry *new_resource)
 {
 	/* TODO: implement */
 	return 0;

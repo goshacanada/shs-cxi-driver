@@ -694,7 +694,14 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 		return ret;
 	}
 
-	return 0;
+	ret = cass_rgroup_add_resource(rgroup, resource_entry);
+	if (!ret)
+		return 0;
+
+	resource_entry_list_delete_resource_entry(list, resource_entry);
+	kfree(resource_entry);
+
+	return ret;
 }
 EXPORT_SYMBOL(cxi_rgroup_add_resource);
 
@@ -724,6 +731,10 @@ int cxi_rgroup_delete_resource(struct cxi_rgroup *rgroup,
 		ret = -ENODATA;
 		goto unlock_return;
 	}
+
+	ret = cass_rgroup_remove_resource(rgroup, resource_entry);
+	if (ret)
+		goto unlock_return;
 
 	resource_entry_list_delete_resource_entry(list, resource_entry);
 	kfree(resource_entry);

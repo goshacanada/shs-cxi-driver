@@ -12,13 +12,10 @@ void cass_dev_rgroup_init(struct cass_dev *hw);
 
 void cass_dev_rgroup_fini(struct cass_dev *hw);
 
-int cass_rgroup_enable_resource(struct cxi_rgroup *rgroup,
+int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
+			     struct cxi_resource_entry *resource);
+
+int cass_rgroup_remove_resource(struct cxi_rgroup *rgroup,
 				struct cxi_resource_entry *resource);
-
-int cass_rgroup_disable_resource(struct cxi_rgroup *rgroup,
-				 struct cxi_resource_entry *resource);
-
-int cass_rgroup_modify_resource(struct cxi_rgroup *rgroup,
-				struct cxi_resource_entry *new_entry);
 
 #endif /* _CASS_RGROUP_H_ */
