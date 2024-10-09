@@ -219,7 +219,7 @@ elif command -v yum > /dev/null; then
         dnf module switch-to -y nvidia-driver:${NVIDIA_MAJORVERSION}-dkms
 	
         ### Install GPU driver sources
-        dnf --nogpgcheck install -y nvidia-kmod-headers-${NVIDIA_VERSION} nvidia-driver-devel-${NVIDIA_VERSION} ${AMD_GPU_RPMS}
+        dnf --nogpgcheck install -y kmod-nvidia-latest-dkms-${NVIDIA_VERSION} nvidia-kmod-headers-${NVIDIA_VERSION} nvidia-driver-devel-${NVIDIA_VERSION} ${AMD_GPU_RPMS}
         # Check the exit status of the install command
         if [ $? -ne 0 ]; then
             echo "Failed to install GPU driver sources."
