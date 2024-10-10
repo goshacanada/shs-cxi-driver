@@ -399,12 +399,11 @@ EXPORT_SYMBOL(cxi_get_qsfp_data);
 /* Read the cable module information. Assume it's a SFF-8436 /
  * SFF-8636 type, with 256-bytes eeprom pages.
  */
-#define FLAT_MEM_OFFSET 2
-#define FLAT_MEM_BIT    7
+#define SFF_8436_STATUS_2_OFFSET           0x02
+#define     SFF_8436_PAGE_01_PRESENT       BIT(7)
 static void uc_update_cable_info(struct cass_dev *hw)
 {
 	int ret;
-	u8 flat_mem;
 
 	mutex_lock(&hw->qsfp_eeprom_lock);
 	hw->qsfp_eeprom_page_len = 0;
@@ -419,11 +418,11 @@ static void uc_update_cable_info(struct cass_dev *hw)
 	hw->qsfp_eeprom_page_len = ETH_MODULE_SFF_8436_LEN;
 	mutex_unlock(&hw->qsfp_eeprom_lock);
 
-	flat_mem = hw->qsfp_eeprom_page0[FLAT_MEM_OFFSET];
-	if (test_bit(FLAT_MEM_BIT, (unsigned long *)&flat_mem)) {
+	if (hw->qsfp_eeprom_page0[SFF_8436_STATUS_2_OFFSET] & SFF_8436_PAGE_01_PRESENT) {
 		cxidev_dbg(&hw->cdev, "no eeprom page1\n");
 		return;
 	}
+
 	ret = cxi_get_qsfp_data(&hw->cdev, 0, ETH_MODULE_SFF_8436_LEN,
 				1, &hw->qsfp_eeprom_page1[0]);
 	if (ret != ETH_MODULE_SFF_8436_LEN)
