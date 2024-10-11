@@ -1,0 +1,152 @@
+## Global options
+PACKAGE_NAME="@PACKAGE_NAME@"
+# Package version should change with each new version
+PACKAGE_VERSION="@PACKAGE_VERSION@"
+
+## SHS DKMS variables
+SHS_DKMS_PACKAGEROOT="$dkms_tree/$PACKAGE_NAME/$PACKAGE_VERSION"
+SHS_DKMS_BUILDROOT="$SHS_DKMS_PACKAGEROOT/build"
+
+#
+# cxi driver optional support for amd, nvidia, and intel GPUs.
+#
+# By default, support the "latest version" of each gpu installed in DKMS will
+# be included but "latest version" is defined using `ls` alphanumeric sorting.
+#
+# _IF_ a different version of the GPU is needed or desired, then set the
+# appropriate variable in the dkms-aux.conf file.
+#
+if [ -f ${SHS_DKMS_BUILDROOT}/dkms.aux.conf ] && [ -r ${SHS_DKMS_BUILDROOT}/dkms.aux.conf ]
+then
+    . ${SHS_DKMS_BUILDROOT}/dkms.aux.conf
+fi
+
+if [ ${DISABLE_GPU_AMD:-0} -eq 0 ]
+then
+    if [ -z "${PATH_GPU_AMD}" ]
+    then
+        # Find newest candidate directory that contains an 'include'
+        # subdirectory - sometimes uninstall can leave behind an empty directory
+        # in /usr/src
+        for dir in $(/bin/ls -d ${source_tree}/amdgpu-* 2>/dev/null | sort --version-sort); do
+            if [ -d $dir/include ]; then
+                PATH_GPU_AMD=$dir
+            fi
+        done
+    elif [ ! -d "${PATH_GPU_AMD}" ]
+    then
+        printf 'dkms.conf:  ERROR:  PATH_GPU_AMD="%s" is not a path to a directory\n' "${PATH_GPU_AMD}"
+    fi
+else
+    unset PATH_GPU_AMD
+fi
+if [ ${DISABLE_GPU_NVIDIA:-0} -eq 0 ]
+then
+    if [ -z "${PATH_GPU_NVIDIA}" ]
+    then
+        # Find newest candidate directory that contains an 'include'
+        # subdirectory - sometimes uninstall can leave behind an empty directory
+        # in /usr/src
+        for dir in $(/bin/ls -d ${source_tree}/kernel-modules/nvidia-*/{.,kernel-open} 2>/dev/null | sort --version-sort); do
+            if [ -d $dir/nvidia ]; then
+                PATH_GPU_NVIDIA=$dir/nvidia
+            fi
+        done
+        # If this isn't a COS system, look for kernel modules in the normal place
+        if [ -z "${PATH_GPU_NVIDIA}" ]
+        then
+            for dir in $(/bin/ls -d ${source_tree}/nvidia-*/{.,kernel-open} 2>/dev/null | sort --version-sort); do
+                if [ -d $dir/nvidia ]; then
+                    PATH_GPU_NVIDIA=$dir/nvidia
+                fi
+            done
+        fi
+    elif [ ! -d "${PATH_GPU_NVIDIA}" ]
+    then
+        printf 'dkms.conf:  ERROR:  PATH_GPU_NVIDIA="%s" is not a path to a directory\n' "${PATH_GPU_NVIDIA}"
+    fi
+else
+    unset PATH_GPU_NVIDIA
+fi
+if [ ${DISABLE_GPU_INTEL:-0} -eq 0 ]
+then
+    if [ -z "${PATH_GPU_INTEL}" ]
+    then
+        # Find newest candidate directory that contains an 'include'
+        # subdirectory - sometimes uninstall can leave behind an empty directory
+        # in /usr/src
+        for dir in $(/bin/ls -d ${source_tree}/intel-dmabuf-* 2>/dev/null | sort --version-sort); do
+            if [ -d $dir/include ]; then
+                PATH_GPU_INTEL=$dir
+            fi
+        done
+    elif [ ! -d "${PATH_GPU_INTEL}" ]
+    then
+        printf 'dkms.conf:  ERROR:  PATH_GPU_INTEL="%s" is not a path to a directory\n' "${PATH_GPU_INTEL}"
+    fi
+else
+    unset PATH_GPU_INTEL
+fi
+
+# Fetch the Module.symvers for our dependencies, stored in the DKMS tree
+SLINGSHOT_BASE_LINK_SYMVERS=${dkms_tree}/cray-slingshot-base-link/kernel-${kernelver}-${arch}/module/Module.symvers
+SL_SYMVERS=${dkms_tree}/sl-driver/kernel-${kernelver}-${arch}/module/Module.symvers.sl
+
+BUILD_DEPENDS=("cray-slingshot-base-link", "sl-driver")
+if [ -n "$PATH_GPU_AMD" ]; then
+    BUILD_DEPENDS+=("amdgpu")
+fi
+if [ -n "$PATH_GPU_NVIDIA" ]; then
+    BUILD_DEPENDS+=("nvidia")
+fi
+if [ -n "$PATH_GPU_INTEL" ]; then
+    BUILD_DEPENDS+=("intel-dmabuf")
+fi
+
+SHS_MAKE_ARGS=" \
+    -C $kernel_source_dir \
+    M=${SHS_DKMS_BUILDROOT}/cxi \
+    NO_BUILD_TESTS=1 \
+    FIRMWARE_CASSINI_DIR=/usr/include \
+    CASSINI_HEADERS_DIR=/usr/include \
+    SLINGSHOT_BASE_LINK_DIR=/usr/include \
+    SL_DIR=/usr/include \
+    AMDGPU_DIR=$PATH_GPU_AMD \
+    INTEL_DMABUF_DIR=$PATH_GPU_INTEL \
+    NVIDIA_DIR=$PATH_GPU_NVIDIA \
+    KBUILD_EXTRA_SYMBOLS='${SLINGSHOT_BASE_LINK_SYMVERS} ${SL_SYMVERS}' \
+"
+
+MAKE="'make' ${SHS_MAKE_ARGS} modules"
+CLEAN="'make' ${SHS_MAKE_ARGS} clean"
+AUTOINSTALL='yes'
+
+#
+# cxi-ss1.ko
+#
+BUILT_MODULE_LOCATION[0]=cxi
+DEST_MODULE_LOCATION[0]=/extra
+BUILT_MODULE_NAME[0]=cxi-ss1
+DEST_MODULE_NAME[0]=cxi-ss1
+STRIP[0]=no
+
+#
+# cxi-eth.ko
+#
+BUILT_MODULE_LOCATION[1]=cxi
+DEST_MODULE_LOCATION[1]=/extra
+BUILT_MODULE_NAME[1]=cxi-eth
+DEST_MODULE_NAME[1]=cxi-eth
+STRIP[1]=no
+
+#
+# cxi-user.ko
+#
+BUILT_MODULE_LOCATION[2]=cxi
+DEST_MODULE_LOCATION[2]=/extra
+BUILT_MODULE_NAME[2]=cxi-user
+DEST_MODULE_NAME[2]=cxi-user
+STRIP[2]=no
+
+# Post-build hook to copy our Module.symvers into the DKMS tree so that other modules can build against it
+POST_BUILD="dkms.post_build.sh ${SHS_DKMS_BUILDROOT}/cxi ${SHS_DKMS_PACKAGEROOT}"
