@@ -3,6 +3,6 @@
 
 buildRunner {
     buildScript = "run.jenkins"
-    timeout = 20
+    timeout = 40
     buildAgent = "dst-arm"
 }
