@@ -36,6 +36,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	struct cxi_lni_priv *lni_priv;
 	struct cxi_svc_priv *svc_priv;
 	char name[30];
+	int id;
 	int rgid;
 	void *err;
 
@@ -61,25 +62,28 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 		goto dec_svc;
 	}
 
-	/* RGID 0 is reserved to store unused resources, and thus is
-	 * not available for general use.
-	 */
-	rgid = ida_simple_get(&hw->rg_table, 1, C_NUM_RGIDS, GFP_KERNEL);
+	rgid = cass_rgid_get(hw, svc_priv);
 	if (rgid < 0) {
 		err = ERR_PTR(rgid);
 		goto dec_svc;
 	}
 
+	id = ida_alloc_min(&hw->lni_table, 1, GFP_KERNEL);
+	if (id < 0) {
+		err = ERR_PTR(rgid);
+		goto put_rgid;
+	}
+
 	lni_priv = kzalloc(sizeof(*lni_priv), GFP_KERNEL);
 	if (!lni_priv) {
-		ida_simple_remove(&hw->rg_table, rgid);
 		err = ERR_PTR(-ENOMEM);
-		goto dec_svc;
+		goto free_lni_id;
 	}
 
 	lni_priv->svc_priv = svc_priv;
 	lni_priv->dev = dev;
-	lni_priv->lni.id = rgid;
+	lni_priv->lni.id = id;
+	lni_priv->lni.rgid = rgid;
 	lni_priv->lpe_le_pool = svc_priv->le_pool_id;
 	lni_priv->tle_pool = svc_priv->tle_pool_id;
 	lni_priv->pid = current->pid;
@@ -107,13 +111,13 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	spin_unlock(&hw->lni_lock);
 
 	refcount_inc(&hw->refcount);
-	ida_init(&lni_priv->lac_table);
 
 	idr_init(&lni_priv->lcid_table);
 
 	sprintf(name, "%d", lni_priv->lni.id);
 	lni_priv->debug_dir = debugfs_create_dir(name, hw->lni_dir);
 	debugfs_create_u32("id", 0444, lni_priv->debug_dir, &lni_priv->lni.id);
+	debugfs_create_u32("rgid", 0444, lni_priv->debug_dir, &lni_priv->lni.rgid);
 	debugfs_create_u32("pid", 0444, lni_priv->debug_dir, &lni_priv->pid);
 
 	lni_priv->cq_dir = debugfs_create_dir("cq", lni_priv->debug_dir);
@@ -123,12 +127,16 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	lni_priv->ac_dir = debugfs_create_dir("ac", lni_priv->debug_dir);
 
 	return &lni_priv->lni;
+
+free_lni_id:
+	ida_free(&hw->lni_table, id);
+put_rgid:
+	cass_rgid_put(hw, rgid);
 dec_svc:
 	spin_lock(&hw->svc_lock);
 	refcount_dec(&svc_priv->refcount);
 	spin_unlock(&hw->svc_lock);
 	return err;
-
 }
 EXPORT_SYMBOL(cxi_lni_alloc);
 
@@ -170,7 +178,8 @@ static bool try_cleanup_lni(struct cxi_lni_priv *lni, bool force)
 
 	refcount_dec(&hw->refcount);
 	atomic_dec(&hw->stats.lni);
-	ida_simple_remove(&hw->rg_table, lni->lni.id);
+	ida_free(&hw->lni_table, lni->lni.id);
+	cass_rgid_put(hw, lni->lni.rgid);
 
 	return true;
 }

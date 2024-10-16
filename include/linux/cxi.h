@@ -60,6 +60,7 @@ struct cxi_dev {
 
 struct cxi_lni {
 	unsigned int id;
+	unsigned int rgid;
 };
 
 struct cxi_md;

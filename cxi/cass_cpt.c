@@ -300,16 +300,16 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 
 	if (rc < 0) {
 		cxidev_dbg(dev, "%s rgid=%u lcids exhausted\n", dev->name,
-			   lni_priv->lni.id);
+			   lni_priv->lni.rgid);
 		refcount_dec(&lni_priv->refcount);
 		goto free_cp;
 	}
 	cp_priv->cp.lcid = rc;
 
-	cass_set_cid(hw, lni_priv->lni.id, rc, cass_cp->id);
+	cass_set_cid(hw, lni_priv->lni.rgid, rc, cass_cp->id);
 
 	cxidev_dbg(dev, "%s lcid allocated: rgid=%u lcid=%u cp=%u\n", dev->name,
-		   lni_priv->lni.id, cp_priv->cp.lcid, cass_cp->id);
+		   lni_priv->lni.rgid, cp_priv->cp.lcid, cass_cp->id);
 
 	cass_flush_pci(hw);
 
@@ -337,10 +337,10 @@ void cxi_cp_free(struct cxi_cp *cp)
 		container_of(lni_priv->dev, struct cass_dev, cdev);
 
 	cxidev_dbg(&hw->cdev, "%s lcid freed: rgid=%u lcid=%u cp=%u\n",
-		   hw->cdev.name, lni_priv->lni.id, cp_priv->cp.lcid,
+		   hw->cdev.name, lni_priv->lni.rgid, cp_priv->cp.lcid,
 		   cp_priv->cass_cp->id);
 
-	cass_set_cid(hw, lni_priv->lni.id, cp_priv->cp.lcid, 0);
+	cass_set_cid(hw, lni_priv->lni.rgid, cp_priv->cp.lcid, 0);
 
 	spin_lock(&lni_priv->res_lock);
 	idr_remove(&lni_priv->lcid_table, cp_priv->cp.lcid);

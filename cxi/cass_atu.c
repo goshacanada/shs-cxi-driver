@@ -356,9 +356,8 @@ static void cass_lac_free(struct cxi_lni_priv *lni_priv, int lac)
 {
 	struct cass_dev *hw = container_of(lni_priv->dev, struct cass_dev, cdev);
 
-	cass_set_acid(hw, lni_priv->lni.id, lac, C_AC_NONE);
-
-	ida_simple_remove(&lni_priv->lac_table, lac);
+	cass_set_acid(hw, lni_priv->lni.rgid, lac, C_AC_NONE);
+	cass_lac_put(hw, lni_priv->lni.rgid, lac);
 }
 
 /**
@@ -410,7 +409,7 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 
 	cac->ac.acid = ret;
 
-	ret = ida_simple_get(&lni_priv->lac_table, 0, C_NUM_LACS, GFP_KERNEL);
+	ret = cass_lac_get(hw, lni_priv->lni.rgid);
 	if (ret < 0)
 		goto ac_put;
 
@@ -439,7 +438,7 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 
 	cass_write_ac(hw, &cac->cfg_ac, cac->ac.acid,
 		      m_opts->flags & CXI_MAP_USER_ADDR);
-	cass_set_acid(hw, lni_priv->lni.id, cac->ac.lac, cac->ac.acid);
+	cass_set_acid(hw, lni_priv->lni.rgid, cac->ac.lac, cac->ac.acid);
 
 	INIT_LIST_HEAD(&cac->md_list);
 	mutex_init(&cac->md_mutex);
@@ -458,7 +457,7 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 	return cac;
 
 lac_put:
-	ida_simple_remove(&lni_priv->lac_table, cac->ac.lac);
+	cass_lac_put(hw, lni_priv->lni.rgid, cac->ac.lac);
 ac_put:
 	ida_simple_remove(&hw->atu_table, cac->ac.acid);
 cac_free:
@@ -992,11 +991,11 @@ int cxi_phys_lac_alloc(struct cxi_lni *lni)
 	struct cass_dev *hw = container_of(lni_priv->dev, struct cass_dev, cdev);
 	int lac;
 
-	lac = ida_simple_get(&lni_priv->lac_table, 0, C_NUM_LACS, GFP_KERNEL);
+	lac = cass_lac_get(hw, lni_priv->lni.rgid);
 	if (lac < 0)
 		return lac;
 
-	cass_set_acid(hw, lni_priv->lni.id, lac, ATU_PHYS_AC);
+	cass_set_acid(hw, lni_priv->lni.rgid, lac, ATU_PHYS_AC);
 
 	return lac;
 }

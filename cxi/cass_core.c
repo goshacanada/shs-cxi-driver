@@ -776,7 +776,8 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	mutex_init(&hw->ct_init_lock);
 	ida_init(&hw->ct_table);
 
-	ida_init(&hw->rg_table);
+	ida_init(&hw->lni_table);
+	cass_rgid_init(hw);
 
 	ida_init(&hw->md_index_table);
 
@@ -1208,6 +1209,7 @@ static void cass_remove(struct pci_dev *pdev)
 	cancel_delayed_work_sync(&hw->lni_cleanups_work);
 	lni_cleanups(hw, true);
 
+	cass_rgid_fini(hw);
 	cass_svc_fini(hw);
 	cass_dev_rgroup_fini(hw);
 	cass_dev_rx_tx_profiles_fini(hw);

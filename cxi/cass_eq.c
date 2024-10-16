@@ -730,7 +730,7 @@ static int pf_write_eq_config(struct cxi_eq_priv *eq)
 	/* Write EQ configuration to hardware */
 	spin_lock(&hw->eq_shadow_lock);
 
-	cass_eq_init(hw, eq_n, eq->lni_priv->lni.id, &eq->cfg,
+	cass_eq_init(hw, eq_n, eq->lni_priv->lni.rgid, &eq->cfg,
 		     attr->flags & CXI_EQ_INIT_LONG,
 		     attr->flags & CXI_EQ_TGT_LONG);
 

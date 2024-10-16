@@ -727,12 +727,14 @@ struct cass_dev {
 	/* Protects C_RMU_CFG_PORTAL_LIST_X/Y. */
 	spinlock_t rmu_portal_list_lock;
 
-	/* Resource Group allocation bitmap */
-	struct ida rg_table;
-	void *oxe_dummy_addr;
-	dma_addr_t oxe_dummy_dma_addr;
+	/* RGID management */
+	struct xarray rgid_array;
+	refcount_t rgids_refcount;
+	struct ida lni_table;
 
 	/* ATU info */
+	void *oxe_dummy_addr;
+	dma_addr_t oxe_dummy_dma_addr;
 	struct cass_ac *cac_table[C_ATU_CFG_AC_TABLE_ENTRIES];
 	struct ida atu_table;
 	struct cass_atu_cq atu_cq;
@@ -1315,6 +1317,12 @@ void finalize_eq_cleanups(struct cxi_lni_priv *lni);
 void finalize_ct_cleanups(struct cxi_lni_priv *lni);
 bool lni_cleanups(struct cass_dev *hw, bool force);
 void lni_cleanups_work(struct work_struct *work);
+void cass_rgid_init(struct cass_dev *hw);
+void cass_rgid_fini(struct cass_dev *hw);
+int cass_lac_get(struct cass_dev *hw, int id);
+void cass_lac_put(struct cass_dev *hw, int id, int lac);
+int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv);
+void cass_rgid_put(struct cass_dev *hw, int id);
 
 int cass_telem_init(struct cass_dev *hw);
 void cass_telem_fini(struct cass_dev *hw);

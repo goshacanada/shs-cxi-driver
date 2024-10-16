@@ -453,7 +453,7 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 		ptl_table.eq_handle_no_rget = C_EQ_NONE;
 	}
 
-	cass_assign_ptlte_to_rgid(hw, pt->pte.id, lni_priv->lni.id);
+	cass_assign_ptlte_to_rgid(hw, pt->pte.id, lni_priv->lni.rgid);
 
 	ptl_table.pe_num = cxi_lni_get_pe_num(lni_priv);
 	pt->pe_num = ptl_table.pe_num;

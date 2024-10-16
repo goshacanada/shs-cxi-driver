@@ -215,7 +215,7 @@ struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 
 	/* Finally the CT can be enabled */
 	cxi_ct_init(&ct_priv->ct, wb, ctn, (__force u64 *)ct_priv->ct_mmio);
-	cass_ct_enable(hw, ctn, lni_priv->lni.id, ct_priv->wb_desc.wb_dma_addr, wb_ac);
+	cass_ct_enable(hw, ctn, lni_priv->lni.rgid, ct_priv->wb_desc.wb_dma_addr, wb_ac);
 
 	/* Track the counting event. */
 	spin_lock(&lni_priv->res_lock);
