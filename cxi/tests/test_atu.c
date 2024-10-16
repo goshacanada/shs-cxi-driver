@@ -1640,6 +1640,114 @@ out:
 	return rc;
 }
 
+#define LNIS_PER_RGID 2
+static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc)
+{
+	int rc;
+	int lpr;
+	struct cxi_svc_fail_info *fail_info;
+
+	desc->enable = 1,
+	desc->is_system_svc = 1,
+	desc->num_vld_vnis = 1,
+	desc->vnis[0] = 8U,
+	desc->resource_limits = false,
+	desc->restricted_members = false,
+
+	rc = cxi_svc_alloc(dev, desc, NULL);
+	if (rc < 0) {
+		pr_err("cxi_svc_alloc failed: %d\n", rc);
+		goto err;
+	}
+
+	desc->svc_id = rc;
+
+	rc = cxi_svc_update(dev, desc, fail_info);
+	if (rc < 0) {
+		pr_err("cxi_svc_update_priv failed: %d\n", rc);
+		goto update_err;
+	}
+
+	rc = cxi_svc_set_lpr(dev, desc->svc_id, LNIS_PER_RGID);
+	if (rc < 0) {
+		pr_err("cxi_svc_set_lpr failed: %d\n", rc);
+		goto update_err;
+	}
+
+	lpr = cxi_svc_get_lpr(dev, desc->svc_id);
+	if (lpr != desc->svc_id) {
+		pr_err("cxi_svc_get_lpr failed: %d\n", lpr);
+		goto update_err;
+	}
+
+	return 0;
+
+update_err:
+	cxi_svc_destroy(dev, desc->svc_id);
+err:
+	return rc;
+}
+
+struct lnis_list {
+	struct list_head list;
+	struct cxi_lni *lni;
+};
+
+struct list_head lni_list;
+static int test_lni_alloc(struct tdev *tdev)
+{
+	int rc;
+	int i;
+	struct lnis_list *lni_l;
+	struct lnis_list *entry, *tmp;
+	struct cxi_svc_desc desc;
+
+	pr_info("%s\n", __func__);
+	INIT_LIST_HEAD(&lni_list);
+
+	rc = build_service(tdev->dev, &desc);
+	if (rc)
+		return rc;
+
+	for (i = 0; i < (C_NUM_RGIDS * LNIS_PER_RGID); i++) {
+		lni_l = kzalloc(sizeof(*lni_l), GFP_KERNEL);
+		if (!lni_l)
+			break;
+
+		lni_l->lni = cxi_lni_alloc(tdev->dev, desc.svc_id);
+		if (IS_ERR(lni_l->lni)) {
+			/* should fail at (C_NUM_RGIDS - 1) * LNIS_PER_RGID */
+			if (i == ((C_NUM_RGIDS - 1) * LNIS_PER_RGID)) {
+				pr_info("%d LNIs\n", i);
+				rc = 0;
+			} else {
+				pr_err("i:%d cxi_lni_alloc failed %ld\n", i,
+				       PTR_ERR(lni_l->lni));
+				rc = PTR_ERR(lni_l->lni);
+			}
+
+			break;
+		}
+
+		list_add_tail(&lni_l->list, &lni_list);
+
+	}
+
+	list_for_each_entry_safe(entry, tmp, &lni_list, list) {
+		cxi_lni_free(entry->lni);
+		kfree(entry);
+	}
+
+	cxi_svc_destroy(tdev->dev, desc.svc_id);
+
+	return rc;
+}
+
+static int test_rgid(struct tdev *tdev)
+{
+	return test_lni_alloc(tdev);
+}
+
 /* Core is adding a new device */
 static int add_device(struct cxi_dev *dev)
 {
@@ -1664,6 +1772,9 @@ static int add_device(struct cxi_dev *dev)
 			goto test_fail;
 
 		if (test_sgtable2(tdev) != 0)
+			goto test_fail;
+
+		if (test_rgid(tdev) != 0)
 			goto test_fail;
 
 		if (map_kvec_err(tdev) != 0)
