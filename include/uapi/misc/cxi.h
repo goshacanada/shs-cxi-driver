@@ -98,6 +98,8 @@ enum cxi_command_opcode {
 		CXI_OP_RGROUP_GET_AC_ENTRY_DATA_BY_ID,
 		CXI_OP_RGROUP_GET_AC_ENTRY_ID_BY_DATA,
 		CXI_OP_RGROUP_GET_AC_ENTRY_ID_BY_USER,
+		CXI_OP_SVC_SET_LPR,
+		CXI_OP_SVC_GET_LPR,
 
 		CXI_OP_MAX,
 };
@@ -917,7 +919,6 @@ struct cxi_svc_desc {
 	struct cxi_rsrc_limits limits;
 
 	unsigned int svc_id;
-
 };
 
 struct cxi_svc_rsrc_list_get_cmd {
@@ -989,6 +990,17 @@ struct cxi_svc_update_cmd {
 	void __user *resp;
 
 	struct cxi_svc_desc svc_desc;
+};
+
+struct cxi_svc_lpr_cmd {
+	enum cxi_command_opcode op;
+	void __user *resp;
+	unsigned int svc_id;
+	unsigned int lnis_per_rgid;
+};
+
+struct cxi_svc_get_value_resp {
+	unsigned int value;
 };
 
 struct cxi_svc_update_resp {

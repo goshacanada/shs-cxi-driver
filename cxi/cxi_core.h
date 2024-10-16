@@ -184,6 +184,8 @@ void cxi_apply_for_all(void (*callback)(struct cxi_dev *dev, void *p),
 
 void cxi_p2p_fini(void);
 
+#define CXI_DEFAULT_LNIS_PER_RGID 1
+
 /* Service */
 struct cxi_svc_priv {
 	struct list_head list;
@@ -192,6 +194,7 @@ struct cxi_svc_priv {
 	atomic_t rsrc_use[CXI_RSRC_TYPE_MAX];
 	int le_pool_id;
 	int tle_pool_id;
+	unsigned int lnis_per_rgid;
 };
 
 /* Logical Network Interface */

@@ -338,6 +338,8 @@ int cass_svc_init(struct cass_dev *hw)
 		spin_unlock(&hw->svc_lock);
 	}
 
+	svc_priv->lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
+
 	hw->svc_debug = debugfs_create_file("services", 0444, hw->debug_dir,
 					    hw, &svc_debug_fops);
 
@@ -614,6 +616,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 		goto free_id;
 
 	svc_priv->svc_desc.enable = 1;
+	svc_priv->lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
 	list_add_tail(&svc_priv->list, &hw->svc_list);
 	hw->svc_count++;
 	spin_unlock(&hw->svc_lock);
@@ -948,6 +951,73 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	return 0;
 }
 EXPORT_SYMBOL(cxi_svc_update);
+
+/**
+ * cxi_svc_set_lpr() - Update an existing service to set the LNIs per RGID
+ *
+ * @dev: Cassini Device
+ * @svc_id: Service ID of service to be updated.
+ * @lnis_per_rgid: New value of lnis_per_rgid
+ *
+ * Return: 0 on success or negative errno value.
+ */
+int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
+		    unsigned int lnis_per_rgid)
+{
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct cxi_svc_priv *svc_priv;
+
+	if (lnis_per_rgid > C_NUM_LACS)
+		return -EINVAL;
+
+	spin_lock(&hw->svc_lock);
+
+	svc_priv = idr_find(&hw->svc_ids, svc_id);
+	if (!svc_priv) {
+		spin_unlock(&hw->svc_lock);
+		return -EINVAL;
+	}
+
+	/* Service must be unused for it to be updated. */
+	if (refcount_read(&svc_priv->refcount) != 1) {
+		spin_unlock(&hw->svc_lock);
+		return -EBUSY;
+	}
+
+	svc_priv->lnis_per_rgid = lnis_per_rgid;
+
+	spin_unlock(&hw->svc_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_svc_set_lpr);
+
+/**
+ * cxi_svc_get_lpr() - Get the LNIs per RGID of the indicated service
+ *
+ * @dev: Cassini Device
+ * @svc_id: Service ID of service to be updated.
+ *
+ * Return: lnis_per_rgid on success or negative errno value.
+ */
+int cxi_svc_get_lpr(struct cxi_dev *dev, unsigned int svc_id)
+{
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct cxi_svc_priv *svc_priv;
+
+	spin_lock(&hw->svc_lock);
+
+	svc_priv = idr_find(&hw->svc_ids, svc_id);
+	if (!svc_priv) {
+		spin_unlock(&hw->svc_lock);
+		return -EINVAL;
+	}
+
+	spin_unlock(&hw->svc_lock);
+
+	return svc_priv->lnis_per_rgid;
+}
+EXPORT_SYMBOL(cxi_svc_get_lpr);
 
 void cass_svc_fini(struct cass_dev *hw)
 {

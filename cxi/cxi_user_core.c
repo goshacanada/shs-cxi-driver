@@ -887,6 +887,33 @@ static int cxi_user_svc_update(struct user_client *client,
 	return rc;
 }
 
+static int cxi_user_svc_set_lpr(struct user_client *client,
+				const void *cmd_in,
+				void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_svc_lpr_cmd *cmd = cmd_in;
+
+	return cxi_svc_set_lpr(client->ucxi->dev, cmd->svc_id,
+			       cmd->lnis_per_rgid);
+}
+
+static int cxi_user_svc_get_lpr(struct user_client *client,
+				const void *cmd_in,
+				void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_svc_lpr_cmd *cmd = cmd_in;
+	struct cxi_svc_get_value_resp resp = {};
+
+	resp.value = cxi_svc_get_lpr(client->ucxi->dev, cmd->svc_id);
+	if (resp.value < 0)
+		return resp.value;
+
+	if (copy_to_user(cmd->resp, &resp, sizeof(resp)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static int cxi_user_cp_alloc(struct user_client *client,
 			     const void *cmd_in,
 			     void *resp_out, size_t *resp_out_len)
@@ -2686,6 +2713,12 @@ static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 	[CXI_OP_SVC_UPDATE] =  { sizeof(struct cxi_svc_update_cmd),
 				 "SVC_UPDATE",
 				 cxi_user_svc_update, true, },
+	[CXI_OP_SVC_SET_LPR] =  { sizeof(struct cxi_svc_lpr_cmd),
+				  "SVC_SET_LPR",
+				  cxi_user_svc_set_lpr, true, },
+	[CXI_OP_SVC_GET_LPR] =  { sizeof(struct cxi_svc_lpr_cmd),
+				  "SVC_GET_LPR",
+				  cxi_user_svc_get_lpr, true, },
 	[CXI_OP_SBUS_OP_RESET] = { sizeof(struct cxi_sbus_op_reset_cmd),
 				   "SBUS_OP_RESET",
 				   cxi_user_sbus_op_reset, true, },

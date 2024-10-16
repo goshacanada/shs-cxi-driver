@@ -215,6 +215,9 @@ int cxi_svc_list_get(struct cxi_dev *dev, int count,
 		     struct cxi_svc_desc *svc_list);
 int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc,
 		   struct cxi_svc_fail_info *fail_info);
+int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
+		    unsigned int lnis_per_rgid);
+int cxi_svc_get_lpr(struct cxi_dev *dev, unsigned int svc_id);
 int cxi_svc_get(struct cxi_dev *dev, unsigned int svc_id,
 		struct cxi_svc_desc *svc_desc);
 int cxi_svc_rsrc_list_get(struct cxi_dev *dev, int count,
