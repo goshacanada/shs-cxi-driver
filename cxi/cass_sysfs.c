@@ -181,6 +181,17 @@ static ssize_t num_les_show(struct kobject *kobj,
 }
 PROP_ATTR_RO(num_les);
 
+static ssize_t rgids_avail_show(struct kobject *kobj,
+			      struct kobj_attribute *kattr, char *buf)
+{
+	struct cass_dev *hw = container_of(kobj, struct cass_dev,
+					   properties_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 C_NUM_RGIDS - refcount_read(&hw->rgids_refcount));
+}
+PROP_ATTR_RO(rgids_avail);
+
 static ssize_t hpc_mtu_show(struct kobject *kobj, struct kobj_attribute *kattr,
 			    char *buf)
 {
@@ -453,6 +464,7 @@ static struct attribute *properties_attrs[] = {
 	&dev_attr_num_acs.attr,
 	&dev_attr_num_tles.attr,
 	&dev_attr_num_les.attr,
+	&dev_attr_rgids_avail.attr,
 	&dev_attr_pct_eq.attr,
 	&dev_attr_driver_rev.attr,
 	&dev_attr_current_esm_link_speed.attr,
