@@ -528,6 +528,7 @@ struct cxi_rgroup_attr {
 	unsigned int   cntr_pool_id;
 	bool           system_service;
 	char           name[50];
+	unsigned int   lnis_per_rgid;
 };
 
 struct cxi_rgroup_state {

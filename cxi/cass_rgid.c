@@ -91,7 +91,7 @@ int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 	struct cass_rgid_priv *rgidp;
 	struct cass_rgid_priv *rgid_priv;
 	unsigned int svc_id = svc_priv->svc_desc.svc_id;
-	unsigned int lnis_per_rgid = svc_priv->lnis_per_rgid;
+	unsigned int lnis_per_rgid = svc_priv->rgroup->attr.lnis_per_rgid;
 
 	rgid_priv = kzalloc(sizeof(*rgid_priv), GFP_KERNEL);
 	if (!rgid_priv)

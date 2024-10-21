@@ -383,8 +383,6 @@ int cass_svc_init(struct cass_dev *hw)
 		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
-	svc_priv->lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
-
 	hw->svc_debug = debugfs_create_file("services", 0444, hw->debug_dir,
 					    hw, &svc_debug_fops);
 
@@ -636,6 +634,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	struct cxi_rgroup_attr attr = {
 		.cntr_pool_id = svc_desc->cntr_pool_id,
 		.system_service = svc_desc->is_system_svc,
+		.lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID,
 	};
 
 	rc = validate_descriptor(hw, svc_desc);
@@ -682,7 +681,6 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 		goto free_id;
 
 	svc_priv->svc_desc.enable = 1;
-	svc_priv->lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
 	list_add_tail(&svc_priv->list, &hw->svc_list);
 	hw->svc_count++;
 	spin_unlock(&hw->svc_lock);
@@ -1083,7 +1081,7 @@ int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
 		return -EBUSY;
 	}
 
-	svc_priv->lnis_per_rgid = lnis_per_rgid;
+	svc_priv->rgroup->attr.lnis_per_rgid = lnis_per_rgid;
 
 	spin_unlock(&hw->svc_lock);
 
@@ -1114,7 +1112,7 @@ int cxi_svc_get_lpr(struct cxi_dev *dev, unsigned int svc_id)
 
 	spin_unlock(&hw->svc_lock);
 
-	return svc_priv->lnis_per_rgid;
+	return svc_priv->rgroup->attr.lnis_per_rgid;
 }
 EXPORT_SYMBOL(cxi_svc_get_lpr);
 
