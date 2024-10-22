@@ -20,6 +20,8 @@
 
 #include "test_ucxi_common.h"
 
+#define LPR 3
+
 static void wait_cb(void *data)
 {
 	printf("Got an event\n");
@@ -80,6 +82,20 @@ int main(void)
 		return 1;
 	}
 	printf("Resource Group Allocated: %u\n", rgroup_id);
+
+	rc = set_svc_lpr(dev, svc_desc.svc_id, LPR);
+	if (rc <= 0) {
+		fprintf(stderr, "cannot set lnis_per_rgid rc: %d\n", rc);
+		return 1;
+	}
+	printf("Set lnis_per_rgid success\n");
+
+	rc = get_svc_lpr(dev, svc_desc.svc_id);
+	if (rc != LPR) {
+		fprintf(stderr, "cannot get lnis_per_rgid rc: %d\n", rc);
+		return 1;
+	}
+	printf("Get lnis_per_rgid success\n");
 
 	/* Get an LNI */
 	lni = alloc_lni(dev, svc_desc.svc_id);

@@ -701,6 +701,36 @@ void svc_destroy(struct cass_dev *dev, unsigned int svc_id)
 		perror("free svc");
 
 }
+
+int set_svc_lpr(struct cass_dev *dev, unsigned int svc_id,
+		unsigned int lnis_per_rgid)
+{
+	struct cxi_svc_lpr_cmd cmd = {
+		.op = CXI_OP_SVC_SET_LPR,
+		.svc_id = svc_id,
+		.lnis_per_rgid = lnis_per_rgid,
+	};
+
+	return write(dev->fd, &cmd, sizeof(cmd));
+}
+
+int get_svc_lpr(struct cass_dev *dev, unsigned int svc_id)
+{
+	int rc;
+	struct cxi_svc_get_value_resp resp = {};
+	struct cxi_svc_lpr_cmd cmd = {
+		.op = CXI_OP_SVC_GET_LPR,
+		.svc_id = svc_id,
+		.resp = &resp,
+	};
+
+	rc = write(dev->fd, &cmd, sizeof(cmd));
+	if (rc < 0)
+		return rc;
+
+	return resp.value;
+}
+
 int alloc_lni(struct cass_dev *dev, unsigned int svc_id)
 {
 	struct cxi_lni_alloc_cmd cmd = {};

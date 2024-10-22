@@ -66,6 +66,9 @@ struct ucxi_ct {
 
 int svc_alloc(struct cass_dev *dev, struct cxi_svc_desc *svc_desc);
 void svc_destroy(struct cass_dev *dev, unsigned int svc_id);
+int set_svc_lpr(struct cass_dev *dev, unsigned int svc_id,
+		unsigned int lnis_per_rgid);
+int get_svc_lpr(struct cass_dev *dev, unsigned int svc_id);
 
 enum ucxi_resource_type {
 	UCXI_RESOURCE_PTLTE = 1,
