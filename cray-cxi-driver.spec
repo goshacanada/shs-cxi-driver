@@ -45,9 +45,16 @@ BuildRequires:  sl-driver-devel
 %if %{with shasta_premium}
 # COS needs the nvidia-gpu-build helper package to install cuda-drivers
 # successfully
+%if "%(echo $SHS_NEW_BUILD_SYSTEM)" == "y"
+%else
 BuildRequires: nvidia-gpu-build
 %endif
+%endif
+%if 0%{?sle_version}
 BuildRequires: cuda-drivers
+%else
+BuildRequires: nvidia-kmod-headers nvidia-driver-devel
+%endif
 %endif
 
 %if %{with amdgpu}
@@ -78,7 +85,7 @@ Requires:       sl-driver-kmp-%1 \n\
 # builds to fail, as upstream dependencies (i.e. SBL) are not built for
 # default on shasta-premium. Work around this by explicitly excluding the
 # default flavor on shasta-premium
-%kernel_module_package -x default %kmp_args
+%kernel_module_package -x 64kb default %kmp_args
 %else
 %kernel_module_package %kmp_args
 %endif
