@@ -49,7 +49,7 @@ ARTI_LOCATION=${ARTI_LOCATION:-"rpm-master-local"}
 ARTI_BRANCH=${ARTI_BRANCH:-"dev/master"}
 OS_TYPE=`cat /etc/os-release | grep "^ID=" | sed "s/\"//g" | cut -d "=" -f 2`
 OS_VERSION=`cat /etc/os-release | grep "^VERSION_ID=" | sed "s/\"//g" | cut -d "=" -f 2`
-RHEL_GPU_SUPPORTED_VERSIONS="8.9 8.10 9.4"
+RHEL_GPU_SUPPORTED_VERSIONS="8.10 9.4"
 BRANCH=`git branch --show-current`
 END
 
@@ -160,10 +160,6 @@ elif command -v yum > /dev/null; then
     if [ $OS_TYPE = "rhel" ] && [[ $RHEL_GPU_SUPPORTED_VERSIONS = *$OS_VERSION* ]]; then
 
         case $OS_VERSION in
-        8.9)
-            AMDGPU_VERSION="6.0"
-            NVIDIA_VERSION="545.23.08"
-            ;;
         8.10)
             AMDGPU_VERSION="6.1"
             NVIDIA_VERSION="550.54.15"
