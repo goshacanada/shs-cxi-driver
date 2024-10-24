@@ -1275,11 +1275,16 @@ int cass_sl_init(struct cass_dev *cass_dev)
 	}
 
 	cass_dev->sl.ldev = sl_ldev_new(cass_dev->cdev.cxi_num,
-		CASS_SL_LGRP_MAP, NULL, &(cass_dev->sl.ldev_config),
-		&cass_dev->port_num_kobj);
+		CASS_SL_LGRP_MAP, NULL, &(cass_dev->sl.ldev_config));
 	if (IS_ERR_OR_NULL(cass_dev->sl.ldev)) {
 		cxidev_err(&cass_dev->cdev, "sl_ldev_new failed\n");
 		goto out_kobject_put_port_num;
+	}
+
+	rtn = sl_ldev_sysfs_parent_set(cass_dev->sl.ldev, &(cass_dev->port_num_kobj));
+	if (rtn) {
+		cxidev_err(&cass_dev->cdev, "sl_ldev_sysfs_parent_set failed [%d]\n", rtn);
+		goto out_ldev_del;
 	}
 
 	rtn = cass_sl_uc_ops_set(cass_dev);
