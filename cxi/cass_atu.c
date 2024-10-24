@@ -1235,6 +1235,10 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 
 	cass_init_md(&m_opts, md_priv);
 
+	pr_debug("va:%llx va_len:%lx iova:%0llx iova_base:%llx md:%d ac:%d flags:%x\n",
+		 m_opts.va_start, m_opts.va_len, m_opts.iova, cac->iova_base,
+		 md->id, md_priv->cac->ac.acid, flags);
+
 	if (!(flags & CXI_MAP_ALLOC_MD)) {
 		ret = cass_nta_mirror_sgt(md_priv, true);
 		if (ret)
@@ -1271,14 +1275,13 @@ EXPORT_SYMBOL(cxi_map_sgtable);
 int cxi_update_sgtable(struct cxi_md *md, struct sg_table *sgt)
 {
 	int ret;
-	struct cxi_md_priv *md_priv;
+	struct cxi_md_priv *md_priv = container_of(md, struct cxi_md_priv, md);
 
-	if ((sgt->nents * PAGE_SIZE) > (md->va + md->len)) {
+	if ((sgt->nents * PAGE_SIZE) > (md_priv->olen)) {
 		pr_debug("Address range not bounded by MD\n");
 		return -EINVAL;
 	}
 
-	md_priv = container_of(md, struct cxi_md_priv, md);
 	md_priv->sgt = sgt;
 	md_priv->external_sgt_owner = true;
 

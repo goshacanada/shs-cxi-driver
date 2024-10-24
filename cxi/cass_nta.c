@@ -1894,13 +1894,13 @@ int cass_nta_mirror_sgt(struct cxi_md_priv *md_priv, bool need_lock)
 	cass_cond_lock(&cac->ac_mutex, need_lock);
 
 	for_each_sgtable_dma_sg(md_priv->sgt, sg, i) {
-		size_t len = sg_dma_len(sg);
+		long len = sg_dma_len(sg);
 		dma_addr_t dma_addr = sg_dma_address(sg);
 
 		atu_debug("dma_addr:%llx len:%x\n", sg_dma_address(sg),
 			  sg_dma_len(sg));
 
-		while (len) {
+		while (len > 0) {
 			ret = cass_dma_addr_mirror(dma_addr, iova, cac,
 						   md_priv->flags, false,
 						   &inval);
