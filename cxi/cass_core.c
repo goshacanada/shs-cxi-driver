@@ -35,14 +35,29 @@ static bool enable_fgfc = true;
 module_param(enable_fgfc, bool, 0444);
 MODULE_PARM_DESC(enable_fgfc, "Enable/disable fine grain flow control");
 
-#define IOI_ORD_LIMIT_MAX 2047U
-#define IOI_ORD_LIMIT_MIN 1U
-#define IOI_ORD_LIMIT_DEFAULT 64U
+#define OUTSTANDING_LIMIT_MAX 2047U
+#define OUTSTANDING_LIMIT_MIN 1U
+#define OUTSTANDING_LIMIT_DEFAULT 64U
 
-static unsigned int ioi_ord_limit = IOI_ORD_LIMIT_DEFAULT;
+static unsigned int get_pkt_limit;
+module_param(get_pkt_limit, uint, 0444);
+MODULE_PARM_DESC(get_pkt_limit,
+		 "Maximum number of outstanding GET packets (1-2047) per MCU");
+
+static unsigned int put_pkt_limit;
+module_param(put_pkt_limit, uint, 0444);
+MODULE_PARM_DESC(put_pkt_limit,
+		 "Maximum number of outstanding PUT packets (1-2047) per MCU");
+
+static unsigned int ioi_ord_limit;
 module_param(ioi_ord_limit, uint, 0444);
 MODULE_PARM_DESC(ioi_ord_limit,
-		 "Maximum number of outstanding order packets (1-2047) per MCU");
+		 "Maximum number of outstanding ordered packets (1-2047) per MCU");
+
+static unsigned int ioi_unord_limit;
+module_param(ioi_unord_limit, uint, 0444);
+MODULE_PARM_DESC(ioi_unord_limit,
+		 "Maximum number of outstanding unordered packets (1-2047) per MCU");
 
 static bool ioi_enable = true;
 module_param(ioi_enable, bool, 0444);
@@ -118,6 +133,87 @@ void traffic_shaping_cfg(struct cass_dev *hw)
 	cass_write(hw, C_OXE_CFG_ARB_HEAD_IN_C, &head_in_c, sizeof(head_in_c));
 }
 
+/* Set the number of packets inflight based on link speed.
+ */
+static unsigned int calculate_packets_inflight(struct cass_dev *hw)
+{
+	unsigned int value;
+	struct cxi_link_info link_info;
+
+	cxi_link_mode_get(&hw->cdev, &link_info);
+
+	if (link_info.speed == SPEED_400000)
+		value = 128;
+	else
+		value = 64;
+
+	return value;
+}
+
+/* Set outstanding limits based on kernel module parameters.
+ * If no input, use the calculated packets_inflight.
+ */
+static void cass_set_outstanding_limit(struct cass_dev *hw)
+{
+	int i;
+	unsigned int packets_inflight;
+	union c_oxe_cfg_outstanding_limit outstanding_limit;
+
+	packets_inflight = calculate_packets_inflight(hw);
+
+	if (packets_inflight < OUTSTANDING_LIMIT_MIN ||
+	    packets_inflight > OUTSTANDING_LIMIT_MAX) {
+		packets_inflight = OUTSTANDING_LIMIT_DEFAULT;
+	}
+
+	if (get_pkt_limit == 0)
+		get_pkt_limit = packets_inflight;
+	if (get_pkt_limit < OUTSTANDING_LIMIT_MIN ||
+	    get_pkt_limit > OUTSTANDING_LIMIT_MAX) {
+		pr_err("Invalid get_pkt_limit %u. Setting to %u\n",
+		       get_pkt_limit, OUTSTANDING_LIMIT_DEFAULT);
+		get_pkt_limit = OUTSTANDING_LIMIT_DEFAULT;
+	}
+
+	if (put_pkt_limit == 0)
+		put_pkt_limit = packets_inflight;
+	if (put_pkt_limit < OUTSTANDING_LIMIT_MIN ||
+	    put_pkt_limit > OUTSTANDING_LIMIT_MAX) {
+		pr_err("Invalid put_pkt_limit %u. Setting to %u\n",
+		       put_pkt_limit, OUTSTANDING_LIMIT_DEFAULT);
+		put_pkt_limit = OUTSTANDING_LIMIT_DEFAULT;
+	}
+
+	if (ioi_ord_limit == 0)
+		ioi_ord_limit = packets_inflight;
+	if (ioi_ord_limit < OUTSTANDING_LIMIT_MIN ||
+	    ioi_ord_limit > OUTSTANDING_LIMIT_MAX) {
+		pr_err("Invalid ioi_ord_limit %u. Setting to %u\n",
+		       ioi_ord_limit, OUTSTANDING_LIMIT_DEFAULT);
+		ioi_ord_limit = OUTSTANDING_LIMIT_DEFAULT;
+	}
+
+	if (ioi_unord_limit == 0)
+		ioi_unord_limit = packets_inflight;
+	if (ioi_unord_limit < OUTSTANDING_LIMIT_MIN ||
+		ioi_unord_limit > OUTSTANDING_LIMIT_MAX) {
+		pr_err("Invalid ioi_unord_limit %u. Setting to %u\n",
+		       ioi_unord_limit, OUTSTANDING_LIMIT_DEFAULT);
+		ioi_unord_limit = OUTSTANDING_LIMIT_DEFAULT;
+	}
+
+	for (i = 0; i < C_OXE_CFG_OUTSTANDING_LIMIT_ENTRIES; i++) {
+		cass_read(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
+			  &outstanding_limit, sizeof(outstanding_limit));
+		outstanding_limit.get_limit = get_pkt_limit;
+		outstanding_limit.put_limit = put_pkt_limit;
+		outstanding_limit.ioi_ord_limit = ioi_ord_limit;
+		outstanding_limit.ioi_unord_limit = ioi_unord_limit;
+		cass_write(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
+			   &outstanding_limit, sizeof(outstanding_limit));
+	}
+}
+
 /* Initialize OXE registers. */
 static void cass_oxe_init(struct cass_dev *hw)
 {
@@ -146,7 +242,6 @@ static void cass_oxe_init(struct cass_dev *hw)
 		.vni_mask = 0xffff,
 	};
 	union c_oxe_cfg_fab_param fab_param;
-	union c_oxe_cfg_outstanding_limit outstanding_limit;
 
 	/* Note: All MCUs must use quanta and mfs value zero. */
 	cass_write(hw, C_OXE_CFG_ARB_DRR_OUT, &wdrr_out, sizeof(wdrr_out));
@@ -201,20 +296,7 @@ static void cass_oxe_init(struct cass_dev *hw)
 	fgfc.enable = enable_fgfc;
 	cass_write(hw, C_OXE_CFG_FGFC, &fgfc, sizeof(fgfc));
 
-	if (ioi_ord_limit < IOI_ORD_LIMIT_MIN ||
-	    ioi_ord_limit > IOI_ORD_LIMIT_MAX) {
-		pr_err("Invalid ioi_ord_limit %u. Setting to %u\n",
-		       ioi_ord_limit, IOI_ORD_LIMIT_DEFAULT);
-		ioi_ord_limit = IOI_ORD_LIMIT_DEFAULT;
-	}
-
-	for (i = 0; i < C_OXE_CFG_OUTSTANDING_LIMIT_ENTRIES; i++) {
-		cass_read(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
-			  &outstanding_limit, sizeof(outstanding_limit));
-		outstanding_limit.ioi_ord_limit = ioi_ord_limit;
-		cass_write(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
-			   &outstanding_limit, sizeof(outstanding_limit));
-	}
+	cass_set_outstanding_limit(hw);
 }
 
 #define DFA_NID_MASK 0xfffff000U
