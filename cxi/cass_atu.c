@@ -1277,7 +1277,7 @@ int cxi_update_sgtable(struct cxi_md *md, struct sg_table *sgt)
 	int ret;
 	struct cxi_md_priv *md_priv = container_of(md, struct cxi_md_priv, md);
 
-	if ((sgt->nents * PAGE_SIZE) > (md_priv->olen)) {
+	if ((sgt->orig_nents * PAGE_SIZE) > (md_priv->olen)) {
 		pr_debug("Address range not bounded by MD\n");
 		return -EINVAL;
 	}
