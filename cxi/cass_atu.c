@@ -748,6 +748,30 @@ static int cass_kvec(struct cass_dev *hw, const struct iov_iter *iter,
 	return 0;
 }
 
+static bool cass_sgtable_is_valid(struct cass_dev *hw,
+				  const struct sg_table *sgt)
+{
+	int i;
+	struct scatterlist *sg;
+	int last_entry = sgt->nents - 1;
+
+	for_each_sgtable_dma_sg(sgt, sg, i) {
+		size_t len = sg_dma_len(sg);
+
+		if ((!i && ((len + sg->offset) % PAGE_SIZE)) || // first entry
+			    (i == last_entry && sg->offset) ||  // last entry
+			    (i && i < last_entry && (sg->offset ||
+						len % PAGE_SIZE))) { // rest
+			cxidev_err(&hw->cdev, "Hole in sg_table at entry %d offset:%x len:%lx\n",
+				   i, sg->offset, len);
+
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /**
  * cass_mirror_range() - Mirror an address range
  *
@@ -1203,6 +1227,9 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 	if (flags & CXI_MAP_ATS)
 		return ERR_PTR(-EINVAL);
 
+	if (!cass_sgtable_is_valid(hw, sgt))
+		return ERR_PTR(-EINVAL);
+
 	m_opts.va_start = 0;
 	m_opts.flags = flags;
 	m_opts.va_len = sgt->nents * PAGE_SIZE;
@@ -1239,11 +1266,9 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 		 m_opts.va_start, m_opts.va_len, m_opts.iova, cac->iova_base,
 		 md->id, md_priv->cac->ac.acid, flags);
 
-	if (!(flags & CXI_MAP_ALLOC_MD)) {
-		ret = cass_nta_mirror_sgt(md_priv, true);
-		if (ret)
-			goto mirror_range_error;
-	}
+	ret = cass_nta_mirror_sgt(md_priv, true);
+	if (ret)
+		goto mirror_range_error;
 
 	cass_add_md(lni_priv, &m_opts, md_priv);
 
