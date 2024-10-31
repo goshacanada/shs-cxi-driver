@@ -139,7 +139,13 @@ static unsigned int calculate_packets_inflight(struct cass_dev *hw)
 {
 	unsigned int value;
 	struct cxi_link_info link_info;
+	bool is_link_up;
 
+	is_link_up = cass_sbl_is_link_up(hw);
+	if (!is_link_up) {
+		pr_err("cxi link info error: link is not up yet.\n");
+		return 0;
+	}
 	cxi_link_mode_get(&hw->cdev, &link_info);
 
 	if (link_info.speed == SPEED_400000)
@@ -153,7 +159,7 @@ static unsigned int calculate_packets_inflight(struct cass_dev *hw)
 /* Set outstanding limits based on kernel module parameters.
  * If no input, use the calculated packets_inflight.
  */
-static void cass_set_outstanding_limit(struct cass_dev *hw)
+void cass_set_outstanding_limit(struct cass_dev *hw)
 {
 	int i;
 	unsigned int packets_inflight;
@@ -295,8 +301,6 @@ static void cass_oxe_init(struct cass_dev *hw)
 	cass_read(hw, C_OXE_CFG_FGFC, &fgfc, sizeof(fgfc));
 	fgfc.enable = enable_fgfc;
 	cass_write(hw, C_OXE_CFG_FGFC, &fgfc, sizeof(fgfc));
-
-	cass_set_outstanding_limit(hw);
 }
 
 #define DFA_NID_MASK 0xfffff000U

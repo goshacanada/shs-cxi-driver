@@ -54,6 +54,7 @@ void cass_phy_link_up(struct cass_dev *hw)
 	cxidev_warn(&hw->cdev, "CXI_EVENT_LINK_UP");
 	update_hni_link_up(hw);
 	update_oxe_link_up(hw);
+	cass_set_outstanding_limit(hw);
 	cxi_send_async_event(&hw->cdev, CXI_EVENT_LINK_UP);
 }
 

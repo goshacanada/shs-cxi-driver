@@ -1368,5 +1368,6 @@ void cass_phy_set_state(enum cass_phy_state state, struct cass_dev *hw);
 
 void start_pcie_monitoring(struct cass_dev *hw);
 void stop_pcie_monitoring(struct cass_dev *hw);
+void cass_set_outstanding_limit(struct cass_dev *hw);
 
 #endif	/* _CASS_CORE_H */
