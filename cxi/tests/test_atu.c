@@ -733,7 +733,16 @@ static void free_sgtable(struct sg_table *sgt)
 	struct scatterlist *sg;
 
 	for_each_sgtable_sg(sgt, sg, i)
-		__free_page(sg_page(sg));
+		if (sg_page(sg))
+			__free_page(sg_page(sg));
+
+	sg_free_table(sgt);
+}
+
+static void unmap_free_sgtable(struct tdev *tdev, struct sg_table *sgt)
+{
+	dma_unmap_sgtable(&tdev->dev->pdev->dev, sgt, DMA_BIDIRECTIONAL, 0);
+	free_sgtable(sgt);
 }
 
 static int alloc_sgtable(struct tdev *tdev, int npages, struct sg_table *sgt)
@@ -857,7 +866,7 @@ unmap_sg:
 	rc = cxi_unmap(sg_md);
 	WARN(rc < 0, "cxi_unmap failed %d", rc);
 free_sgtable2:
-	free_sgtable(&sgt2);
+	unmap_free_sgtable(tdev, &sgt2);
 unmap_snd:
 	rc = test_unmap(tdev, &snd_mem, false);
 	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
@@ -951,9 +960,9 @@ unmap_sg:
 	rc = cxi_unmap(sg_md);
 	WARN(rc < 0, "cxi_unmap failed %d", rc);
 free_sgtable2:
-	free_sgtable(&sgt2);
+	unmap_free_sgtable(tdev, &sgt2);
 free_sgtable1:
-	free_sgtable(&sgt1);
+	unmap_free_sgtable(tdev, &sgt1);
 unmap_snd:
 	rc = test_unmap(tdev, &snd_mem, false);
 	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
