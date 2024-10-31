@@ -806,21 +806,17 @@ static int test_sgtable1(struct tdev *tdev)
 {
 	int i;
 	int rc;
-	struct cxi_md *sg_md;
-	struct cxi_md snd_md = {};
-	struct sg_table sgt1 = { .nents = SGPAGES };
-	struct sg_table sgt2 = {};
-	struct mem_window snd_mem;
+	int ret;
+	struct cxi_md *md;
+	struct sg_table sgt = {};
 	size_t len = SGPAGES * PAGE_SIZE;
+	struct mem_window snd_mem = {.length = len};
 
 	pr_info("%s\n", __func__);
-	return 0;
+
 	rc = test_setup(tdev);
 	if (rc)
 		return rc;
-
-	snd_mem.length = len;
-	snd_mem.md = &snd_md;
 
 	snd_mem.buffer = kzalloc(snd_mem.length, GFP_KERNEL);
 	if (!snd_mem.buffer) {
@@ -834,43 +830,42 @@ static int test_sgtable1(struct tdev *tdev)
 		goto free_sndmem;
 	}
 
-	rc = alloc_sgtable(tdev, SGPAGES, &sgt2);
+	rc = alloc_sgtable(tdev, SGPAGES, &sgt);
 	if (rc)
 		goto unmap_snd;
 
-	sg_md = cxi_map_sgtable(tdev->lni, &sgt1,
-				CXI_MAP_WRITE | CXI_MAP_READ | CXI_MAP_ALLOC_MD);
-	if (IS_ERR(sg_md)) {
-		rc = PTR_ERR(sg_md);
-		pr_err("cxi_map_sgtable failed %d\n", rc);
-		goto free_sgtable2;
+	md = cxi_map(tdev->lni, 0, len, MAP_NTA_RW | CXI_MAP_ALLOC_MD, NULL);
+	if (IS_ERR(md)) {
+		rc = PTR_ERR(md);
+		pr_err("cxi_map failed %d\n", rc);
+		goto free_sgtable;
 	}
+
+	rc = cxi_update_sgtable(md, &sgt);
+	if (rc)
+		goto unmap_md;
+
+	test_append_le(tdev, len, md, 0);
 
 	for (i = 0; i < snd_mem.length; i++)
 		snd_mem.buffer[i] = i;
 
-	rc = cxi_update_sgtable(sg_md, &sgt2);
-	if (rc)
-		goto unmap_sg;
-
-	test_append_le(tdev, len, sg_md, 0);
-
 	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
 	if (rc < 0) {
 		pr_err("test_do_put failed %d\n", rc);
-		goto unmap_sg;
+		goto unmap_md;
 	}
 
-	rc = check_sgtable_result(snd_mem.buffer, &sgt2);
+	rc = check_sgtable_result(snd_mem.buffer, &sgt);
 
-unmap_sg:
-	rc = cxi_unmap(sg_md);
-	WARN(rc < 0, "cxi_unmap failed %d", rc);
-free_sgtable2:
-	unmap_free_sgtable(tdev, &sgt2);
+unmap_md:
+	ret = cxi_unmap(md);
+	WARN(ret < 0, "cxi_unmap failed %d", ret);
+free_sgtable:
+	unmap_free_sgtable(tdev, &sgt);
 unmap_snd:
-	rc = test_unmap(tdev, &snd_mem, false);
-	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
+	ret = test_unmap(tdev, &snd_mem, false);
+	WARN(ret < 0, "cxi_unmap failed %d\n", ret);
 free_sndmem:
 	kfree(snd_mem.buffer);
 teardown:
