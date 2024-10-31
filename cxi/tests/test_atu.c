@@ -96,7 +96,8 @@ static void wait_for_event(struct tdev *tdev, enum c_event_type type)
  * Append a list entry to the priority list for the non-matching Portals table.
  * Enable the non-matching Portals table.
  */
-static void test_append_le(struct tdev *tdev, u64 len, struct cxi_md *md)
+static void test_append_le(struct tdev *tdev, u64 len, struct cxi_md *md,
+			   size_t offset)
 {
 	union c_cmdu cq_cmd;
 
@@ -111,7 +112,7 @@ static void test_append_le(struct tdev *tdev, u64 len, struct cxi_md *md)
 	cq_cmd.target.op_get = 1;
 	cq_cmd.target.event_ct_comm = 1;
 	cq_cmd.target.event_ct_overflow = 1;
-	cq_cmd.target.start = md->iova;
+	cq_cmd.target.start = md->iova + offset;
 	cq_cmd.target.length = len;
 	cq_cmd.target.lac = md->lac;
 
@@ -835,14 +836,14 @@ static int test_sgtable1(struct tdev *tdev)
 		goto free_sgtable2;
 	}
 
-	test_append_le(tdev, len, sg_md);
-
 	for (i = 0; i < snd_mem.length; i++)
 		snd_mem.buffer[i] = i;
 
 	rc = cxi_update_sgtable(sg_md, &sgt2);
 	if (rc)
 		goto unmap_sg;
+
+	test_append_le(tdev, len, sg_md, 0);
 
 	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
 	if (rc < 0) {
@@ -915,7 +916,7 @@ static int test_sgtable2(struct tdev *tdev)
 		goto free_sgtable2;
 	}
 
-	test_append_le(tdev, len, sg_md);
+	test_append_le(tdev, len, sg_md, 0);
 
 	for (i = 0; i < snd_mem.length; i++)
 		snd_mem.buffer[i] = i;
@@ -1122,7 +1123,7 @@ static int test_rma(struct tdev *tdev, bool phys)
 	pr_info("cxi_map addr:%p len:%ld iova:0x%llx\n", rma_mem.buffer,
 		rma_mem.length, (u64)snd_mem.md->iova);
 
-	test_append_le(tdev, len, rma_mem.md);
+	test_append_le(tdev, len, rma_mem.md, 0);
 
 	WARN_ON(tdev->cq_target->status->rd_ptr != 2 + C_CQ_FIRST_WR_PTR);
 
@@ -1253,7 +1254,7 @@ static int test_bvec_rma(struct tdev *tdev)
 	if (!dbvec)
 		goto clean_up_rma_bi;
 
-	test_append_le(tdev, len, rma_bi.md);
+	test_append_le(tdev, len, rma_bi.md, 0);
 	WARN_ON(tdev->cq_target->status->rd_ptr != 2 + C_CQ_FIRST_WR_PTR);
 
 	snd_mem.buffer = NULL;
@@ -1402,7 +1403,7 @@ static int test_alloc_md(struct tdev *tdev)
 	bvec_iter_init(&src_bi.iter, false);
 	bvec_iter_init(&rma_bi.iter, true);
 
-	test_append_le(tdev, len, rma_bi.md);
+	test_append_le(tdev, len, rma_bi.md, 0);
 
 	snd_mem.buffer = NULL;
 	snd_mem.length = len;
@@ -1589,7 +1590,7 @@ static int test_atu(struct tdev *tdev)
 	pr_info("cxi_map addr:%p len:%ld iova:0x%llx\n", tgt_data,
 		tgt_data_size, (u64)md->iova);
 
-	test_append_le(tdev, tgt_data_size, md);
+	test_append_le(tdev, tgt_data_size, md, 0);
 
 	retry = 100;
 	while (retry-- && tdev->cq_target->status->rd_ptr != 2 + C_CQ_FIRST_WR_PTR)
