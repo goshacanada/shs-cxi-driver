@@ -784,8 +784,9 @@ static int check_sgtable_result(u8 *src, struct sg_table *sgt)
 
 	for_each_sgtable_sg(sgt, sg, j) {
 		u8 *sg_b = sg_virt(sg);
+		long len = sg_dma_len(sg);
 
-		for (i = 0; i < PAGE_SIZE; i++, src++) {
+		for (i = 0; i < len; i++, src++) {
 			if (*src != sg_b[i]) {
 				pr_info("Data mismatch: src:%px idx %2d - %02x != %02x\n",
 					src, i, *src, sg_b[i]);
