@@ -970,6 +970,193 @@ teardown:
 	return rc;
 }
 
+#define HPAGE (PAGE_SIZE >> 1)
+#define QPAGE (PAGE_SIZE >> 2)
+
+struct scatterdata {
+	size_t offset;
+	size_t length;
+} sd_t;
+
+static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
+			struct scatterdata *sdata, size_t *length)
+{
+	int i;
+	int rc;
+	struct page *page;
+	struct scatterlist *sg;
+	struct device *device = &tdev->dev->pdev->dev;
+
+	rc = sg_alloc_table(sgt, npages, GFP_KERNEL);
+	if (rc)
+		return rc;
+
+	for_each_sgtable_sg(sgt, sg, i) {
+		page = alloc_page(GFP_KERNEL);
+		if (!page) {
+			pr_info("failed alloc_page\n");
+			goto free_pages;
+		}
+		sg_set_page(sg, page, sdata[i].length, sdata[i].offset);
+		memset(sg_virt(sg), 0, sdata[i].length);
+		*length += sdata[i].length;
+	}
+
+	rc = dma_map_sgtable(device, sgt, DMA_BIDIRECTIONAL, 0);
+	if (rc)
+		goto free_pages;
+
+	return 0;
+
+free_pages:
+	free_sgtable(sgt);
+
+	return rc;
+}
+
+static int test_sgtable3(struct tdev *tdev)
+{
+	int i;
+	u32 *b;
+	int rc;
+	int ret;
+	size_t offset;
+	size_t len = 0;
+	struct cxi_md *sg_md;
+	struct cxi_md snd_md = {};
+	struct sg_table sgt = {};
+	struct mem_window snd_mem;
+	struct scatterdata sdata[] = {
+		{.offset = HPAGE, .length = HPAGE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = QPAGE},
+	};
+	struct scatterdata bad_sdata0[] = {
+		{.offset = HPAGE, .length = QPAGE},
+		{.offset = 0, .length = PAGE_SIZE},
+	};
+	struct scatterdata bad_sdata1[] = {
+		{.offset = HPAGE, .length = HPAGE},
+		{.offset = 1, .length = PAGE_SIZE - 1},
+		{.offset = 0, .length = QPAGE},
+	};
+	struct scatterdata bad_sdata2[] = {
+		{.offset = HPAGE, .length = HPAGE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 1, .length = QPAGE},
+	};
+
+	pr_info("%s\n", __func__);
+
+	rc = test_setup(tdev);
+	if (rc)
+		return rc;
+
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata0), bad_sdata0, &len);
+	if (rc)
+		goto teardown;
+
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	rc = PTR_ERR(sg_md);
+	if (rc != -EINVAL) {
+		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
+		goto free_sgtable;
+	}
+
+	unmap_free_sgtable(tdev, &sgt);
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata1), bad_sdata1, &len);
+	if (rc)
+		goto teardown;
+
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	rc = PTR_ERR(sg_md);
+	if (rc != -EINVAL) {
+		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
+		goto free_sgtable;
+	}
+
+	unmap_free_sgtable(tdev, &sgt);
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata2), bad_sdata2, &len);
+	if (rc)
+		goto teardown;
+
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	rc = PTR_ERR(sg_md);
+	if (rc != -EINVAL) {
+		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
+		goto free_sgtable;
+	}
+
+	unmap_free_sgtable(tdev, &sgt);
+
+	len = 0;
+	rc = fill_sgtable(tdev, &sgt, 4, sdata, &len);
+	if (rc)
+		goto teardown;
+
+	snd_mem.length = len;
+	snd_mem.md = &snd_md;
+
+	snd_mem.buffer = kzalloc(snd_mem.length, GFP_KERNEL);
+	if (!snd_mem.buffer) {
+		rc = -ENOMEM;
+		goto free_sgtable;
+	}
+
+	rc = test_map(tdev, &snd_mem, false, 0);
+	if (rc < 0) {
+		pr_err("cxi_map failed %d\n", rc);
+		goto free_sndmem;
+	}
+
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt, CXI_MAP_WRITE | CXI_MAP_READ);
+	if (IS_ERR(sg_md)) {
+		rc = PTR_ERR(sg_md);
+		pr_err("cxi_map_sgtable failed %d\n", rc);
+		goto unmap_snd;
+	}
+
+	offset = (u64)sg_virt(sgt.sgl) - (u64)page_address(sg_page(sgt.sgl));
+	test_append_le(tdev, len, sg_md, offset);
+
+	for (i = 0, b = (u32 *)snd_mem.buffer; i < snd_mem.length / sizeof(u32); i++)
+		b[i] = i;
+
+	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
+	if (rc < 0) {
+		pr_err("test_do_put failed %d\n", rc);
+		goto unmap_sg;
+	}
+
+	rc = check_sgtable_result(snd_mem.buffer, &sgt);
+	if (rc)
+		goto unmap_sg;
+
+	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
+	if (rc < 0) {
+		pr_err("test_do_put failed %d\n", rc);
+		goto unmap_sg;
+	}
+
+	rc = check_sgtable_result(snd_mem.buffer, &sgt);
+
+unmap_sg:
+	ret = cxi_unmap(sg_md);
+	WARN(ret < 0, "cxi_unmap failed %d", ret);
+unmap_snd:
+	ret = test_unmap(tdev, &snd_mem, false);
+	WARN(ret < 0, "cxi_unmap failed %d\n", ret);
+free_sndmem:
+	kfree(snd_mem.buffer);
+free_sgtable:
+	unmap_free_sgtable(tdev, &sgt);
+teardown:
+	test_teardown(tdev);
+
+	return rc;
+}
+
 static int map_bvec(struct tdev *tdev)
 {
 	int rc;
@@ -1778,6 +1965,9 @@ static int add_device(struct cxi_dev *dev)
 			goto test_fail;
 
 		if (test_sgtable2(tdev) != 0)
+			goto test_fail;
+
+		if (test_sgtable3(tdev) != 0)
 			goto test_fail;
 
 		if (test_rgid(tdev) != 0)
