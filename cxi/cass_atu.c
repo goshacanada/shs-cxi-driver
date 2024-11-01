@@ -1232,7 +1232,7 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 
 	m_opts.va_start = 0;
 	m_opts.flags = flags;
-	m_opts.va_len = sgt->nents * PAGE_SIZE;
+	m_opts.va_len = sgt->orig_nents * PAGE_SIZE;
 	m_opts.va_end = m_opts.va_len;
 	m_opts.ptg_mode = default_ptg_mode;
 
