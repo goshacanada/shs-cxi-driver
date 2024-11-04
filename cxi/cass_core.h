@@ -885,7 +885,7 @@ struct cass_dev {
 	struct cxi_rxtx_profile_list tx_profile_list;
 
 	/* Services */
-	spinlock_t svc_lock;
+	struct mutex svc_lock;
 	struct idr svc_ids;
 	struct dentry *svc_debug;
 	struct list_head svc_list;

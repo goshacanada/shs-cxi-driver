@@ -41,11 +41,11 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	void *err;
 
 	/* Verify svc_id exists */
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (svc_priv)
 		refcount_inc(&svc_priv->refcount);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	if (!svc_priv)
 		return ERR_PTR(-EINVAL);
@@ -132,9 +132,9 @@ free_lni_id:
 put_rgid:
 	cass_rgid_put(hw, rgid);
 dec_svc:
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 	refcount_dec(&svc_priv->refcount);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 	return err;
 }
 EXPORT_SYMBOL(cxi_lni_alloc);
@@ -171,9 +171,10 @@ static bool try_cleanup_lni(struct cxi_lni_priv *lni, bool force)
 
 	debugfs_remove_recursive(lni->debug_dir);
 
-	spin_lock(&hw->svc_lock);
+	/* TODO: this lock is probably not required */
+	mutex_lock(&hw->svc_lock);
 	refcount_dec(&lni->svc_priv->refcount);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 	cxi_rgroup_dec_refcount(lni->svc_priv->rgroup);
 	refcount_dec(&hw->refcount);
 	atomic_dec(&hw->stats.lni);

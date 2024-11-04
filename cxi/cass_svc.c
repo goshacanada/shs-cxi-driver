@@ -165,7 +165,7 @@ static int dump_services(struct seq_file *s, void *unused)
 	struct cass_dev *hw = s->private;
 	struct cxi_resource_use *rsrc_use = hw->resource_use;
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	seq_puts(s, "Resources\n");
 	seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
@@ -228,7 +228,7 @@ static int dump_services(struct seq_file *s, void *unused)
 		seq_puts(s, "\n\n");
 	}
 
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return 0;
 }
@@ -339,7 +339,7 @@ int cass_svc_init(struct cass_dev *hw)
 			return -EINVAL;
 	}
 
-	spin_lock_init(&hw->svc_lock);
+	mutex_init(&hw->svc_lock);
 	idr_init(&hw->svc_ids);
 	INIT_LIST_HEAD(&hw->svc_list);
 	hw->svc_count = 0;
@@ -358,9 +358,9 @@ int cass_svc_init(struct cass_dev *hw)
 		goto destroy;
 	}
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	/* Ensure we got correct default Pool IDs */
 	if (svc_priv->rgroup->pools.tle_pool_id != DEFAULT_TLE_POOL_ID) {
@@ -377,9 +377,9 @@ int cass_svc_init(struct cass_dev *hw)
 	}
 
 	if (disable_default_svc) {
-		spin_lock(&hw->svc_lock);
+		mutex_lock(&hw->svc_lock);
 		svc_priv->svc_desc.enable = 0;
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
@@ -656,11 +656,11 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	if (rc)
 		goto release_rgroup;
 
+	mutex_lock(&hw->svc_lock);
 	idr_preload(GFP_KERNEL);
-	spin_lock(&hw->svc_lock);
 	rc = idr_alloc(&hw->svc_ids, svc_priv, 1, -1, GFP_NOWAIT);
-	spin_unlock(&hw->svc_lock);
 	idr_preload_end();
+	mutex_unlock(&hw->svc_lock);
 
 	if (rc < 0) {
 		cxidev_dbg(&hw->cdev, "%s service IDs exhausted\n", hw->cdev.name);
@@ -671,7 +671,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	svc_priv->rgroup = rgroup;
 
 	/* Check if requested reserved resources are available */
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 	rc = reserve_rsrcs(hw, svc_priv, fail_info);
 	if (rc)
 		goto free_id;
@@ -683,7 +683,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	svc_priv->svc_desc.enable = 1;
 	list_add_tail(&svc_priv->list, &hw->svc_list);
 	hw->svc_count++;
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	refcount_inc(&hw->refcount);
 
@@ -691,7 +691,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 free_id:
 	idr_remove(&hw->svc_ids, svc_priv->svc_desc.svc_id);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 rgroup_dec_refcount:
 	cxi_rgroup_dec_refcount(rgroup);
 	/* The rgroup pointer is no longer usable. */
@@ -729,12 +729,12 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 	if (svc_id == CXI_DEFAULT_SVC_ID)
 		return -EINVAL;
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	/* Look up svc */
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
@@ -743,7 +743,7 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 		free_rsrcs(svc_priv);
 		idr_remove(&hw->svc_ids, svc_id);
 	} else {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
 
@@ -755,7 +755,7 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 
 	list_del(&svc_priv->list);
 	hw->svc_count--;
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	svc_destroy(hw, svc_priv);
 
@@ -784,10 +784,10 @@ int cxi_svc_rsrc_list_get(struct cxi_dev *dev, int count,
 	struct cxi_svc_priv *svc_priv;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	if (count < hw->svc_count) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return hw->svc_count;
 	}
 
@@ -797,7 +797,7 @@ int cxi_svc_rsrc_list_get(struct cxi_dev *dev, int count,
 		i++;
 	}
 
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return i;
 }
@@ -818,17 +818,17 @@ int cxi_svc_rsrc_get(struct cxi_dev *dev, unsigned int svc_id,
 	struct cxi_svc_priv *svc_priv;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	/* Find priv descriptor */
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
 	copy_rsrc_use(dev, rsrc_use, svc_priv);
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return 0;
 }
@@ -855,10 +855,10 @@ int cxi_svc_list_get(struct cxi_dev *dev, int count,
 	struct cxi_svc_priv *svc_priv;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	if (count < hw->svc_count) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return hw->svc_count;
 	}
 
@@ -866,7 +866,7 @@ int cxi_svc_list_get(struct cxi_dev *dev, int count,
 		svc_list[i] = svc_priv->svc_desc;
 		i++;
 	}
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return i;
 }
@@ -887,17 +887,17 @@ int cxi_svc_get(struct cxi_dev *dev, unsigned int svc_id,
 	struct cxi_svc_priv *svc_priv;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	/* Find priv descriptor */
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
 	*svc_desc = svc_priv->svc_desc;
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return 0;
 }
@@ -915,7 +915,7 @@ void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	rtype = stype_to_rtype(type, 0);
 	r_use = &hw->resource_use[rtype];
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
 	if (rc) {
@@ -930,7 +930,7 @@ void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	r_use->in_use--;
 	entry->limits.in_use--;
 unlock:
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 }
 
 /* used to allocate ACs, etc. */
@@ -950,7 +950,7 @@ int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	rtype = stype_to_rtype(type, 0);
 	r_use = &hw->resource_use[rtype];
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
 	if (rc) {
@@ -976,7 +976,7 @@ int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	}
 
 unlock:
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 	return rc;
 }
 
@@ -1004,24 +1004,24 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	if (rc)
 		return rc;
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	/* Find priv descriptor */
 	svc_priv = idr_find(&hw->svc_ids, svc_desc->svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
 	/* Service must be unused for it to be updated. */
 	if (refcount_read(&svc_priv->refcount) != 1) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
 
 	/* TODO Handle Resource Reservation Changes */
 	if (svc_priv->svc_desc.resource_limits != svc_desc->resource_limits) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
@@ -1044,7 +1044,7 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	memcpy(svc_priv->svc_desc.vnis, svc_desc->vnis, sizeof(svc_desc->vnis));
 	memcpy(svc_priv->svc_desc.members, svc_desc->members, sizeof(svc_desc->members));
 
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 	return 0;
 }
 EXPORT_SYMBOL(cxi_svc_update);
@@ -1067,23 +1067,23 @@ int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
 	if (lnis_per_rgid > C_NUM_LACS)
 		return -EINVAL;
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
 	/* Service must be unused for it to be updated. */
 	if (refcount_read(&svc_priv->refcount) != 1) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
 
 	svc_priv->rgroup->attr.lnis_per_rgid = lnis_per_rgid;
 
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return 0;
 }
@@ -1102,15 +1102,15 @@ int cxi_svc_get_lpr(struct cxi_dev *dev, unsigned int svc_id)
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
 
-	spin_lock(&hw->svc_lock);
+	mutex_lock(&hw->svc_lock);
 
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
-		spin_unlock(&hw->svc_lock);
+		mutex_unlock(&hw->svc_lock);
 		return -EINVAL;
 	}
 
-	spin_unlock(&hw->svc_lock);
+	mutex_unlock(&hw->svc_lock);
 
 	return svc_priv->rgroup->attr.lnis_per_rgid;
 }
