@@ -606,7 +606,7 @@ static int cass_tc_cq_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 
 	tc_cq = cass_tc_get_cq_tc(hw);
 	if (tc_cq < 0)
-		return 0;
+		return tc_cq;
 
 	if (is_static)
 		ocuset = cass_tc_cq_static_ocuset_cfg(hw, ocu_base, ocu_count,
