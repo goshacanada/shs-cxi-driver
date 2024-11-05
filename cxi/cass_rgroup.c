@@ -40,15 +40,15 @@ void cass_dev_rgroup_init(struct cass_dev *hw)
 	hw->resource_use[CXI_RESOURCE_PTLTE].max = C_NUM_PTLTES;
 	hw->resource_use[CXI_RESOURCE_TXQ].max = C_NUM_TRANSMIT_CQS;
 	hw->resource_use[CXI_RESOURCE_TGQ].max = C_NUM_TARGET_CQS;
-	hw->resource_use[CXI_RESOURCE_EQ].max = C_NUM_EQS - 1; /* EQ 0 invalid */
-	hw->resource_use[CXI_RESOURCE_CT].max = C_NUM_CTS - 1; /* CT 0 invalid */
+	hw->resource_use[CXI_RESOURCE_EQ].max = EQS_AVAIL;
+	hw->resource_use[CXI_RESOURCE_CT].max = CTS_AVAIL;
 	hw->resource_use[CXI_RESOURCE_PE0_LE].max = pe_total_les;
 	hw->resource_use[CXI_RESOURCE_PE1_LE].max = pe_total_les;
 	hw->resource_use[CXI_RESOURCE_PE2_LE].max = pe_total_les;
 	hw->resource_use[CXI_RESOURCE_PE3_LE].max = pe_total_les;
 	hw->resource_use[CXI_RESOURCE_TLE].max = C_NUM_TLES;
 	/* AC 0 invalid and one reserved for shared physical mappings */
-	hw->resource_use[CXI_RESOURCE_AC].max = ATU_PHYS_AC - 1;
+	hw->resource_use[CXI_RESOURCE_AC].max = ACS_AVAIL;
 
 	/* start with all resources shared */
 	for (i = 0; i < CXI_RESOURCE_MAX; i++) {
