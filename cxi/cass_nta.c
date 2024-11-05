@@ -1755,7 +1755,7 @@ static void cass_pri_fault(struct cass_dev *hw,
 	int align_shift;
 	int index = pre->index;
 	struct cass_ac *cac;
-	struct cxi_md_priv *e;
+	struct cxi_md_priv *e = NULL;
 	struct ac_map_opts m_opts = {};
 	union c_atu_sts_prb_table entry;
 	enum c_odp_status status = C_ATU_ODP_FAILURE;
@@ -1843,7 +1843,7 @@ no_md:
 	mutex_unlock(&cac->md_mutex);
 no_cac:
 	atu_debug("sts:%s rc:%d ac:%d index:%d iova:%llx md.va:%llx\n",
-		  status ? "f" : "s", rc, pre->acid, index, iova, e->md.va);
+		  status ? "f" : "s", rc, pre->acid, index, iova, e ? e->md.va : 0);
 
 	*(u64 *)pre = 0;
 	/* make sure entry is zeroed before reporting to hw */
