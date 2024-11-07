@@ -159,6 +159,10 @@ END
             AMDGPU_VERSION="6.1"
             NVIDIA_VERSION="550.54.15"
             ;;
+        9.5)
+            AMDGPU_VERSION="6.3"
+            NVIDIA_VERSION="550.90.07"
+            ;;
         *)
             echo "GPU software versions not defined for OS version \"${OS_VERSION}\""
             exit 1
