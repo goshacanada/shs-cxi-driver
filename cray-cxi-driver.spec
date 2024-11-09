@@ -18,7 +18,7 @@
 
 # Exclude -preempt kernel flavor, this seems to get built alongside the -default
 # flavor for stock SLES. It doesn't get used, and its presence can cause issues
-%define kmp_args_common -x preempt -p %{_sourcedir}/%name.rpm_preamble
+%define kmp_args_common -x azure preempt -p %{_sourcedir}/%name.rpm_preamble
 
 %if 0%{?rhel}
 # On RHEL, override the kmod RPM name to include the kernel version it was built
