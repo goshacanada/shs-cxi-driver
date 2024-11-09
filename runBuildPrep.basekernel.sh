@@ -49,7 +49,7 @@ ARTI_LOCATION=${ARTI_LOCATION:-"rpm-master-local"}
 ARTI_BRANCH=${ARTI_BRANCH:-"dev/master"}
 OS_TYPE=`cat /etc/os-release | grep "^ID=" | sed "s/\"//g" | cut -d "=" -f 2`
 OS_VERSION=`cat /etc/os-release | grep "^VERSION_ID=" | sed "s/\"//g" | cut -d "=" -f 2`
-RHEL_GPU_SUPPORTED_VERSIONS="8.10 9.4"
+RHEL_GPU_SUPPORTED_VERSIONS="8.10 9.4 9.5"
 BRANCH=`git branch --show-current`
 END
 
@@ -168,6 +168,10 @@ elif command -v yum > /dev/null; then
             AMDGPU_VERSION="6.1"
             NVIDIA_VERSION="550.54.15"
             ;;
+        9.5)
+            AMDGPU_VERSION="6.3"
+            NVIDIA_VERSION="550.90.07"
+            ;;
         *)
             echo "GPU software versions not defined for OS version \"${OS_VERSION}\""
             exit 1
@@ -190,6 +194,10 @@ elif command -v yum > /dev/null; then
                 ;;
             9.4)
                 url="${ARTI_URL}/radeon-amdgpu-remote/${AMDGPU_VERSION}/${OS_TYPE}/9.3/main/${TARGET_ARCH}/"
+                ;;
+            9.5)
+                url="${ARTI_URL}/uss-internal-third-party-rpm-local/amdgpu_driver/dev/master/rhel_9_5/"
+                ## Update link to radeon-amdgpu-remote/6.3 when available.
                 ;;
             *)
                 echo "GPU software versions not defined for OS version \"${OS_VERSION}\""
