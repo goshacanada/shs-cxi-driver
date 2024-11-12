@@ -639,7 +639,7 @@ void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 	if (attr) {
 		attr->cntr_pool_id   = rgroup->attr.cntr_pool_id;
 		attr->system_service = rgroup->attr.system_service;
-		strncpy(attr->name, rgroup->attr.name, ARRAY_SIZE(attr->name));
+		strscpy(attr->name, rgroup->attr.name, ARRAY_SIZE(attr->name));
 	}
 
 	if (state) {

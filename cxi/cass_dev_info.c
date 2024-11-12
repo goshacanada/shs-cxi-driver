@@ -48,10 +48,10 @@ int cxi_dev_info_get(struct cxi_dev *dev,
 		uc_cmd_get_fru(hw);
 
 	if (hw->fru_info[PLDM_FRU_FIELD_DESCRIPTION])
-		strncpy(devinfo->fru_description, hw->fru_info[PLDM_FRU_FIELD_DESCRIPTION],
+		strscpy(devinfo->fru_description, hw->fru_info[PLDM_FRU_FIELD_DESCRIPTION],
 			sizeof(devinfo->fru_description) - 1);
 	else
-		strncpy(devinfo->fru_description, "Not Available",
+		strscpy(devinfo->fru_description, "Not Available",
 			sizeof(devinfo->fru_description) - 1);
 	devinfo->fru_description[sizeof(devinfo->fru_description) - 1] = '\0';
 

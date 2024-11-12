@@ -21,7 +21,7 @@ void cxi_rxtx_profile_init(struct cxi_rxtx_profile *rxtx_profile,
 {
 	rxtx_profile->vni_attr.match  = vni_attr->match;
 	rxtx_profile->vni_attr.ignore = vni_attr->ignore;
-	strncpy(rxtx_profile->vni_attr.name, vni_attr->name,
+	strscpy(rxtx_profile->vni_attr.name, vni_attr->name,
 		ARRAY_SIZE(rxtx_profile->vni_attr.name));
 
 	/* Profiles are long lived.  We indicate this by an
@@ -185,7 +185,7 @@ void cxi_rxtx_profile_get_info(struct cxi_rxtx_profile *rxtx_profile,
 	if (vni_attr) {
 		vni_attr->ignore   = rxtx_profile->vni_attr.ignore;
 		vni_attr->match    = rxtx_profile->vni_attr.match;
-		strncpy(vni_attr->name, rxtx_profile->vni_attr.name,
+		strscpy(vni_attr->name, rxtx_profile->vni_attr.name,
 			ARRAY_SIZE(vni_attr->name));
 	}
 

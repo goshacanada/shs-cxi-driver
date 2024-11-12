@@ -258,7 +258,7 @@ static int cxi_user_dev_alloc_rgroup(struct user_client *client,
 
 	attr.cntr_pool_id   = cmd->attr.cntr_pool_id;
 	attr.system_service = cmd->attr.system_service;
-	strncpy(attr.name, cmd->attr.name, ARRAY_SIZE(attr.name));
+	strscpy(attr.name, cmd->attr.name, ARRAY_SIZE(attr.name));
 
 	ret = cxi_dev_alloc_rgroup(client->ucxi->dev, &attr, &resp.rgroup_id);
 	if (ret)
@@ -364,7 +364,7 @@ static int cxi_user_rgroup_get_info(struct user_client *client,
 
 	resp.attr.cntr_pool_id   = attr.cntr_pool_id;
 	resp.attr.system_service = attr.system_service;
-	strncpy(resp.attr.name, attr.name, ARRAY_SIZE(resp.attr.name));
+	strscpy(resp.attr.name, attr.name, ARRAY_SIZE(resp.attr.name));
 
 	resp.state.enabled  = state.enabled;
 	resp.state.released = state.released;
