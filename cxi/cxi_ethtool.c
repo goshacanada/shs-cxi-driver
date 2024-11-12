@@ -352,7 +352,7 @@ static int cxi_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key, u8 *hfunc)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0) || (defined(RHEL_MAJOR) && (RHEL_MAJOR == 9 && RHEL_MINOR >= 5))
 static int cxi_set_rxfh(struct net_device *ndev,
 			struct ethtool_rxfh_param *rxfh,
 			struct netlink_ext_ack *extack)
