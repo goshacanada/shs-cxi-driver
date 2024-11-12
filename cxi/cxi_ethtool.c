@@ -326,7 +326,7 @@ static u32 cxi_get_rxfh_key_size(struct net_device *ndev)
 	return CXI_ETH_HASH_KEY_SIZE;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0) || (defined(RHEL_MAJOR) && (RHEL_MAJOR == 9 && RHEL_MINOR >= 5))
 static int cxi_get_rxfh(struct net_device *ndev,
 			struct ethtool_rxfh_param *rxfh)
 {
