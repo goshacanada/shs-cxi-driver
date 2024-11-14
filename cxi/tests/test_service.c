@@ -20,6 +20,7 @@ static int test_service_tle_in_use(struct cxi_dev *dev)
 		.enable = 1,
 		.is_system_svc = 1,
 		.num_vld_vnis = 1,
+		.resource_limits = 1,
 		.vnis[0] = VNI,
 		.limits.type[CXI_RSRC_TYPE_PTE].max = 100,
 		.limits.type[CXI_RSRC_TYPE_PTE].res = 100,
