@@ -219,6 +219,9 @@ static inline void pci_disable_pcie_error_reporting(void *p) {}
 
 #define CASS_NUM_LE_POOLS (C_LPE_CFG_PE_LE_POOLS_ENTRIES / C_PE_COUNT)
 #define CASS_MIN_POOL_TLES 8
+#define ACS_AVAIL (ATU_PHYS_AC - 1)
+#define CTS_AVAIL (C_NUM_CTS - 1) /* CT 0 invalid */
+#define EQS_AVAIL (C_NUM_EQS - 1) /* EQ 0 invalid */
 
 #define CASS_MAX_IRQ_NAME 24
 
@@ -887,7 +890,6 @@ struct cass_dev {
 	struct dentry *svc_debug;
 	struct list_head svc_list;
 	unsigned int svc_count;
-	struct cass_rsrc_info rsrc_use[CXI_RSRC_TYPE_MAX];
 	struct cxi_resource_use resource_use[CXI_RESOURCE_MAX];
 	spinlock_t rgrp_lock;
 

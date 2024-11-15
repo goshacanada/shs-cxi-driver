@@ -845,6 +845,7 @@ struct cxi_rsrc_use {
 	 * resources used on the device
 	 */
 	unsigned int svc_id;
+	unsigned int tle_pool_id;
 	uint16_t in_use[CXI_RSRC_TYPE_MAX];
 };
 

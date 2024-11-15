@@ -32,7 +32,6 @@ void verbose_printf(const char *fmt, ...)
 	va_end(ap);
 }
 
-
 static const char *true_false(bool truth)
 {
 	return (truth) ? "true" : "false";
@@ -108,11 +107,12 @@ static struct ucxi_rgroup_attr rgroup_attr[] = {
 	},
 };
 static const size_t num_rgroup_attr = ARRAY_SIZE(rgroup_attr);
+static const size_t tot_rgroup_attr = ARRAY_SIZE(rgroup_attr) + 1;
 
 int rgroup_id_test(struct cass_dev *dev)
 {
 	unsigned int rgroup_ids[num_rgroup_attr];
-	unsigned int ids[num_rgroup_attr];
+	unsigned int ids[tot_rgroup_attr];
 	size_t   num_ids;
 	size_t   i, j;
 	int      ret;
@@ -128,8 +128,7 @@ int rgroup_id_test(struct cass_dev *dev)
 			       rgroup_ids[i]);
 	}
 
-
-	ret = get_rgroup_ids(dev, num_rgroup_attr, ids, &num_ids);
+	ret = get_rgroup_ids(dev, tot_rgroup_attr, ids, &num_ids);
 	if (ret) {
 		printf("unable to get rgroup ids: %s\n",
 		       errstr(ret));
@@ -137,26 +136,26 @@ int rgroup_id_test(struct cass_dev *dev)
 	}
 	verbose_printf("Found %zu rgroup ids.\n", num_ids);
 
-	if (num_ids != num_rgroup_attr) {
+	if (num_ids != tot_rgroup_attr) {
 		printf("Number of rgroup ids (%zu) is not %zu.\n",
 		       num_ids, num_rgroup_attr);
 		return -1;
 	}
 
-	for (i = 0; i < num_ids; i++) {
+	for (i = 0; i < num_rgroup_attr; i++) {
 		for (j = 0; j < num_ids; j++) {
 			if (rgroup_ids[i] == ids[j])
 				goto found;
 		}
-		printf("Rgroup id %u not retrieved.\n",
-		       rgroup_ids[i]);
+		printf("Rgroup id %u not retrieved.\n", rgroup_ids[i]);
 		return -1;
 found:
 		verbose_printf("Rgroup id %u successfully retrieved.\n",
 			       rgroup_ids[i]);
 	}
 
-	for (i = 0; i < num_ids; i++) {
+	/* skip default id */
+	for (i = 1; i < num_ids; i++) {
 		ret = release_rgroup(dev, ids[i]);
 		if (ret) {
 			printf("Unable to release rgroup %u: %s\n",
@@ -930,7 +929,7 @@ int cleanup_check(struct cass_dev *dev)
 	if (ret)
 		return ret;
 
-	if (num_rgroup_ids > 0) {
+	if (num_rgroup_ids > 1) {
 		printf("%zu rgroup ids found during %s\n",
 		       num_rgroup_ids, __func__);
 

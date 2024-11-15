@@ -84,7 +84,7 @@ void cass_cfg_le_pools(struct cass_dev *hw, int pool_id, int pe,
 	};
 
 	if (release) {
-		le_pool.max_alloc = 0;
+		le_pool.max_alloc = les->max;
 		le_pool.num_reserved = 0;
 		sign = -1;
 	}
@@ -454,7 +454,8 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 
 	ptl_table.pe_num = cxi_lni_get_pe_num(lni_priv);
 	pt->pe_num = ptl_table.pe_num;
-	ptl_table.le_pool = pt->le_pool = pt->lni_priv->lpe_le_pool;
+	ptl_table.le_pool = pt->le_pool =
+		pt->lni_priv->svc_priv->rgroup->pools.le_pool_id[pt->pe_num];
 
 	spin_lock(&hw->lpe_shadow_lock);
 	cass_config_pte(hw, pt_n, &ptl_table);

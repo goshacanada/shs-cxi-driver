@@ -108,7 +108,7 @@ static int setup_hw_tx_cq(struct cass_dev *hw, unsigned int cq_n,
 	txq_cfg.mem_q_pfq = flow_cfg.pfq;
 
 	if (opts->flags & CXI_CQ_TX_WITH_TRIG_CMDS)
-		txq_cfg.mem_q_pfq = lni_priv->tle_pool;
+		txq_cfg.mem_q_pfq = lni_priv->svc_priv->rgroup->pools.tle_pool_id;
 
 	spin_lock(&hw->cq_shadow_lock);
 	cass_tx_cq_init(hw, &cq->cass_cq, cq_n, &tc, &txq_cfg);

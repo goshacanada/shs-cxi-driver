@@ -30,6 +30,30 @@ module_param_array(default_vnis, uint, NULL, 0444);
 MODULE_PARM_DESC(default_vnis,
 		 "Default VNIS. Should be consistent at the fabric level");
 
+static enum cxi_resource_type stype_to_rtype(enum cxi_rsrc_type type, int pe)
+{
+	switch (type) {
+	case CXI_RSRC_TYPE_PTE:
+		return CXI_RESOURCE_PTLTE;
+	case CXI_RSRC_TYPE_TXQ:
+		return CXI_RESOURCE_TXQ;
+	case CXI_RSRC_TYPE_TGQ:
+		return CXI_RESOURCE_TGQ;
+	case CXI_RSRC_TYPE_EQ:
+		return CXI_RESOURCE_EQ;
+	case CXI_RSRC_TYPE_CT:
+		return CXI_RESOURCE_CT;
+	case CXI_RSRC_TYPE_LE:
+		return CXI_RESOURCE_PE0_LE + pe;
+	case CXI_RSRC_TYPE_TLE:
+		return CXI_RESOURCE_TLE;
+	case CXI_RSRC_TYPE_AC:
+		return CXI_RESOURCE_AC;
+	default:
+		return CXI_RESOURCE_MAX;
+	}
+}
+
 /* Check if a service allows a particular VNI to be used */
 bool valid_svc_vni(const struct cxi_svc_priv *svc_priv, unsigned int vni)
 {
@@ -88,100 +112,120 @@ bool valid_svc_user(const struct cxi_svc_priv *svc_priv)
 static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 			  struct cxi_svc_priv *svc_priv)
 {
+	int rc;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	union c_cq_sts_tle_in_use tle_in_use;
 	int type;
+	enum cxi_resource_type rtype;
+	struct cxi_resource_entry *entry;
 
 	for (type = 0; type < CXI_RSRC_TYPE_MAX; type++) {
+		rtype = stype_to_rtype(type, 0);
 		if (type == CXI_RSRC_TYPE_TLE) {
 			cass_read(hw,
-				  C_CQ_STS_TLE_IN_USE(svc_priv->tle_pool_id),
+				  C_CQ_STS_TLE_IN_USE(svc_priv->rgroup->pools.tle_pool_id),
 				  &tle_in_use, sizeof(tle_in_use));
 			rsrcs->in_use[type] = tle_in_use.count;
+			rsrcs->tle_pool_id = svc_priv->rgroup->pools.tle_pool_id;
 		} else {
-			rsrcs->in_use[type] =
-				atomic_read(&svc_priv->rsrc_use[type]);
+			rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup,
+							   rtype, &entry);
+			if (rc) {
+				rsrcs->in_use[type] = 0;
+				continue;
+			}
+
+			rsrcs->in_use[type] = entry->limits.in_use;
 		}
 	}
 }
 
+int rsrc_dump_order[] = {
+	CXI_RESOURCE_AC,
+	CXI_RESOURCE_CT,
+	CXI_RESOURCE_EQ,
+	CXI_RESOURCE_PTLTE,
+	CXI_RESOURCE_TGQ,
+	CXI_RESOURCE_TXQ,
+	CXI_RESOURCE_PE0_LE,
+	CXI_RESOURCE_PE1_LE,
+	CXI_RESOURCE_PE2_LE,
+	CXI_RESOURCE_PE3_LE,
+	CXI_RESOURCE_TLE
+};
+
 static int dump_services(struct seq_file *s, void *unused)
 {
+	int i;
+	int rc;
+	ulong index;
+	ulong value;
+	struct cxi_rgroup *rgroup;
+	struct cxi_resource_entry *entry;
 	struct cass_dev *hw = s->private;
-	struct cxi_svc_priv *svc_priv;
-	int svc_id;
-	struct cass_rsrc_info *hw_use = hw->rsrc_use;
+	struct cxi_resource_use *rsrc_use = hw->resource_use;
 
 	spin_lock(&hw->svc_lock);
 
 	seq_puts(s, "Resources\n");
-	seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs     LEs    TLEs\n");
+	seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
 
-	seq_printf(s, "  Max   %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-		hw->cdev.prop.rsrcs.acs.max, hw->cdev.prop.rsrcs.cts.max,
-		hw->cdev.prop.rsrcs.eqs.max, hw->cdev.prop.rsrcs.ptes.max,
-		hw->cdev.prop.rsrcs.tgqs.max, hw->cdev.prop.rsrcs.txqs.max,
-		hw->cdev.prop.rsrcs.les.max, hw->cdev.prop.rsrcs.tles.max);
+	seq_puts(s, "  Max ");
+	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
+		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].max);
+	seq_puts(s, "\n");
 
-	seq_printf(s, "  Res   %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-		hw_use[CXI_RSRC_TYPE_AC].res,
-		hw_use[CXI_RSRC_TYPE_CT].res,
-		hw_use[CXI_RSRC_TYPE_EQ].res,
-		hw_use[CXI_RSRC_TYPE_PTE].res,
-		hw_use[CXI_RSRC_TYPE_TGQ].res,
-		hw_use[CXI_RSRC_TYPE_TXQ].res,
-		hw_use[CXI_RSRC_TYPE_LE].res,
-		hw_use[CXI_RSRC_TYPE_TLE].res);
+	seq_puts(s, "  Res ");
+	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
+		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].reserved);
+	seq_puts(s, "\n");
 
-	seq_printf(s, "  Avail %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-		hw_use[CXI_RSRC_TYPE_AC].shared_total - hw_use[CXI_RSRC_TYPE_AC].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_CT].shared_total - hw_use[CXI_RSRC_TYPE_CT].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_EQ].shared_total - hw_use[CXI_RSRC_TYPE_EQ].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_PTE].shared_total - hw_use[CXI_RSRC_TYPE_PTE].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_TGQ].shared_total - hw_use[CXI_RSRC_TYPE_TGQ].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_TXQ].shared_total - hw_use[CXI_RSRC_TYPE_TXQ].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_LE].shared_total - hw_use[CXI_RSRC_TYPE_LE].shared_in_use,
-		hw_use[CXI_RSRC_TYPE_TLE].shared_total - hw_use[CXI_RSRC_TYPE_TLE].shared_in_use);
+	seq_puts(s, "Avail ");
+	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
+		value = rsrc_use[rsrc_dump_order[i]].shared -
+			rsrc_use[rsrc_dump_order[i]].shared_use;
+		seq_printf(s, "  %6lu", value);
+	}
+	seq_puts(s, "\n\n");
 
-	idr_for_each_entry(&hw->svc_ids, svc_priv, svc_id) {
-		seq_printf(s, "ID: %u%s\n", svc_id,
-			(svc_id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
+	for_each_rgroup(index, rgroup) {
+		seq_printf(s, "ID: %u%s\n", rgroup->id,
+			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
 
-		seq_printf(s, "  Refs: %u  LE pool: %u  TLE pool: %u\n",
-			refcount_read(&svc_priv->refcount),
-			svc_priv->le_pool_id, svc_priv->tle_pool_id);
+		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
+			rgroup->pools.le_pool_id[0],
+			rgroup->pools.le_pool_id[1],
+			rgroup->pools.le_pool_id[2],
+			rgroup->pools.le_pool_id[3],
+			rgroup->pools.tle_pool_id);
 
-		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs     LEs    TLEs\n");
+		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
+		seq_puts(s, "  Max   ");
+		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
+			rc = cxi_rgroup_get_resource_entry(rgroup,
+							   rsrc_dump_order[i],
+							   &entry);
+			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.max);
+		}
+		seq_puts(s, "\n");
 
-		seq_printf(s, "  Max   %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_AC].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_CT].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_EQ].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_PTE].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TGQ].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TXQ].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_LE].max,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TLE].max);
+		seq_puts(s, "  Res   ");
+		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
+			rc = cxi_rgroup_get_resource_entry(rgroup,
+							   rsrc_dump_order[i],
+							   &entry);
+			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.reserved);
+		}
+		seq_puts(s, "\n");
 
-		seq_printf(s, "  Res   %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_AC].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_CT].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_EQ].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_PTE].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TGQ].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TXQ].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_LE].res,
-			svc_priv->svc_desc.limits.type[CXI_RSRC_TYPE_TLE].res);
-
-		seq_printf(s, "  Alloc %6u  %6u  %6u  %6u  %6u  %6u  %6u  %6u\n",
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_AC]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_CT]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_EQ]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_PTE]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_TGQ]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_TXQ]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_LE]),
-			atomic_read(&svc_priv->rsrc_use[CXI_RSRC_TYPE_TLE]));
+		seq_puts(s, "Alloc   ");
+		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
+			rc = cxi_rgroup_get_resource_entry(rgroup,
+							   rsrc_dump_order[i],
+							   &entry);
+			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.in_use);
+		}
+		seq_puts(s, "\n\n");
 	}
 
 	spin_unlock(&hw->svc_lock);
@@ -238,6 +282,20 @@ void cass_tle_init(struct cass_dev *hw)
 			   sizeof(tle_pool_cfg));
 }
 
+static void default_rsrc_limits(struct cxi_rsrc_limits *limits)
+{
+	memset(limits, 0, sizeof(*limits));
+
+	limits->type[CXI_RSRC_TYPE_PTE].max = C_NUM_PTLTES;
+	limits->type[CXI_RSRC_TYPE_TXQ].max = C_NUM_TRANSMIT_CQS;
+	limits->type[CXI_RSRC_TYPE_TGQ].max = C_NUM_TARGET_CQS;
+	limits->type[CXI_RSRC_TYPE_EQ].max = EQS_AVAIL;
+	limits->type[CXI_RSRC_TYPE_CT].max = CTS_AVAIL;
+	limits->type[CXI_RSRC_TYPE_LE].max = pe_total_les;
+	limits->type[CXI_RSRC_TYPE_TLE].max = C_NUM_TLES;
+	limits->type[CXI_RSRC_TYPE_AC].max = ACS_AVAIL;
+}
+
 int cass_svc_init(struct cass_dev *hw)
 {
 	static struct cxi_svc_desc svc_desc = {
@@ -249,25 +307,11 @@ int cass_svc_init(struct cass_dev *hw)
 
 	/* TODO differentiate PF/VF */
 	if (!hw->cdev.is_physfn)
-		svc_desc.resource_limits = false;
+		return 0;
 
-	/* Set Resource Limits. These are advertised in devinfo */
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_PTE].max = C_NUM_PTLTES;
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_TXQ].max = C_NUM_TRANSMIT_CQS;
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_TGQ].max = C_NUM_TARGET_CQS;
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_EQ].max = C_NUM_EQS - 1; /* EQ 0 invalid */
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_CT].max = C_NUM_CTS - 1; /* CT 0 invalid */
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_LE].max = pe_total_les;
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_TLE].max = C_NUM_TLES;
-	hw->cdev.prop.rsrcs.type[CXI_RSRC_TYPE_AC].max = ATU_PHYS_AC - 1; /* AC 1023 reserved */
+	default_rsrc_limits(&hw->cdev.prop.rsrcs);
 
 	for (i = 0; i < CXI_RSRC_TYPE_MAX; i++) {
-		/* The amount of resources that are available for each type is
-		 * its max. This will be decremented by the svc alloc call if
-		 * resources are reserved.
-		 */
-		hw->rsrc_use[i].shared_total = hw->cdev.prop.rsrcs.type[i].max;
-
 		/* Set up resource limits for default service */
 		if (i != CXI_RSRC_TYPE_TLE) {
 			limits.type[i].max = hw->cdev.prop.rsrcs.type[i].max;
@@ -319,15 +363,15 @@ int cass_svc_init(struct cass_dev *hw)
 	spin_unlock(&hw->svc_lock);
 
 	/* Ensure we got correct default Pool IDs */
-	if (svc_priv->tle_pool_id != DEFAULT_TLE_POOL_ID) {
+	if (svc_priv->rgroup->pools.tle_pool_id != DEFAULT_TLE_POOL_ID) {
 		cxidev_err(&hw->cdev, "Got incorrect TLE_POOL_ID: %d\n",
-			   svc_priv->tle_pool_id);
+			   svc_priv->rgroup->pools.tle_pool_id);
 		rc = -EINVAL;
 		goto destroy;
 	}
-	if (svc_priv->le_pool_id != DEFAULT_LE_POOL_ID) {
+	if (svc_priv->rgroup->pools.le_pool_id[0] != DEFAULT_LE_POOL_ID) {
 		cxidev_err(&hw->cdev, "Got incorrect LE_POOL_ID:  %d\n",
-			   svc_priv->le_pool_id);
+			   svc_priv->rgroup->pools.le_pool_id[0]);
 		rc = -EINVAL;
 		goto destroy;
 	}
@@ -336,6 +380,7 @@ int cass_svc_init(struct cass_dev *hw)
 		spin_lock(&hw->svc_lock);
 		svc_priv->svc_desc.enable = 0;
 		spin_unlock(&hw->svc_lock);
+		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
 	svc_priv->lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
@@ -352,11 +397,17 @@ destroy:
 /* Check if a there are enough unused instances of a particular resource */
 static bool rsrc_available(struct cass_dev *hw,
 			   struct cxi_rsrc_limits *limits,
-			   enum cxi_rsrc_type type,
+			   enum cxi_rsrc_type type, int pe,
 			   struct cxi_svc_fail_info *fail_info)
 {
-	u16 shared_avail = hw->rsrc_use[type].shared_total -
-			   hw->rsrc_use[type].shared_in_use;
+	u16 shared_avail;
+	enum cxi_resource_type rtype;
+
+	rtype = stype_to_rtype(type, pe);
+	if (rtype >= CXI_RESOURCE_MAX)
+		return false;
+
+	shared_avail = hw->resource_use[rtype].shared;
 
 	/* Always fill out fail_info if a resource was requested so it
 	 * accurately reflects how many of resource X was available.
@@ -375,44 +426,68 @@ static bool rsrc_available(struct cass_dev *hw,
 /* Return resource reservations upon destruction of a service
  * Caller must hold hw->svc_lock.
  */
-static void free_rsrcs(struct cass_dev *hw,
-		       struct cxi_svc_priv *svc_priv)
+static void free_rsrc(struct cxi_svc_priv *svc_priv,
+		      enum cxi_rsrc_type type)
+{
+	int rc;
+	int pe;
+	enum cxi_resource_type rtype = stype_to_rtype(type, 0);
+
+	if (type == CXI_RSRC_TYPE_LE) {
+		for (pe = 0; pe < C_PE_COUNT; pe++) {
+			rc = cxi_rgroup_delete_resource(svc_priv->rgroup,
+							rtype + pe);
+			if (rc)
+				pr_debug("delete resource %s failed %d\n",
+					 cxi_resource_type_to_str(type + pe),
+					 rc);
+		}
+
+		return;
+	}
+
+	rc = cxi_rgroup_delete_resource(svc_priv->rgroup, rtype);
+	if (rc)
+		pr_debug("delete resource %s failed %d\n",
+			 cxi_rsrc_type_to_str(type), rc);
+}
+
+static void free_rsrcs(struct cxi_svc_priv *svc_priv)
 {
 	int i;
-	struct cxi_rsrc_limits *limits = &svc_priv->svc_desc.limits;
 
-	if (!svc_priv->svc_desc.resource_limits)
-		return;
+	for (i = 0; i < CXI_RSRC_TYPE_MAX; i++)
+		free_rsrc(svc_priv, i);
+}
 
-	for (i = 0; i < CXI_RSRC_TYPE_MAX; i++) {
-		if (limits->type[i].res) {
-			hw->rsrc_use[i].res -= limits->type[i].res;
-			hw->rsrc_use[i].shared_total += limits->type[i].res;
+static int add_resource(struct cxi_rgroup *rgroup, enum cxi_rsrc_type type,
+			struct cxi_resource_limits *limits)
+{
+	int rc;
+	int pe;
 
-			if ((i == CXI_RSRC_TYPE_TLE) &&
-			    (limits->type[i].res)) {
-				cass_cfg_tle_pool(hw, svc_priv->tle_pool_id,
-						  &limits->type[i], true);
-				if (svc_priv->tle_pool_id != DEFAULT_TLE_POOL_ID)
-					ida_simple_remove(&hw->tle_pool_ids,
-							  svc_priv->tle_pool_id);
-			}
-
-			if ((i == CXI_RSRC_TYPE_LE) &&
-			    (limits->type[i].res)) {
-				int pe;
-
-				for (pe = 0; pe < C_PE_COUNT; pe++)
-					cass_cfg_le_pools(hw,
-							  svc_priv->le_pool_id,
-							  pe, &limits->type[i],
-							  true);
-				if (svc_priv->le_pool_id != DEFAULT_LE_POOL_ID)
-					ida_simple_remove(&hw->le_pool_ids[0],
-							  svc_priv->le_pool_id);
+	if (type == CXI_RSRC_TYPE_LE) {
+		for (pe = 0; pe < C_PE_COUNT; pe++) {
+			rc = cxi_rgroup_add_resource(rgroup,
+						     stype_to_rtype(type, pe),
+						     limits);
+			if (rc) {
+				pr_debug("add resource %s PE %d failed\n",
+					 cxi_rsrc_type_to_str(type), pe);
+				return rc;
 			}
 		}
+
+		return rc;
 	}
+
+	rc = cxi_rgroup_add_resource(rgroup,
+				     stype_to_rtype(type, 0), limits);
+	if (rc)
+		pr_debug("add resource %s failed\n",
+			 cxi_rsrc_type_to_str(type));
+
+	return rc;
 }
 
 /* For each resource requested, check if enough of that resource is available.
@@ -424,114 +499,79 @@ static int reserve_rsrcs(struct cass_dev *hw,
 			 struct cxi_svc_fail_info *fail_info)
 {
 	int i;
+	int pe;
 	int rc = 0;
-	bool got_tle_pool = false;
-	bool got_le_pool = false;
+	struct cxi_rgroup *rgroup = svc_priv->rgroup;
 	struct cxi_rsrc_limits *limits = &svc_priv->svc_desc.limits;
 
 	/* Default pool for default svc or when there are no LE limits */
-	svc_priv->le_pool_id = DEFAULT_LE_POOL_ID;
-	svc_priv->tle_pool_id = DEFAULT_TLE_POOL_ID;
 	if (!svc_priv->svc_desc.resource_limits)
-		return 0;
+		default_rsrc_limits(limits);
 
-	/* First check if all resources are available */
-	if (limits->type[CXI_RSRC_TYPE_PTE].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_PTE, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_TXQ].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_TXQ, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_TGQ].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_TGQ, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_EQ].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_EQ, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_CT].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_CT, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_AC].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_AC, fail_info))
-			rc = -ENOSPC;
-	}
-	if (limits->type[CXI_RSRC_TYPE_TLE].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_TLE, fail_info))
-			rc = -ENOSPC;
-		if (!rc && svc_priv->svc_desc.svc_id != CXI_DEFAULT_SVC_ID) {
-			/* Ensure TLE max/res are at least CASS_MIN_POOL_TLES */
-			if (limits->type[CXI_RSRC_TYPE_TLE].res < CASS_MIN_POOL_TLES)
-				limits->type[CXI_RSRC_TYPE_TLE].res = CASS_MIN_POOL_TLES;
-			/* Force TLE max/res to be equal */
-			limits->type[CXI_RSRC_TYPE_TLE].max = limits->type[CXI_RSRC_TYPE_TLE].res;
+	for (i = CXI_RSRC_TYPE_PTE; i < CXI_RSRC_TYPE_MAX; i++) {
+		if (!limits->type[i].res && !limits->type[i].max)
+			continue;
 
-			svc_priv->tle_pool_id = ida_simple_get(
-							&hw->tle_pool_ids,
-							DEFAULT_TLE_POOL_ID + 1,
-							C_CQ_CFG_TLE_POOL_ENTRIES,
-							GFP_KERNEL);
-			if (svc_priv->tle_pool_id < 1) {
-				rc = -ENOSPC;
-				if (fail_info)
-					fail_info->no_tle_pools = true;
-			} else {
-				got_tle_pool = true;
+		if (i == CXI_RSRC_TYPE_TLE) {
+			if (svc_priv->svc_desc.svc_id != CXI_DEFAULT_SVC_ID) {
+				/* Ensure TLE max/res are at least CASS_MIN_POOL_TLES */
+				if (limits->type[i].res < CASS_MIN_POOL_TLES)
+					limits->type[i].res = CASS_MIN_POOL_TLES;
+				/* Force TLE max/res to be equal */
+				limits->type[i].max = limits->type[i].res;
 			}
-		}
-	}
-	if (limits->type[CXI_RSRC_TYPE_LE].res) {
-		if (!rsrc_available(hw, limits, CXI_RSRC_TYPE_LE, fail_info))
+		} else if (i == CXI_RSRC_TYPE_LE) {
+			for (pe = 0; pe < C_PE_COUNT; pe++) {
+				if (!rsrc_available(hw, limits, i, pe,
+						    fail_info)) {
+					pr_debug("resource %s PE %d unavailable\n",
+						 cxi_rsrc_type_to_str(i), pe);
+					rc = -ENOSPC;
+					goto nospace;
+				}
+			}
+		} else if (!rsrc_available(hw, limits, i, 0, fail_info)) {
+			pr_debug("resource %s unavailable\n",
+				 cxi_rsrc_type_to_str(i));
 			rc = -ENOSPC;
-		if (!rc && svc_priv->svc_desc.svc_id != CXI_DEFAULT_SVC_ID) {
-			svc_priv->le_pool_id = ida_simple_get(&hw->le_pool_ids[0],
-							      DEFAULT_LE_POOL_ID + 1,
-							      CASS_NUM_LE_POOLS,
-							      GFP_KERNEL);
-			if (svc_priv->le_pool_id < 1) {
-				rc = -ENOSPC;
-				if (fail_info)
-					fail_info->no_le_pools = true;
-			} else {
-				got_le_pool = true;
-			}
+			goto nospace;
 		}
 	}
 
-	/* If any resources weren't available, cleanup */
+nospace:
 	if (rc)
-		goto err;
+		return rc;
 
 	/* Now reserve resources since needed ones are available */
-	for (i = 0; i < CXI_RSRC_TYPE_MAX; i++) {
-		if (limits->type[i].res) {
-			hw->rsrc_use[i].res += limits->type[i].res;
-			hw->rsrc_use[i].shared_total -= limits->type[i].res;
-			if (i == CXI_RSRC_TYPE_TLE)
-				cass_cfg_tle_pool(hw, svc_priv->tle_pool_id,
-						  &limits->tles, false);
-			if (i == CXI_RSRC_TYPE_LE) {
-				int pe;
+	for (i = CXI_RSRC_TYPE_PTE; i < CXI_RSRC_TYPE_MAX; i++) {
+		struct cxi_resource_limits lim = {
+			.reserved = limits->type[i].res,
+			.max = limits->type[i].max
+		};
 
-				for (pe = 0; pe < C_PE_COUNT; pe++)
-					cass_cfg_le_pools(hw,
-							  svc_priv->le_pool_id,
-							  pe, &limits->les,
-							  false);
-			}
+		if (!lim.reserved && !lim.max)
+			continue;
+
+		rc = add_resource(rgroup, i, &lim);
+		if (rc) {
+			pr_debug("resource %s add_resource failed %d\n",
+				 cxi_rsrc_type_to_str(i), rc);
+
+			goto err;
 		}
 	}
+
 	return 0;
 
 err:
-	if (limits->type[CXI_RSRC_TYPE_TLE].res && got_tle_pool)
-		ida_simple_remove(&hw->tle_pool_ids, svc_priv->tle_pool_id);
-	if (limits->type[CXI_RSRC_TYPE_LE].res && got_le_pool)
-		ida_simple_remove(&hw->le_pool_ids[0], svc_priv->le_pool_id);
+	/* Remove any resources we already allocated */
+	for (--i; i >= CXI_RSRC_TYPE_PTE; i--) {
+		if (!limits->type[i].res)
+			continue;
+
+		free_rsrc(svc_priv, i);
+	}
+
 	return rc;
 }
 
@@ -590,7 +630,13 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
-	int rc, i;
+	int rc;
+	unsigned int rgroup_id;
+	struct cxi_rgroup *rgroup;
+	struct cxi_rgroup_attr attr = {
+		.cntr_pool_id = svc_desc->cntr_pool_id,
+		.system_service = svc_desc->is_system_svc,
+	};
 
 	rc = validate_descriptor(hw, svc_desc);
 	if (rc)
@@ -603,9 +649,13 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 	refcount_set(&svc_priv->refcount, 1);
 
-	/* Initialize rsrc_use in svc_priv */
-	for (i = 0; i < CXI_RSRC_TYPE_MAX; i++)
-		atomic_set(&svc_priv->rsrc_use[i], 0);
+	rc = cxi_dev_alloc_rgroup(dev, &attr, &rgroup_id);
+	if (rc)
+		goto free_svc;
+
+	rc = cxi_dev_find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
+	if (rc)
+		goto release_rgroup;
 
 	idr_preload(GFP_KERNEL);
 	spin_lock(&hw->svc_lock);
@@ -615,14 +665,19 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 	if (rc < 0) {
 		cxidev_dbg(&hw->cdev, "%s service IDs exhausted\n", hw->cdev.name);
-		goto free_svc;
+		goto rgroup_dec_refcount;
 	}
 
 	svc_priv->svc_desc.svc_id = rc;
+	svc_priv->rgroup = rgroup;
 
 	/* Check if requested reserved resources are available */
 	spin_lock(&hw->svc_lock);
 	rc = reserve_rsrcs(hw, svc_priv, fail_info);
+	if (rc)
+		goto free_id;
+
+	rc = cxi_rgroup_enable(rgroup);
 	if (rc)
 		goto free_id;
 
@@ -639,7 +694,11 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 free_id:
 	idr_remove(&hw->svc_ids, svc_priv->svc_desc.svc_id);
 	spin_unlock(&hw->svc_lock);
-
+rgroup_dec_refcount:
+	cxi_rgroup_dec_refcount(rgroup);
+	/* The rgroup pointer is no longer usable. */
+release_rgroup:
+	cxi_dev_rgroup_release(dev, rgroup_id);
 free_svc:
 	kfree(svc_priv);
 
@@ -663,8 +722,10 @@ static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
  */
 int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 {
+	int rc;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
+	int rgroup_id;
 
 	/* Don't destroy default svc */
 	if (svc_id == CXI_DEFAULT_SVC_ID)
@@ -681,12 +742,18 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 
 	/* Don't delete if an LNI is still using this SVC */
 	if (refcount_read(&svc_priv->refcount) == 1) {
-		free_rsrcs(hw, svc_priv);
+		free_rsrcs(svc_priv);
 		idr_remove(&hw->svc_ids, svc_id);
 	} else {
 		spin_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
+
+	rgroup_id = svc_priv->rgroup->id;
+	cxi_rgroup_dec_refcount(svc_priv->rgroup);
+	rc = cxi_dev_rgroup_release(dev, rgroup_id);
+	if (rc)
+		pr_debug("cxi_dev_release_rgroup_by_id failed %d\n", rc);
 
 	list_del(&svc_priv->list);
 	hw->svc_count--;
@@ -841,18 +908,30 @@ EXPORT_SYMBOL(cxi_svc_get);
 void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		      enum cxi_rsrc_type type)
 {
+	int rc;
+	enum cxi_resource_type rtype;
+	struct cxi_resource_use *r_use;
+	struct cxi_resource_entry *entry;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-	struct cass_rsrc_info *hw_use = &hw->rsrc_use[type];
-	struct cxi_limits *svc_limits = &svc_priv->svc_desc.limits.type[type];
-	atomic_t *svc_usage = &svc_priv->rsrc_use[type];
 
+	rtype = stype_to_rtype(type, 0);
+	r_use = &hw->resource_use[rtype];
 
 	spin_lock(&hw->svc_lock);
-	/* First free from shared space if applicable */
-	if (atomic_read(svc_usage) > svc_limits->res)
-		hw_use->shared_in_use--;
 
-	atomic_dec(svc_usage);
+	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
+	if (rc) {
+		pr_warn("cxi_rgroup_get_resource_entry failed:%d\n", rc);
+		goto unlock;
+	}
+
+	/* First free from shared space if applicable */
+	if (entry->limits.in_use > entry->limits.max)
+		r_use->shared_use--;
+
+	r_use->in_use--;
+	entry->limits.in_use--;
+unlock:
 	spin_unlock(&hw->svc_lock);
 }
 
@@ -860,46 +939,47 @@ void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		       enum cxi_rsrc_type type)
 {
-	int rc = 0;
+	int rc;
+	size_t available;
+	enum cxi_resource_type rtype;
+	struct cxi_resource_use *r_use;
+	struct cxi_resource_entry *entry;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-	struct cass_rsrc_info *hw_use = &hw->rsrc_use[type];
-	struct cxi_limits *svc_limits = &svc_priv->svc_desc.limits.type[type];
-	atomic_t *svc_usage = &svc_priv->rsrc_use[type];
 
-	/* Ensure service is enabled */
-	if (!svc_priv->svc_desc.enable)
+	if (!svc_priv->rgroup->state.enabled)
 		return -EKEYREVOKED;
+
+	rtype = stype_to_rtype(type, 0);
+	r_use = &hw->resource_use[rtype];
 
 	spin_lock(&hw->svc_lock);
 
-	/* First allocate against reserved space if applicable */
-	if (svc_priv->svc_desc.resource_limits) {
-		if (atomic_read(svc_usage) < svc_limits->res) {
-			if (!atomic_add_unless(svc_usage, 1, svc_limits->res))
-				rc = -ENOSPC; /* Should never happen */
-			goto unlock;
-		}
+	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
+	if (rc) {
+		pr_debug("cxi_rgroup_get_resource_entry failed:%d\n", rc);
+		goto unlock;
 	}
 
-	/* Allocate from shared space */
-	if (hw_use->shared_total - hw_use->shared_in_use > 0) {
-		/* Don't allocate more than specified max */
-		if (svc_priv->svc_desc.resource_limits) {
-			if (!atomic_add_unless(svc_usage, 1, svc_limits->max)) {
-				rc = -ENOSPC;
-				goto unlock;
-			}
-		} else {
-			atomic_inc(svc_usage);
-		}
-		hw_use->shared_in_use++;
+	available = r_use->max - r_use->shared_use;
+
+	if (entry->limits.in_use < entry->limits.reserved) {
+		r_use->in_use++;
+		entry->limits.in_use++;
+	} else if (entry->limits.in_use < entry->limits.max && available) {
+		entry->limits.in_use++;
+		r_use->in_use++;
+		r_use->shared_use++;
 	} else {
+		pr_debug("%s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
+			 cxi_resource_type_to_str(rtype),
+			 entry->limits.in_use, entry->limits.reserved,
+			 entry->limits.max, r_use->shared_use);
 		rc = -ENOSPC;
 	}
+
 unlock:
 	spin_unlock(&hw->svc_lock);
 	return rc;
-
 }
 
 /**
@@ -945,6 +1025,13 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	if (svc_priv->svc_desc.resource_limits != svc_desc->resource_limits) {
 		spin_unlock(&hw->svc_lock);
 		return -EINVAL;
+	}
+
+	if (svc_priv->svc_desc.enable != svc_desc->enable) {
+		if (svc_desc->enable)
+			cxi_rgroup_enable(svc_priv->rgroup);
+		else
+			cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
 	/* Update TCs, VNIs, Members */

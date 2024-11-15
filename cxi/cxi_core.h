@@ -191,10 +191,8 @@ struct cxi_svc_priv {
 	struct list_head list;
 	struct cxi_svc_desc svc_desc;
 	refcount_t refcount;
-	atomic_t rsrc_use[CXI_RSRC_TYPE_MAX];
-	int le_pool_id;
-	int tle_pool_id;
 	unsigned int lnis_per_rgid;
+	struct cxi_rgroup *rgroup;
 };
 
 /* Logical Network Interface */
@@ -225,8 +223,6 @@ struct cxi_lni_priv {
 	struct mutex ac_list_mutex;
 
 	struct ida lac_table;
-	int lpe_le_pool;
-	int tle_pool;
 	atomic_t lpe_pe_num;
 
 	struct dentry *debug_dir;

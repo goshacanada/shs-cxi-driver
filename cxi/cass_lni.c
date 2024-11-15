@@ -84,8 +84,6 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	lni_priv->dev = dev;
 	lni_priv->lni.id = id;
 	lni_priv->lni.rgid = rgid;
-	lni_priv->lpe_le_pool = svc_priv->le_pool_id;
-	lni_priv->tle_pool = svc_priv->tle_pool_id;
 	lni_priv->pid = current->pid;
 	atomic_set(&lni_priv->lpe_pe_num, rgid % C_PE_COUNT);
 
