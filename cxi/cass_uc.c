@@ -381,7 +381,9 @@ int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset, u32 len, u32 page, u8 *d
 			memcpy(data, rsp_data, to_read);
 		} else {
 			mutex_unlock(&hw->uc_mbox_mutex);
-			cxidev_err(cdev, "uC failed to read the cable eeprom: %d\n", rc);
+			cxidev_err(cdev,
+				   "uC failed to read the cable eeprom page %u offset %u length %u: %d\n",
+				   page, offset, to_read, rc);
 			return -EIO;
 		}
 
@@ -400,7 +402,7 @@ EXPORT_SYMBOL(cxi_get_qsfp_data);
  * SFF-8636 type, with 256-bytes eeprom pages.
  */
 #define SFF_8436_STATUS_2_OFFSET           0x02
-#define     SFF_8436_PAGE_01_PRESENT       BIT(7)
+#define     CMIS_PAGE_01_PRESENT           BIT(7)
 static void uc_update_cable_info(struct cass_dev *hw)
 {
 	int ret;
@@ -418,15 +420,15 @@ static void uc_update_cable_info(struct cass_dev *hw)
 	hw->qsfp_eeprom_page_len = ETH_MODULE_SFF_8436_LEN;
 	mutex_unlock(&hw->qsfp_eeprom_lock);
 
-	if (hw->qsfp_eeprom_page0[SFF_8436_STATUS_2_OFFSET] & SFF_8436_PAGE_01_PRESENT) {
-		cxidev_dbg(&hw->cdev, "no eeprom page1\n");
+	if (hw->qsfp_eeprom_page0[SFF_8436_STATUS_2_OFFSET] & CMIS_PAGE_01_PRESENT) {
+		cxidev_dbg(&hw->cdev, "no eeprom page 1\n");
 		return;
 	}
 
 	ret = cxi_get_qsfp_data(&hw->cdev, 0, ETH_MODULE_SFF_8436_LEN,
 				1, &hw->qsfp_eeprom_page1[0]);
 	if (ret != ETH_MODULE_SFF_8436_LEN)
-		cxidev_err(&hw->cdev, "couldn't read page1 properly\n");
+		cxidev_dbg(&hw->cdev, "couldn't read eeprom page 1: %d\n", ret);
 }
 
 /* Write to the QSFP module - CUC_CMD_QSFP_WRITE */
