@@ -45,7 +45,7 @@ static struct xa_limit   rgroup_id_limits = RGROUP_ID_LIMITS;
 static void rgroup_list_lock(struct cxi_rgroup_list *list)
 	__acquires(&list->xarray.xa_lock)
 {
-	xa_lock(&list->xarray);
+	xa_lock_nested(&list->xarray, SINGLE_DEPTH_NESTING);
 }
 
 static void dev_lock_rgroup_list(struct cass_dev *hw)
@@ -707,7 +707,9 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	if (!ret)
 		return 0;
 
+	resource_entry_list_lock(list);
 	resource_entry_list_delete_resource_entry(list, resource_entry);
+	resource_entry_list_unlock(list);
 	kfree(resource_entry);
 
 	return ret;
