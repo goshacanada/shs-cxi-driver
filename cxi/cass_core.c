@@ -1022,9 +1022,25 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			goto free_error_handlers;
 		}
 
-		if (HW_PLATFORM_ASIC(hw) &&
-		    hw->uc_platform == CUC_BOARD_TYPE_UNKNOWN) {
-			cxidev_err(&hw->cdev, "Unknown uC platform: %d\n",
+		switch (hw->uc_platform) {
+		case CUC_BOARD_TYPE_SAWTOOTH:
+		case CUC_BOARD_TYPE_BRAZOS:
+			if (!cass_version(hw, CASSINI_1)) {
+				cxidev_err(&hw->cdev, "Invalid Cassini 1 platform: %d\n",
+					   hw->uc_platform);
+				goto unregister_uc;
+			}
+			break;
+		case CUC_BOARD_TYPE_WASHINGTON:
+		case CUC_BOARD_TYPE_KENNEBEC:
+			if (!cass_version(hw, CASSINI_2)) {
+				cxidev_err(&hw->cdev, "Invalid Cassini 2 platform: %d\n",
+					   hw->uc_platform);
+				goto unregister_uc;
+			}
+			break;
+		default:
+			cxidev_err(&hw->cdev, "Unknown uC platform %d\n",
 				   hw->uc_platform);
 			goto unregister_uc;
 		}
