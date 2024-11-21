@@ -923,8 +923,8 @@ void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		goto unlock;
 	}
 
-	/* First free from shared space if applicable */
-	if (entry->limits.in_use > entry->limits.max)
+	/* Free from shared space if applicable */
+	if (entry->limits.in_use > entry->limits.reserved)
 		r_use->shared_use--;
 
 	r_use->in_use--;
@@ -968,7 +968,8 @@ int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		r_use->in_use++;
 		r_use->shared_use++;
 	} else {
-		pr_debug("%s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
+		pr_debug("rgroup_id:%d %s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
+			 svc_priv->rgroup->id,
 			 cxi_resource_type_to_str(rtype),
 			 entry->limits.in_use, entry->limits.reserved,
 			 entry->limits.max, r_use->shared_use);
