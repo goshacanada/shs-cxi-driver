@@ -898,6 +898,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	mutex_init(&hw->amo_remap_to_pcie_fadd_mutex);
 
 	hw->tsc_fill_qty = TSC_DEFAULT_FILL_QTY;
+	hw->uc_platform = CUC_BOARD_TYPE_UNKNOWN;
 
 	/* Enable Device */
 	rc = pci_enable_device(pdev);
@@ -1022,7 +1023,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		}
 
 		if (HW_PLATFORM_ASIC(hw) &&
-		    hw->uc_platform == SBL_UC_PLATFORM_UNDEFINED) {
+		    hw->uc_platform == CUC_BOARD_TYPE_UNKNOWN) {
 			cxidev_err(&hw->cdev, "Unknown uC platform: %d\n",
 				   hw->uc_platform);
 			goto unregister_uc;

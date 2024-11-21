@@ -16,7 +16,6 @@
 #include <net/genetlink.h>
 #include <linux/ptp_clock_kernel.h>
 #include <linux/etherdevice.h>
-#include <uapi/sbl_cassini.h>
 #include <linux/completion.h>
 #include <linux/hrtimer.h>
 #include <linux/hwmon.h>
@@ -844,7 +843,7 @@ struct cass_dev {
 
 	/* Micro-controller */
 	bool uc_present;
-	enum cass_uc_platform uc_platform;
+	int uc_platform;	/* CUC_BOARD_TYPE_xxx */
 	struct cxi_reg_err_flg uc_err;
 	struct completion uc_attention0_comp;
 	struct cuc_pkt uc_req;

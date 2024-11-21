@@ -246,7 +246,7 @@ int cass_cable_scan(struct cass_dev *hw)
 
 	/* Check if a cable is present */
 	switch (hw->uc_platform) {
-	case SBL_UC_PLATFORM_BRAZOS:
+	case CUC_BOARD_TYPE_BRAZOS:
 		cxidev_dbg(&hw->cdev, "Platform: BRAZOS\n");
 		if (!cass_is_cable_present(hw)) {
 			cxidev_warn(&hw->cdev, "HSN cable is not plugged\n");
@@ -268,7 +268,7 @@ int cass_cable_scan(struct cass_dev *hw)
 		hw->port->lattr.mattr = attr;
 		return cass_link_headshell_insert(hw, &attr);
 
-	case SBL_UC_PLATFORM_SAWTOOTH:
+	case CUC_BOARD_TYPE_SAWTOOTH:
 		cxidev_dbg(&hw->cdev, "Platform: SAWTOOTH\n");
 		attr.media = SBL_LINK_MEDIA_ELECTRICAL;
 		attr.len = SBL_LINK_LEN_BACKPLANE;
@@ -284,7 +284,7 @@ int cass_cable_scan(struct cass_dev *hw)
 
 		return cass_link_media_config(hw, &attr);
 
-	case SBL_UC_PLATFORM_KENNEBEC:
+	case CUC_BOARD_TYPE_KENNEBEC:
 		cxidev_dbg(&hw->cdev, "Platform: KENNEBEC\n");
 		if (!cass_is_cable_present(hw)) {
 			cxidev_warn(&hw->cdev, "HSN cable is not plugged\n");
@@ -295,7 +295,7 @@ int cass_cable_scan(struct cass_dev *hw)
 			return cass_link_headshell_error(hw);
 		return cass_link_headshell_insert(hw, &attr);
 
-	case SBL_UC_PLATFORM_WASHINGTON:
+	case CUC_BOARD_TYPE_WASHINGTON:
 		cxidev_dbg(&hw->cdev, "Platform: WASHINGTON\n");
 		attr.media = SBL_LINK_MEDIA_ELECTRICAL;
 		attr.len   = SBL_LINK_LEN_BACKPLANE;
@@ -303,6 +303,8 @@ int cass_cable_scan(struct cass_dev *hw)
 		return cass_link_media_config(hw, &attr);
 
 	default:
+		cxidev_err(&hw->cdev, "Platform %d is not supported\n",
+			   hw->uc_platform);
 		return -EINVAL;
 	}
 }

@@ -815,7 +815,17 @@ int cass_sbl_init(struct cass_dev *hw)
 
 	sbl_iattr.magic = SBL_INIT_ATTR_MAGIC;
 	sbl_iattr.uc_nic = hw->uc_nic;
-	sbl_iattr.uc_platform = hw->uc_platform;
+
+	switch (hw->uc_platform) {
+	case CUC_BOARD_TYPE_SAWTOOTH:
+		sbl_iattr.uc_platform = SBL_UC_PLATFORM_SAWTOOTH;
+		break;
+	case CUC_BOARD_TYPE_BRAZOS:
+		sbl_iattr.uc_platform = SBL_UC_PLATFORM_BRAZOS;
+		break;
+	default:
+		sbl_iattr.uc_platform = SBL_UC_PLATFORM_UNKNOWN;
+	}
 
 	sbl = sbl_new_instance(hw, hw, &ops, &sbl_iattr);
 

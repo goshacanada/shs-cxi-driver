@@ -354,8 +354,8 @@ int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset, u32 len, u32 page, u8 *d
 	int rc;
 
 	if (!hw->uc_present ||
-	    (hw->uc_platform != SBL_UC_PLATFORM_BRAZOS &&
-	     hw->uc_platform != SBL_UC_PLATFORM_KENNEBEC &&
+	    (hw->uc_platform != CUC_BOARD_TYPE_BRAZOS &&
+	     hw->uc_platform != CUC_BOARD_TYPE_KENNEBEC &&
 	     !HW_PLATFORM_NETSIM(hw)))
 		return -ENOMEDIUM;
 
@@ -1210,9 +1210,9 @@ static void set_uc_platform(struct cass_dev *hw)
 
 	if (HW_PLATFORM_Z1(hw)) {
 		if (!cass_version(hw, CASSINI_1))
-			hw->uc_platform = SBL_UC_PLATFORM_WASHINGTON;
+			hw->uc_platform = CUC_BOARD_TYPE_WASHINGTON;
 		else
-			hw->uc_platform = SBL_UC_PLATFORM_SAWTOOTH;
+			hw->uc_platform = CUC_BOARD_TYPE_SAWTOOTH;
 		return;
 	}
 
@@ -1235,23 +1235,7 @@ static void set_uc_platform(struct cass_dev *hw)
 	 * CUC_CMD_FW_VERSION response would be at least 4 bytes.
 	 */
 	if (rc == 0 && resp_len == (1 + sizeof(struct cuc_board_info_rsp))) {
-		switch (board_type) {
-		case CUC_BOARD_TYPE_SAWTOOTH:
-			hw->uc_platform = SBL_UC_PLATFORM_SAWTOOTH;
-			break;
-		case CUC_BOARD_TYPE_BRAZOS:
-			hw->uc_platform = SBL_UC_PLATFORM_BRAZOS;
-			break;
-		case CUC_BOARD_TYPE_KENNEBEC:
-			hw->uc_platform = SBL_UC_PLATFORM_KENNEBEC;
-			break;
-		case CUC_BOARD_TYPE_WASHINGTON:
-			hw->uc_platform = SBL_UC_PLATFORM_WASHINGTON;
-			break;
-		default:
-			hw->uc_platform = SBL_UC_PLATFORM_UNKNOWN;
-			break;
-		}
+		hw->uc_platform = board_type;
 
 		return;
 	}
@@ -1262,7 +1246,7 @@ static void set_uc_platform(struct cass_dev *hw)
 
 	if (!hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER]) {
 		cxidev_err(&hw->cdev, "Failed to detect platform from uC!\n");
-		hw->uc_platform = SBL_UC_PLATFORM_UNKNOWN;
+		hw->uc_platform = CUC_BOARD_TYPE_UNKNOWN;
 	} else if (!strcmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
 			   PCA_SHASTA_SAWTOOTH_PASS_1_PN) ||
 		   !strcmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
@@ -1270,7 +1254,7 @@ static void set_uc_platform(struct cass_dev *hw)
 		   !strncmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
 			    PCA_SHASTA_SAWTOOTH_PASS_3_PN,
 			    strlen(PCA_SHASTA_SAWTOOTH_PASS_3_PN))) {
-		hw->uc_platform = SBL_UC_PLATFORM_SAWTOOTH;
+		hw->uc_platform = CUC_BOARD_TYPE_SAWTOOTH;
 	} else if (!strcmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
 			   PCA_SHASTA_BRAZOS_PASS_1_PN) ||
 		   !strcmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
@@ -1280,9 +1264,9 @@ static void set_uc_platform(struct cass_dev *hw)
 		   !strncmp(hw->fru_info[PLDM_FRU_FIELD_PART_NUMBER],
 			    PCA_SHASTA_BRAZOS_PASS_4_PN,
 			    strlen(PCA_SHASTA_BRAZOS_PASS_4_PN))) {
-		hw->uc_platform = SBL_UC_PLATFORM_BRAZOS;
+		hw->uc_platform = CUC_BOARD_TYPE_BRAZOS;
 	} else {
-		hw->uc_platform = SBL_UC_PLATFORM_UNKNOWN;
+		hw->uc_platform = CUC_BOARD_TYPE_UNKNOWN;
 	};
 }
 

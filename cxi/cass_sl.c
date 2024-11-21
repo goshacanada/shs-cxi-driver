@@ -878,7 +878,7 @@ static int cass_sl_dt_info_get(void *dt_accessor, u8 ldev_num, u8 lgrp_num,
 	info->dev_addr  = 0x5;
 
 	switch (cass_dev->uc_platform) {
-	case SBL_UC_PLATFORM_WASHINGTON:
+	case CUC_BOARD_TYPE_WASHINGTON:
 		switch (cass_dev->uc_nic) {
 		case 0:
 			/* TX: [3, 2, 1, 0] = {3, 2, 1, 0inv} */
@@ -922,7 +922,7 @@ static int cass_sl_dt_info_get(void *dt_accessor, u8 ldev_num, u8 lgrp_num,
 			break;
 		}
 		break;
-	case SBL_UC_PLATFORM_KENNEBEC:
+	case CUC_BOARD_TYPE_KENNEBEC:
 		/* TX: [3, 2, 1, 0] = {1inv, 0, 2inv, 3} */
 		/* CSR:      serdes = logical            */
 		info->lane_info[3].tx_source = 1;
@@ -1380,14 +1380,14 @@ int cass_sl_connect_id_set(struct cass_dev *cass_dev, const char *connect_id)
 int cass_sl_media_config(struct cass_dev *cass_dev, void *unused)
 {
 	u32 flags = 0;
-	
+
 	cxidev_dbg(&cass_dev->cdev, "media config\n");
-	
-	if (cass_dev->uc_platform == SBL_UC_PLATFORM_WASHINGTON)
+
+	if (cass_dev->uc_platform == CUC_BOARD_TYPE_WASHINGTON)
 		flags |= SL_MEDIA_TYPE_BACKPLANE;
 
 	return sl_media_cable_insert(cass_dev->sl.lgrp, cass_dev->qsfp_eeprom_page0,
-		cass_dev->qsfp_eeprom_page1, flags);
+				     cass_dev->qsfp_eeprom_page1, flags);
 }
 
 int cass_sl_media_unconfig(struct cass_dev *cass_dev)
