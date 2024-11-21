@@ -155,7 +155,8 @@ static void uc_cmd_get_fw_versions(struct cass_dev *hw)
 	uc_cmd_get_fw_version(hw, FW_UC_APPLICATION);
 	uc_cmd_get_fw_version(hw, FW_UC_BOOTLOADER);
 	uc_cmd_get_fw_version(hw, FW_QSPI_BLOB);
-	uc_cmd_get_fw_version(hw, FW_OPROM);
+	if (cass_version(hw, CASSINI_1))
+		uc_cmd_get_fw_version(hw, FW_OPROM);
 	uc_cmd_get_fw_version(hw, FW_CSR1);
 	uc_cmd_get_fw_version(hw, FW_CSR2);
 	uc_cmd_get_fw_version(hw, FW_SRDS);
