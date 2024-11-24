@@ -6,6 +6,28 @@
  */
 #include "cass_core.h"
 
+#define SRB_MAX_SIZE 2048U
+
+/* Reserve half the SRB space to cover C2 expected bandwidth delay product. The
+ * remainder of the space should be split up between the RDMA traffic classes.
+ */
+#define SRB_SHARED_MAX (SRB_MAX_SIZE / 2)
+#define SRB_RESERVED (SRB_MAX_SIZE - SRB_SHARED_MAX)
+
+/* Since low-latency does not need to sustain bandwidth, reserve only a few
+ * MTU sized packets worth of SRB.
+ */
+#define LOW_LATENCY_SRB_RSVD 32U
+
+/* Number of RDMA traffic classes which need to sustain max bandwidth. */
+#define MAX_BANDWIDTH_TCS 3
+#define TC_SRB_RSVD ((SRB_RESERVED - LOW_LATENCY_SRB_RSVD) / MAX_BANDWIDTH_TCS)
+
+/* The following traffic classes are expected to get max bandwidth. */
+#define BULK_DATA_SRB_RSVD TC_SRB_RSVD
+#define BEST_EFFORT_SRB_RSVD TC_SRB_RSVD
+#define DEDICATED_ACCESS_SRB_RSVD TC_SRB_RSVD
+
 struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 	/* HPC Profile */
 	[CXI_QOS_HPC] = {
@@ -49,7 +71,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 39,
+					.srb_rsvd = DEDICATED_ACCESS_SRB_RSVD,
 					.pbuf_rsvd = 39,
 					.assured_percent = 50,
 					.ceiling_percent = 100,
@@ -97,7 +119,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = LOW_LATENCY_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 15,
 					.ceiling_percent = 30,
@@ -144,7 +166,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 39,
+					.srb_rsvd = BULK_DATA_SRB_RSVD,
 					.pbuf_rsvd = 39,
 					.assured_percent = 15,
 					.ceiling_percent = 100,
@@ -191,7 +213,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = BEST_EFFORT_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 10,
 					.ceiling_percent = 100,
@@ -295,7 +317,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = LOW_LATENCY_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 2,
 					.ceiling_percent = 5,
@@ -343,7 +365,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 39,
+					.srb_rsvd = BULK_DATA_SRB_RSVD,
 					.pbuf_rsvd = 39,
 					.assured_percent = 10, /* Fabric: 20 */
 					.ceiling_percent = 100,
@@ -390,7 +412,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = BEST_EFFORT_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 10, /* Fabric: 50 */
 					.ceiling_percent = 100,
@@ -495,7 +517,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = LOW_LATENCY_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 2,
 					.ceiling_percent = 5,
@@ -543,7 +565,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 39,
+					.srb_rsvd = BULK_DATA_SRB_RSVD,
 					.pbuf_rsvd = 39,
 					.assured_percent = 10, /* Fabric: 20 */
 					.ceiling_percent = 100,
@@ -590,7 +612,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
-					.srb_rsvd = 13,
+					.srb_rsvd = BEST_EFFORT_SRB_RSVD,
 					.pbuf_rsvd = 13,
 					.assured_percent = 10, /* Fabric: 40 */
 					.ceiling_percent = 100,
