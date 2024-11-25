@@ -109,6 +109,7 @@ struct cxi_tc {
 	unsigned int restricted_cq_tc;
 	unsigned int branch;
 	unsigned int leaf[2]; /* assumes always 2 leaves per TC */
+	unsigned int req_bc;
 
 	/* RDMA Only Settings */
 	struct cass_tc_dscp_pcp_settings dscp_pcp_settings;
@@ -131,7 +132,6 @@ struct qos_profile {
 	unsigned int pct_control_pcp;
 	unsigned int pct_control_res_rsp_dscp;
 	unsigned int pct_control_unres_rsp_dscp;
-	unsigned int tc_restricted_oxe_req_bc;
 	unsigned int untagged_eth_pcp;
 	struct cxi_tc tcs[CXI_ETH_TC_MAX];
 };

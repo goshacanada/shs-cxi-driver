@@ -399,6 +399,8 @@ static int cass_tc_oxe_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 	if (req_bc < 0)
 		return req_bc;
 
+	hw->qos.tcs[tc].req_bc = req_bc;
+
 	rsp_bc = cass_tc_rsp_oxe_bc_cfg(hw, oxe_settings->pbuf_rsvd);
 	if (rsp_bc < 0)
 		return rsp_bc;
@@ -1314,40 +1316,6 @@ static void cass_tc_hni_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 		cass_tc_enable_pauses(hw, rsp_pcp);
 }
 
-#define C1_RESTRICTED_BC_SPT_RSVD 1500U
-#define C2_RESTRICTED_BC_SPT_RSVD 64U
-#define RESTRICTED_BC_SMT_RSVD 0U
-#define RESTRICTED_BC_SCT_RSVD 0U
-#define RESTRICTED_BC_SRB_RSVD 39U
-#define RESTRICTED_BC_PBUF_RSVD 39U
-
-/**
- * cass_tc_init_res_req_oxe_bc() - Initialize global OXE buffer class to be used
- * for restricted request MCUs.
- *
- * @hw: Cassini device
- *
- * This buffer class is to be used by all CXI_TC_TYPE_HRP and
- * CXI_TC_TYPE_RESTRICTED traffic class types.
- */
-static int cass_tc_init_res_req_oxe_bc(struct cass_dev *hw)
-{
-	int bc;
-
-	bc = cass_tc_req_oxe_bc_cfg(hw, cass_version(hw, CASSINI_1) ?
-				    C1_RESTRICTED_BC_SPT_RSVD : C2_RESTRICTED_BC_SPT_RSVD,
-				    RESTRICTED_BC_SMT_RSVD,
-				    RESTRICTED_BC_SCT_RSVD,
-				    RESTRICTED_BC_SRB_RSVD,
-				    RESTRICTED_BC_PBUF_RSVD);
-	if (bc < 0)
-		return bc;
-
-	hw->qos.tc_restricted_oxe_req_bc = bc;
-
-	return 0;
-}
-
 /* Set the DSCP DFA mask. */
 static void set_dscp_dfa_mask(struct cass_dev *hw,
 			      int dscp, unsigned int new_mask)
@@ -1737,14 +1705,14 @@ static int cass_tc_restricted_cfg(struct cass_dev *hw,
 
 	ret = cass_tc_oxe_mcu_cfg(hw, cq_mcu_base, cq_mcu_count, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
-				  hw->qos.tc_restricted_oxe_req_bc,
+				  hw->qos.tcs[tc].req_bc,
 				  oxe_settings->mfs_index);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, tou_mcu, 1, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
-				  hw->qos.tc_restricted_oxe_req_bc,
+				  hw->qos.tcs[tc].req_bc,
 				  oxe_settings->mfs_index);
 	if (ret)
 		return ret;
@@ -2074,11 +2042,6 @@ int cass_tc_init(struct cass_dev *hw)
 	rx_ctrl_cfg.pfc_rec_enable = 1;
 	rx_ctrl_cfg.pause_rec_enable = 0;
 	cass_write(hw, C_HNI_CFG_PAUSE_RX_CTRL, &rx_ctrl_cfg, sizeof(rx_ctrl_cfg));
-
-	/* Setup Global OXE BC for restricted request MCUs */
-	ret = cass_tc_init_res_req_oxe_bc(hw);
-	if (ret)
-		return ret;
 
 	for (tc = 0; tc < CXI_MAX_RDMA_TCS; tc++) {
 		/* Don't configure inactive TCs */
