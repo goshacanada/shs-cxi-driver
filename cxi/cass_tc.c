@@ -385,14 +385,26 @@ static int cass_tc_oxe_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 	int req_leaf_bucket;
 	int rsp_leaf_bucket;
 	int ret;
+	int spt_rsvd = oxe_settings->spt_rsvd;
 
 	/* If PCT control traffic needs to be remapped to a different traffic
 	 * class, reuse the response PCP of the remapped traffic class.
 	 */
 	int mcu_pcp = hw->qos.pct_control_pcp;
 
-	req_bc = cass_tc_req_oxe_bc_cfg(hw, oxe_settings->spt_rsvd,
-					oxe_settings->smt_rsvd,
+	/* Calculate SPT reserved back on number of MCUs and ordered packets
+	 * inflight. Only 3 MCUs worth of SPT entries are currently supported
+	 * being reserved.
+	 */
+	if (!spt_rsvd) {
+		spt_rsvd = min_t(int, 3, cq_mcu_count);
+		if (cass_version(hw, CASSINI_2))
+			spt_rsvd *= CASS2_MAX_PACKETS_INFLIGHT;
+		else
+			spt_rsvd *= CASS1_MAX_PACKETS_INFLIGHT;
+	}
+
+	req_bc = cass_tc_req_oxe_bc_cfg(hw, spt_rsvd, oxe_settings->smt_rsvd,
 					oxe_settings->sct_rsvd,
 					oxe_settings->srb_rsvd,
 					oxe_settings->pbuf_rsvd);

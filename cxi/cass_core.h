@@ -227,6 +227,9 @@ static inline void pci_disable_pcie_error_reporting(void *p) {}
 /* Current devices have up to 20 sensors */
 #define CASS_MAX_SENSORS 30
 
+#define CASS2_MAX_PACKETS_INFLIGHT 128U
+#define CASS1_MAX_PACKETS_INFLIGHT 64U
+
 enum cass_link_speed {
 	CASS_SPEED_UNKNOWN = PCI_SPEED_UNKNOWN,
 	CASS_SPEED_2_5GT = PCIE_SPEED_2_5GT,

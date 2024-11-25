@@ -68,7 +68,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 256,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = DEDICATED_ACCESS_SRB_RSVD,
@@ -163,7 +162,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 128,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BULK_DATA_SRB_RSVD,
@@ -210,7 +208,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 16,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BEST_EFFORT_SRB_RSVD,
@@ -362,7 +359,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 128,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BULK_DATA_SRB_RSVD,
@@ -409,7 +405,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 16,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BEST_EFFORT_SRB_RSVD,
@@ -435,7 +430,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 			},
 			[CXI_TC_ETH] = {
 				.oxe_settings = {
-					.spt_rsvd = 30,
 					.pbuf_rsvd = DIV_ROUND_UP(ETHERNET_MAX_FRAME_SIZE, 256),
 				},
 				.cq_settings = {
@@ -562,7 +556,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 128,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BULK_DATA_SRB_RSVD,
@@ -609,7 +602,6 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 					.tct_rsvd = 16,
 				},
 				.oxe_settings = {
-					.spt_rsvd = 64,
 					.smt_rsvd = 4,
 					.sct_rsvd = 4,
 					.srb_rsvd = BEST_EFFORT_SRB_RSVD,

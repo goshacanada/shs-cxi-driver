@@ -149,9 +149,9 @@ static unsigned int calculate_packets_inflight(struct cass_dev *hw)
 	cxi_link_mode_get(&hw->cdev, &link_info);
 
 	if (link_info.speed == SPEED_400000)
-		value = 128;
+		value = CASS2_MAX_PACKETS_INFLIGHT;
 	else
-		value = 64;
+		value = CASS1_MAX_PACKETS_INFLIGHT;
 
 	return value;
 }
