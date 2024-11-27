@@ -1301,11 +1301,16 @@ int cxi_update_sgtable(struct cxi_md *md, struct sg_table *sgt)
 {
 	int ret;
 	struct cxi_md_priv *md_priv = container_of(md, struct cxi_md_priv, md);
+	struct cxi_dev *cdev = md_priv->lni_priv->dev;
+	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 
 	if ((sgt->orig_nents * PAGE_SIZE) > (md_priv->olen)) {
 		pr_debug("Address range not bounded by MD\n");
 		return -EINVAL;
 	}
+
+	if (!cass_sgtable_is_valid(hw, sgt))
+		return -EINVAL;
 
 	md_priv->sgt = sgt;
 	md_priv->external_sgt_owner = true;
