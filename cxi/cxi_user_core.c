@@ -2718,7 +2718,7 @@ static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 				  cxi_user_svc_set_lpr, true, },
 	[CXI_OP_SVC_GET_LPR] =  { sizeof(struct cxi_svc_lpr_cmd),
 				  "SVC_GET_LPR",
-				  cxi_user_svc_get_lpr, true, },
+				  cxi_user_svc_get_lpr, },
 	[CXI_OP_SBUS_OP_RESET] = { sizeof(struct cxi_sbus_op_reset_cmd),
 				   "SBUS_OP_RESET",
 				   cxi_user_sbus_op_reset, true, },
