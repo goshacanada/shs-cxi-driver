@@ -1025,6 +1025,7 @@ static int test_sgtable3(struct tdev *tdev)
 	struct cxi_md *sg_md;
 	struct cxi_md snd_md = {};
 	struct sg_table sgt = {};
+	struct sg_table sgt_bad = {};
 	struct mem_window snd_mem;
 	struct scatterdata sdata[] = {
 		{.offset = HPAGE, .length = HPAGE},
@@ -1053,47 +1054,44 @@ static int test_sgtable3(struct tdev *tdev)
 	if (rc)
 		return rc;
 
-	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata0), bad_sdata0, &len);
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata0), bad_sdata0, &len);
 	if (rc)
 		goto teardown;
 
-	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt_bad, 0);
 	rc = PTR_ERR(sg_md);
 	if (rc != -EINVAL) {
 		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
-		goto free_sgtable;
+		goto free_bad_sgtable;
 	}
 
-	unmap_free_sgtable(tdev, &sgt);
-	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata1), bad_sdata1, &len);
+	unmap_free_sgtable(tdev, &sgt_bad);
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata1), bad_sdata1, &len);
 	if (rc)
 		goto teardown;
 
-	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt_bad, 0);
 	rc = PTR_ERR(sg_md);
 	if (rc != -EINVAL) {
 		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
-		goto free_sgtable;
+		goto free_bad_sgtable;
 	}
 
-	unmap_free_sgtable(tdev, &sgt);
-	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(bad_sdata2), bad_sdata2, &len);
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata2), bad_sdata2, &len);
 	if (rc)
 		goto teardown;
 
-	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt_bad, 0);
 	rc = PTR_ERR(sg_md);
 	if (rc != -EINVAL) {
 		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
-		goto free_sgtable;
+		goto free_bad_sgtable;
 	}
-
-	unmap_free_sgtable(tdev, &sgt);
 
 	len = 0;
 	rc = fill_sgtable(tdev, &sgt, 4, sdata, &len);
 	if (rc)
-		goto teardown;
+		goto free_bad_sgtable;
 
 	snd_mem.length = len;
 	snd_mem.md = &snd_md;
@@ -1115,6 +1113,12 @@ static int test_sgtable3(struct tdev *tdev)
 		rc = PTR_ERR(sg_md);
 		pr_err("cxi_map_sgtable failed %d\n", rc);
 		goto unmap_snd;
+	}
+
+	rc = cxi_update_sgtable(sg_md, &sgt_bad);
+	if (!rc) {
+		pr_err("cxi_update_sgtable should fail with -EINVAL %d\n", rc);
+		goto unmap_sg;
 	}
 
 	offset = (u64)sg_virt(sgt.sgl) - (u64)page_address(sg_page(sgt.sgl));
@@ -1151,6 +1155,8 @@ free_sndmem:
 	kfree(snd_mem.buffer);
 free_sgtable:
 	unmap_free_sgtable(tdev, &sgt);
+free_bad_sgtable:
+	unmap_free_sgtable(tdev, &sgt_bad);
 teardown:
 	test_teardown(tdev);
 
