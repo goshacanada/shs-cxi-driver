@@ -64,13 +64,6 @@ module_param(ioi_enable, bool, 0444);
 MODULE_PARM_DESC(ioi_enable,
 		 "Enable the In-Out-In protocol for puts.");
 
-static unsigned int oxe_spt_bc_limit[C2_OXE_CFG_SPT_BC_LIMIT_ENTRIES] = {
-	2047, 2047, 2047, 2047, 2047, 2047, 2047, 2047, 2047, 2047
-};
-module_param_array(oxe_spt_bc_limit, uint, NULL, 0644);
-MODULE_PARM_DESC(oxe_spt_bc_limit,
-		 "OXE SPT BC limit, Cassini 2 only, 10 values, 0 to 2047");
-
 #ifndef PCI_EXT_CAP_ID_DVSEC
 #define PCI_EXT_CAP_ID_DVSEC 0x23
 #define PCI_DVSEC_HEADER1       0x4 /* Designated Vendor-Specific Header1 */
@@ -260,16 +253,6 @@ static void cass_oxe_init(struct cass_dev *hw)
 	/* Clear all default reserved buffer class values. */
 	cass_clear(hw, C_OXE_CFG_PCT_BC_CDT(0), C_OXE_CFG_PCT_BC_CDT_SIZE);
 	cass_clear(hw, C_OXE_CFG_BUF_BC_PARAM(0), C_OXE_CFG_BUF_BC_PARAM_SIZE);
-
-	if (cass_version(hw, CASSINI_2)) {
-		for (i = 0; i < C2_OXE_CFG_SPT_BC_LIMIT_ENTRIES; i++) {
-			union c2_oxe_cfg_spt_bc_limit limit = {
-				.limit = oxe_spt_bc_limit[i],
-			};
-
-			cass_write(hw, C2_OXE_CFG_SPT_BC_LIMIT(i), &limit, sizeof(limit));
-		}
-	}
 
 	/* Lower MCU arbitration priority limits to prevent a single MCU
 	 * starving other MCUs within a traffic class.
