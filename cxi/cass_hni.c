@@ -103,10 +103,8 @@ static const struct quantas {
 
 void update_hni_link_up(struct cass_dev *hw)
 {
-	union c_cq_cfg_fq_thresh_table fq_thresh = {};
 	struct cxi_link_info link_info;
 	const struct quantas *quanta;
-	int i;
 
 	cxi_link_mode_get(&hw->cdev, &link_info);
 
@@ -126,16 +124,6 @@ void update_hni_link_up(struct cass_dev *hw)
 		cass_write(hw, C_OXE_CFG_PAUSE_QUANTA, &quanta->q, sizeof(quanta->q));
 		cass_write(hw, C_HNI_CFG_PAUSE_QUANTA, &quanta->q, sizeof(quanta->q));
 	}
-
-	/* and the FQ threshold */
-	if (link_info.speed == SPEED_400000)
-		fq_thresh.thresh = 8 * 1024 * 1024;
-	else
-		fq_thresh.thresh = 4 * 1024 * 1024;
-
-	for (i = 0; i < C_CQ_CFG_FQ_THRESH_TABLE_ENTRIES; i++)
-		cass_write(hw, C_CQ_CFG_FQ_THRESH_TABLE(i),
-			   &fq_thresh, sizeof(fq_thresh));
 }
 
 void cass_hni_init(struct cass_dev *hw)

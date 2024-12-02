@@ -5,6 +5,11 @@
 
 #include "cass_core.h"
 
+#define LL_FQ_THRESH_DEFAULT 32768U
+static unsigned int ll_fq_thresh = LL_FQ_THRESH_DEFAULT;
+module_param(ll_fq_thresh, uint, 0444);
+MODULE_PARM_DESC(ll_fq_thresh, "Low-latency flow queue fetch threshold");
+
 static unsigned int pfc_buf_skid_space = 65280;
 module_param(pfc_buf_skid_space, uint, 0444);
 MODULE_PARM_DESC(pfc_buf_skid_space,
@@ -609,6 +614,7 @@ static int cass_tc_cq_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 	int ocu_base;
 	int tc_cq;
 	int ocuset;
+	union c_cq_cfg_fq_thresh_table fq_thresh = {};
 
 	fq_count = is_static ? cq_settings->static_fq_count :
 		cq_settings->dynamic_fq_count;
@@ -633,6 +639,13 @@ static int cass_tc_cq_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 						       fq_count);
 	if (ocuset < 0)
 		return ocuset;
+
+	if (tc == CXI_TC_LOW_LATENCY)
+		fq_thresh.thresh = ll_fq_thresh;
+	else
+		fq_thresh.thresh = hw->bw_fq_thresh;
+	cass_write(hw, C_CQ_CFG_FQ_THRESH_TABLE(ocuset), &fq_thresh,
+		   sizeof(fq_thresh));
 
 	cass_tc_cq_pfq_cfg(hw, tc_cq, ocuset, cq_settings->pfq_high_thresh);
 	cass_tc_cq_fq_cfg(hw, tc_cq, cq_settings->fq_buf_reserved);

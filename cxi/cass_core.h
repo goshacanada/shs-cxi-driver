@@ -983,6 +983,8 @@ struct cass_dev {
 
 	/* sl */
 	struct cass_sl_dev sl;
+
+	unsigned int bw_fq_thresh;
 };
 
 /* A VNI entry with its RMU index */
