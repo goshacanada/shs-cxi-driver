@@ -226,7 +226,7 @@ static int cass_tc_get_leaf_bucket(struct cass_dev *hw)
 static int cass_tc_oxe_mcu_cfg(struct cass_dev *hw, unsigned int mcu_base,
 			       unsigned int mcu_count, unsigned int pcp,
 			       unsigned int tsc, unsigned int bc,
-			       unsigned int mfs_index)
+			       unsigned int mfs_index, unsigned int limit)
 {
 	const union c_oxe_cfg_mcu_param mcu_cfg = {
 		.bc_map = bc,
@@ -234,6 +234,7 @@ static int cass_tc_oxe_mcu_cfg(struct cass_dev *hw, unsigned int mcu_base,
 		.pcp_map = pcp,
 		.wdrr_in_sel = mfs_index,
 		.wdrr_out_sel = mfs_index,
+		.limit_sel = limit,
 	};
 	int i;
 
@@ -386,6 +387,8 @@ static int cass_tc_oxe_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 	int rsp_leaf_bucket;
 	int ret;
 	int spt_rsvd = oxe_settings->spt_rsvd;
+	int limit = (tc == CXI_TC_LOW_LATENCY) ?
+		LOW_LATENCY_MCU_LIMIT_ID : BANDWIDTH_MCU_LIMIT_ID;
 
 	/* If PCT control traffic needs to be remapped to a different traffic
 	 * class, reuse the response PCP of the remapped traffic class.
@@ -438,24 +441,24 @@ static int cass_tc_oxe_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 
 	ret = cass_tc_oxe_mcu_cfg(hw, cq_mcu_base, cq_mcu_count, mcu_pcp,
 				  req_leaf_bucket, req_bc,
-				  oxe_settings->mfs_index);
+				  oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, tou_mcu, 1, mcu_pcp, req_leaf_bucket,
-				  req_bc, oxe_settings->mfs_index);
+				  req_bc, oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, lpe_mcu_base, lpe_mcu_count, mcu_pcp,
 				  req_leaf_bucket, req_bc,
-				  oxe_settings->mfs_index);
+				  oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, ixe_mcu_base, ixe_mcu_count, rsp_pcp,
 				  rsp_leaf_bucket, rsp_bc,
-				  oxe_settings->mfs_index);
+				  oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
@@ -1694,6 +1697,8 @@ static int cass_tc_restricted_cfg(struct cass_dev *hw,
 	unsigned int cq_mcu_count;
 	unsigned int cq_tc;
 	unsigned int tou_mcu;
+	int limit = (tc == CXI_TC_LOW_LATENCY) ?
+		LOW_LATENCY_MCU_LIMIT_ID : BANDWIDTH_MCU_LIMIT_ID;
 
 	/* If PCT control traffic needs to be remapped to a different traffic
 	 * class, reuse the response PCP of the remapped traffic class.
@@ -1718,14 +1723,14 @@ static int cass_tc_restricted_cfg(struct cass_dev *hw,
 	ret = cass_tc_oxe_mcu_cfg(hw, cq_mcu_base, cq_mcu_count, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
 				  hw->qos.tcs[tc].req_bc,
-				  oxe_settings->mfs_index);
+				  oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, tou_mcu, 1, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
 				  hw->qos.tcs[tc].req_bc,
-				  oxe_settings->mfs_index);
+				  oxe_settings->mfs_index, limit);
 	if (ret)
 		return ret;
 
@@ -1855,7 +1860,8 @@ static int cass_tc_eth_oxe_cfg(struct cass_dev *hw,
 
 	ret = cass_tc_oxe_mcu_cfg(hw, cq_mcu_base, cq_mcu_count,
 				  hw->qos.untagged_eth_pcp,
-				  leaf, req_bc, oxe_settings->mfs_index);
+				  leaf, req_bc, oxe_settings->mfs_index,
+				  BANDWIDTH_MCU_LIMIT_ID);
 	if (ret)
 		return ret;
 
