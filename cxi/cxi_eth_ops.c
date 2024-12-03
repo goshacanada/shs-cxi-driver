@@ -298,11 +298,18 @@ void free_tx_queue(struct tx_queue *tx)
 {
 	netif_napi_del(&tx->napi);
 
+	tx->untagged_cq = NULL;
+
 	cxi_cq_free(tx->shared_cq);
 	tx->shared_cq = NULL;
 
 	cxi_cq_free(tx->eth1_cq);
 	tx->eth1_cq = NULL;
+
+	if (tx->eth2_cq) {
+		cxi_cq_free(tx->eth2_cq);
+		tx->eth2_cq = NULL;
+	}
 
 	cxi_eq_free(tx->eq);
 	tx->eq = NULL;
