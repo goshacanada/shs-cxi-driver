@@ -23,6 +23,7 @@
 #include <linux/debugfs.h>
 
 #include "cass_core.h"
+#include "cass_cable.h"
 
 /* Reserved DMAC registers for communication.
  * Range is [FIRST, FIRST+16)
@@ -421,15 +422,19 @@ static void uc_update_cable_info(struct cass_dev *hw)
 	hw->qsfp_eeprom_page_len = ETH_MODULE_SFF_8436_LEN;
 	mutex_unlock(&hw->qsfp_eeprom_lock);
 
-	if (hw->qsfp_eeprom_page0[SFF_8436_STATUS_2_OFFSET] & CMIS_PAGE_01_PRESENT) {
-		cxidev_dbg(&hw->cdev, "no eeprom page 1\n");
-		return;
-	}
+	if (((hw->qsfp_eeprom_page0[QSFP_REV_CMPL_OFFSET] & 0xF0) == 0x30) ||
+		((hw->qsfp_eeprom_page0[QSFP_REV_CMPL_OFFSET] & 0xF0) == 0x40) ||
+		((hw->qsfp_eeprom_page0[QSFP_REV_CMPL_OFFSET] & 0xF0) == 0x50)) {
+		if (hw->qsfp_eeprom_page0[SFF_8436_STATUS_2_OFFSET] & CMIS_PAGE_01_PRESENT) {
+			cxidev_dbg(&hw->cdev, "no eeprom page 1\n");
+			return;
+		}
 
-	ret = cxi_get_qsfp_data(&hw->cdev, 0, ETH_MODULE_SFF_8436_LEN,
-				1, &hw->qsfp_eeprom_page1[0]);
-	if (ret != ETH_MODULE_SFF_8436_LEN)
-		cxidev_dbg(&hw->cdev, "couldn't read eeprom page 1: %d\n", ret);
+		ret = cxi_get_qsfp_data(&hw->cdev, 0, ETH_MODULE_SFF_8436_LEN,
+					1, &hw->qsfp_eeprom_page1[0]);
+		if (ret != ETH_MODULE_SFF_8436_LEN)
+			cxidev_dbg(&hw->cdev, "couldn't read eeprom page 1: %d\n", ret);
+	}
 }
 
 /* Write to the QSFP module - CUC_CMD_QSFP_WRITE */
