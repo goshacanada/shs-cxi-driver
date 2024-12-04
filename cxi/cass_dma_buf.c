@@ -3,8 +3,6 @@
 
 #include "cass_core.h"
 
-#if defined(ENABLE_DMABUF)
-
 #ifdef MODULE_IMPORT_NS
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
@@ -174,5 +172,3 @@ err_release_dma_buf:
 err:
 	return rc;
 }
-
-#endif

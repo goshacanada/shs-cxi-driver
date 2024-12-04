@@ -293,10 +293,8 @@ int cass_is_device_memory(struct cass_dev *hw, struct ac_map_opts *m_opts,
  */
 int cass_device_get_pages(struct ac_map_opts *m_opts)
 {
-#if defined(ENABLE_DMABUF)
 	if (m_opts->md_priv->dmabuf_fd != INVALID_DMABUF_FD)
 		return cxi_dmabuf_get_pages(m_opts);
-#endif
 
 	if (p2p_ops.get_pages)
 		return p2p_ops.get_pages(m_opts);
@@ -311,12 +309,10 @@ int cass_device_get_pages(struct ac_map_opts *m_opts)
  */
 void cass_device_put_pages(struct cxi_md_priv *md_priv)
 {
-#if defined(ENABLE_DMABUF)
 	if (md_priv->dmabuf_fd != INVALID_DMABUF_FD) {
 		cxi_dmabuf_put_pages(md_priv);
 		return;
 	}
-#endif
 
 	p2p_ops.put_pages(md_priv);
 }

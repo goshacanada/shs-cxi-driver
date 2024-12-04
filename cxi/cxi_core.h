@@ -19,47 +19,23 @@
 #define STR(x) #x
 
 /* Some kernel specific defines */
-#if (defined(RHEL_MAJOR) && RHEL_MAJOR == 8 && RHEL_MINOR == 7)
-#define HAVE_HMM
-#define RHEL8_7
-#define ENABLE_DMABUF
-#elif (defined(RHEL_MAJOR) && RHEL_MAJOR == 8 && RHEL_MINOR == 8)
-#define HAVE_HMM
-#define RHEL8_8
-#define ENABLE_DMABUF
-#define HAVE_GET_SINGLETON
-#define HAVE_IOVA_INIT_RCACHES
-#elif (defined(RHEL_MAJOR) && RHEL_MAJOR == 8 && RHEL_MINOR >= 9)
-#define HAVE_HMM
+#if (defined(RHEL_MAJOR) && RHEL_MAJOR == 8 && RHEL_MINOR >= 9)
 #define RHEL8_9_PLUS
-#define ENABLE_DMABUF
 #define HAVE_GET_SINGLETON
 #define HAVE_IOVA_INIT_RCACHES
 #elif (defined(RHEL_MAJOR) && RHEL_MAJOR == 9 && RHEL_MINOR >= 3)
-#define HAVE_HMM
 #define RHEL9_3_PLUS
-#define ENABLE_DMABUF
 #define HAVE_GET_SINGLETON
 #define HAVE_IOVA_INIT_RCACHES
 #elif defined(CONFIG_SUSE_PRODUCT_SLE) && CONFIG_SUSE_VERSION == 15 && \
 	CONFIG_SUSE_PATCHLEVEL == 4
-#define HAVE_HMM
-#define ENABLE_DMABUF
 #elif defined(CONFIG_SUSE_PRODUCT_SLE) && CONFIG_SUSE_VERSION == 15 && \
 	CONFIG_SUSE_PATCHLEVEL >= 5
-#define HAVE_HMM
 #define HAVE_GET_SINGLETON
 #define HAVE_IOVA_INIT_RCACHES
 #ifndef AARCH64
-#define ENABLE_DMABUF
 #endif
 #include <linux/mmu_notifier.h>
-#elif KERNEL_VERSION(5, 11, 0) <= LINUX_VERSION_CODE
-#define HAVE_HMM
-#elif defined(CONFIG_SUSE_PRODUCT_SLE) && CONFIG_SUSE_VERSION == 15 && \
-	CONFIG_SUSE_PATCHLEVEL == 3
-#define HAVE_HMM
-#define SLES15SP3
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
@@ -316,9 +292,7 @@ struct cxi_md_priv {
 	bool need_lock;
 	/* SG table is owned by an external user (e.g. kfabric) */
 	bool external_sgt_owner;
-#ifdef HAVE_HMM
 	struct mmu_interval_notifier mn_sub;
-#endif
 	/* GPU direct info */
 	void *p2p_info;
 	bool cleanup_done;

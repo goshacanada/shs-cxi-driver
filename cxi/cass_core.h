@@ -119,14 +119,7 @@ static inline u64 ALLOC_IOVA_FAST(struct iova_domain *iovad, unsigned long len,
 #define INIT_IOVA_DOMAIN(iovad, ps, base, end) \
 		init_iova_domain(iovad, ps, base)
 
-#ifdef HAVE_HMM
 #define ATU_HMM_PFN_TO_PFN(hpfn) page_to_pfn(hmm_pfn_to_page(hpfn))
-#else
-#define HMM_PFN_WRITE 0
-#define HMM_PFN_VALID 0
-#define HMM_PFN_ERROR 0
-#define ATU_HMM_PFN_TO_PFN(pfn) pfn
-#endif
 
 #define ATU_PFN_INVALID(hpfn) \
 	(!(hpfn & HMM_PFN_VALID) || \

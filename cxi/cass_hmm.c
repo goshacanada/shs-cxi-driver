@@ -31,8 +31,6 @@ int cass_vma_write_flag(struct mm_struct *mm, ulong start, ulong end, u32 flags)
 	return write;
 }
 
-#ifdef HAVE_HMM
-
 void cass_notifier_cleanup(struct cxi_md_priv *md_priv)
 {
 	if (!md_priv->mn_sub.mm)
@@ -320,31 +318,3 @@ int cass_odp_supported(struct cass_dev *hw, u32 flags)
 
 	return 0;
 }
-
-#else /* HAVE_HMM */
-
-void cass_notifier_cleanup(struct cxi_md_priv *md_priv)
-{
-}
-
-int cass_mirror_fault(const struct ac_map_opts *m_opts, u64 *pfns, int count,
-		      uintptr_t addr, size_t len)
-{
-	return -EOPNOTSUPP;
-}
-
-int cass_mmu_notifier_insert(struct cxi_md_priv *md_priv,
-			     const struct ac_map_opts *m_opts)
-{
-	return -EOPNOTSUPP;
-}
-
-int cass_odp_supported(struct cass_dev *hw, u32 flags)
-{
-	if (!(flags & CXI_MAP_PIN) && (flags & CXI_MAP_USER_ADDR))
-		return -EOPNOTSUPP;
-
-	return 0;
-}
-
-#endif

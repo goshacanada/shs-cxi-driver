@@ -72,13 +72,11 @@ static int pri_shift = 16;
 module_param_cb(pri_shift, &pri_shift_ops, &pri_shift, 0644);
 MODULE_PARM_DESC(pri_shift, "ODP default number of pages to fault");
 
-#ifdef HAVE_HMM
 static irqreturn_t cass_pri_int_cb(int irq, void *context);
 static void cass_pri_worker(struct work_struct *work);
 static void cass_prb_worker(struct work_struct *work);
 static void cass_odpq_write(struct cass_dev *hw, int index,
 			    enum c_odp_status status);
-#endif /* HAVE_HMM */
 
 static int min_root_entries(struct cass_ac *cac)
 {
@@ -163,7 +161,6 @@ int cass_nta_cq_init(struct cass_dev *hw)
 	return 0;
 }
 
-#ifdef HAVE_HMM
 void cass_nta_pri_fini(struct cass_dev *hw)
 {
 	if (cass_version(hw, CASSINI_1_0))
@@ -261,15 +258,6 @@ free_table:
 
 	return rc;
 }
-#else
-void cass_nta_pri_fini(struct cass_dev *hw)
-{
-}
-int cass_nta_pri_init(struct cass_dev *hw)
-{
-	return 0;
-}
-#endif /* HAVE_HMM */
 
 int cass_sts_idle(struct sts_idle *sidle)
 {
@@ -1610,7 +1598,6 @@ err:
 	return ret;
 }
 
-#ifdef HAVE_HMM
 static int atu_odpq_space(struct cass_dev *hw)
 {
 	union c_atu_sts_odpq sts_odpq;
@@ -1879,7 +1866,6 @@ static irqreturn_t cass_pri_int_cb(int irq, void *context)
 
 	return IRQ_HANDLED;
 }
-#endif /* HAVE_HMM */
 
 int cass_nta_mirror_sgt(struct cxi_md_priv *md_priv, bool need_lock)
 {
