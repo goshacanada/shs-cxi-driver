@@ -12,6 +12,7 @@ struct cass_rgid_priv {
 	int lnis;
 	int svc_id;
 	struct ida lac_table;
+	struct idr lcid_table;
 	refcount_t refcount;
 };
 
@@ -77,6 +78,60 @@ void cass_lac_put(struct cass_dev *hw, int id, int lac)
 }
 
 /**
+ * cass_lcid_get() - Get an LCID
+ *
+ * @hw: Cassini device
+ * @cp_priv: Communication Profile object
+ * @rgid: Value of RGID to get an LCID from
+ * @return: 0 or positive value on success or negative error
+ */
+int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid)
+{
+	int rc;
+	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
+
+	if (!rgid_priv)
+		return 0;
+
+	return idr_alloc(&rgid_priv->lcid_table, cp_priv, 0, C_COMM_PROF_PER_CQ,
+			 GFP_NOWAIT);
+}
+
+/**
+ * cass_lcid_put() - Free an LCID
+ *
+ * @hw: Cassini device
+ * @rgid: Value of RGID
+ * @lcid: LCID to free
+ */
+void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid)
+{
+	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
+
+	if (!rgid_priv)
+		return;
+
+	idr_remove(&rgid_priv->lcid_table, lcid);
+}
+
+/**
+ * cass_lcid_get() - Get an LCID
+ *
+ * @hw: Cassini device
+ * @rgid: Value of RGID to get an LCID from
+ * @return: CP object on success or NULL on error
+ */
+struct cxi_cp_priv *cass_cp_find(struct cass_dev *hw, int rgid, int lcid)
+{
+	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
+
+	if (!rgid_priv)
+		return NULL;
+
+	return idr_find(&rgid_priv->lcid_table, lcid);
+}
+
+/**
  * cass_rgid_get() - Get an RGID from the pool
  *
  * @hw: Cassini device
@@ -119,6 +174,7 @@ int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 	rgid_priv->lnis = lnis_per_rgid;
 	refcount_set(&rgid_priv->refcount, 1);
 	ida_init(&rgid_priv->lac_table);
+	idr_init(&rgid_priv->lcid_table);
 
 	ret = xa_err(__xa_store(&hw->rgid_array, id, rgid_priv, GFP_KERNEL));
 	if (ret)

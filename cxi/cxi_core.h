@@ -208,9 +208,6 @@ struct cxi_lni_priv {
 	struct dentry *ct_dir;
 	struct dentry *ac_dir;
 
-	/* Communication profiles LCID table. */
-	struct idr lcid_table;
-
 	/* Pending resources to cleanup. Use res_lock to serialize. */
 	struct list_head pt_cleanups_list;
 	struct list_head cq_cleanups_list;

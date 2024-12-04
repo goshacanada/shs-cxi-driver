@@ -1322,6 +1322,9 @@ int cass_lac_get(struct cass_dev *hw, int id);
 void cass_lac_put(struct cass_dev *hw, int id, int lac);
 int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv);
 void cass_rgid_put(struct cass_dev *hw, int id);
+int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid);
+void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid);
+struct cxi_cp_priv *cass_cp_find(struct cass_dev *hw, int rgid, int lcid);
 
 int cass_telem_init(struct cass_dev *hw);
 void cass_telem_fini(struct cass_dev *hw);

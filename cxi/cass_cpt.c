@@ -249,6 +249,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	struct cass_cp *cass_cp;
 	struct cxi_cp_priv *cp_priv;
 	int rc;
+	int lcid;
 
 	if (tc < 0 || tc >= CXI_ETH_TC_MAX || tc_type < 0 ||
 	    tc_type >= CXI_TC_TYPE_MAX)
@@ -290,23 +291,21 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	idr_preload(GFP_KERNEL);
 	spin_lock(&lni_priv->res_lock);
 
-	rc = idr_alloc(&lni_priv->lcid_table, cp_priv, 0, C_COMM_PROF_PER_CQ,
-		       GFP_NOWAIT);
-
+	lcid = cass_lcid_get(hw, cp_priv, lni_priv->lni.rgid);
 	refcount_inc(&lni_priv->refcount);
 
 	spin_unlock(&lni_priv->res_lock);
 	idr_preload_end();
 
-	if (rc < 0) {
+	if (lcid < 0) {
 		cxidev_dbg(dev, "%s rgid=%u lcids exhausted\n", dev->name,
 			   lni_priv->lni.rgid);
-		refcount_dec(&lni_priv->refcount);
+		rc = lcid;
 		goto free_cp;
 	}
-	cp_priv->cp.lcid = rc;
+	cp_priv->cp.lcid = lcid;
 
-	cass_set_cid(hw, lni_priv->lni.rgid, rc, cass_cp->id);
+	cass_set_cid(hw, lni_priv->lni.rgid, lcid, cass_cp->id);
 
 	cxidev_dbg(dev, "%s lcid allocated: rgid=%u lcid=%u cp=%u\n", dev->name,
 		   lni_priv->lni.rgid, cp_priv->cp.lcid, cass_cp->id);
@@ -343,7 +342,7 @@ void cxi_cp_free(struct cxi_cp *cp)
 	cass_set_cid(hw, lni_priv->lni.rgid, cp_priv->cp.lcid, 0);
 
 	spin_lock(&lni_priv->res_lock);
-	idr_remove(&lni_priv->lcid_table, cp_priv->cp.lcid);
+	cass_lcid_put(hw, lni_priv->lni.rgid, cp_priv->cp.lcid);
 	refcount_dec(&lni_priv->refcount);
 	spin_unlock(&lni_priv->res_lock);
 

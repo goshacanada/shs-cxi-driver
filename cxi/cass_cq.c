@@ -362,7 +362,7 @@ struct cxi_cq *cxi_cq_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 			return ERR_PTR(-EINVAL);
 
 		spin_lock(&lni_priv->res_lock);
-		cp_priv = idr_find(&lni_priv->lcid_table, opts->lcid);
+		cp_priv = cass_cp_find(hw, lni_priv->lni.rgid, opts->lcid);
 		spin_unlock(&lni_priv->res_lock);
 
 		if (!cp_priv)

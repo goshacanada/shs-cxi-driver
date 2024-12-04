@@ -111,8 +111,6 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	cxi_rgroup_inc_refcount(lni_priv->svc_priv->rgroup);
 	refcount_inc(&hw->refcount);
 
-	idr_init(&lni_priv->lcid_table);
-
 	sprintf(name, "%d", lni_priv->lni.id);
 	lni_priv->debug_dir = debugfs_create_dir(name, hw->lni_dir);
 	debugfs_create_u32("id", 0444, lni_priv->debug_dir, &lni_priv->lni.id);
