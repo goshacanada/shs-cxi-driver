@@ -285,7 +285,8 @@ int cass_cable_scan(struct cass_dev *hw)
 		return cass_link_media_config(hw, &attr);
 
 	case CUC_BOARD_TYPE_KENNEBEC:
-		cxidev_dbg(&hw->cdev, "Platform: KENNEBEC\n");
+	case CUC_BOARD_TYPE_SOUHEGAN:
+		cxidev_dbg(&hw->cdev, "Platform: KENNEBEC | SOUHEGAN\n");
 		if (!cass_is_cable_present(hw)) {
 			cxidev_warn(&hw->cdev, "HSN cable is not plugged\n");
 			cass_link_headshell_remove(hw);

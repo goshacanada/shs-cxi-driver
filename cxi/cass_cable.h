@@ -20,6 +20,7 @@
 #define QDD_VENDOR_FINISAR              "FINISAR CORP"
 #define QDD_VENDOR_HPE                  "HPE"
 #define QDD_VENDOR_CLOUD_LIGHT          "Cloud Light"
+#define QDD_VENDOR_AMPHENOL             "Amphenol"
 
 // SFF-8024 Specification for SFF Cross Reference -----------------------------
 #define SFF8436_MEDIA_TYPE_OFFSET                147

@@ -128,7 +128,7 @@ int cass_sbl_link_start(struct cass_dev *hw)
 out_lmon:
 	cass_lmon_kill_all(hw);
 out_sbl:
-	cass_sbl_exit(hw);
+	hw->link_ops->link_fini(hw);
 out_ports:
 	cass_port_del_port_db(hw);
 out:

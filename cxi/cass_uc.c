@@ -358,6 +358,7 @@ int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset, u32 len, u32 page, u8 *d
 	if (!hw->uc_present ||
 	    (hw->uc_platform != CUC_BOARD_TYPE_BRAZOS &&
 	     hw->uc_platform != CUC_BOARD_TYPE_KENNEBEC &&
+	     hw->uc_platform != CUC_BOARD_TYPE_SOUHEGAN &&
 	     !HW_PLATFORM_NETSIM(hw)))
 		return -ENOMEDIUM;
 

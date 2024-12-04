@@ -1016,6 +1016,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			break;
 		case CUC_BOARD_TYPE_WASHINGTON:
 		case CUC_BOARD_TYPE_KENNEBEC:
+		case CUC_BOARD_TYPE_SOUHEGAN:
 			if (!cass_version(hw, CASSINI_2)) {
 				cxidev_err(&hw->cdev, "Invalid Cassini 2 platform: %d\n",
 					   hw->uc_platform);

@@ -363,6 +363,8 @@ static void cass_hdsh_get_vendor(struct cass_dev *hw,
 		attr->vendor = SBL_LINK_VENDOR_HPE;
 	else if (strnstr(qsfp_vendor, QDD_VENDOR_CLOUD_LIGHT, QSFP_VENDOR_MAX_STR_LEN) != NULL)
 		attr->vendor = SBL_LINK_VENDOR_CLOUD_LIGHT;
+	else if (strnstr(qsfp_vendor, QDD_VENDOR_AMPHENOL, QSFP_VENDOR_MAX_STR_LEN) != NULL)
+		attr->vendor = SL_MEDIA_VENDOR_AMPHENOL;
 	else {
 		cxidev_warn(&hw->cdev, "No valid enum found for link Vendor %16s",
 			    qsfp_vendor);

@@ -944,6 +944,54 @@ static int cass_sl_dt_info_get(void *dt_accessor, u8 ldev_num, u8 lgrp_num,
 		info->lane_info[0].rx_source = 0;
 		info->lane_info[0].rx_invert = 0;
 		break;
+	case CUC_BOARD_TYPE_SOUHEGAN:
+		switch (cass_dev->uc_nic) {
+		case 0:
+			/* TX: [3, 2, 1, 0] = {2, 3, 1, 0} */
+			/* CSR:      serdes = logical      */
+			info->lane_info[3].tx_source = 2;
+			info->lane_info[3].tx_invert = 0;
+			info->lane_info[2].tx_source = 3;
+			info->lane_info[2].tx_invert = 0;
+			info->lane_info[1].tx_source = 1;
+			info->lane_info[1].tx_invert = 0;
+			info->lane_info[0].tx_source = 0;
+			info->lane_info[0].tx_invert = 0;
+			/* RX: [3, 2, 1, 0] = {0, 1, 2, 3} */
+			/* CSR:     logical = serdes       */
+			info->lane_info[3].rx_source = 0;
+			info->lane_info[3].rx_invert = 0;
+			info->lane_info[2].rx_source = 1;
+			info->lane_info[2].rx_invert = 0;
+			info->lane_info[1].rx_source = 2;
+			info->lane_info[1].rx_invert = 0;
+			info->lane_info[0].rx_source = 3;
+			info->lane_info[0].rx_invert = 0;
+			break;
+		case 1:
+			/* TX: [3, 2, 1, 0] = {0, 1, 2, 3} */
+			/* CSR:      serdes = logical      */
+			info->lane_info[3].tx_source = 0;
+			info->lane_info[3].tx_invert = 0;
+			info->lane_info[2].tx_source = 1;
+			info->lane_info[2].tx_invert = 0;
+			info->lane_info[1].tx_source = 2;
+			info->lane_info[1].tx_invert = 0;
+			info->lane_info[0].tx_source = 3;
+			info->lane_info[0].tx_invert = 0;
+			/* RX: [3, 2, 1, 0] = {3, 2, 1, 0} */
+			/* CSR:     logical = serdes       */
+			info->lane_info[3].rx_source = 3;
+			info->lane_info[3].rx_invert = 0;
+			info->lane_info[2].rx_source = 2;
+			info->lane_info[2].rx_invert = 0;
+			info->lane_info[1].rx_source = 1;
+			info->lane_info[1].rx_invert = 0;
+			info->lane_info[0].rx_source = 0;
+			info->lane_info[0].rx_invert = 0;
+			break;
+		}
+		break;
 	default:  /* straight */
 		info->lane_info[3].tx_source = 3;
 		info->lane_info[3].tx_invert = 0;
@@ -1156,14 +1204,14 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	u32           ucw_limit;
 	u32           ccw_limit;
 
-	cxidev_dbg(&cass_dev->cdev, "sl config init (platform = %d, board = %d)\n",
-		HW_PLATFORM(cass_dev), cass_dev->uc_platform);
+	cxidev_dbg(&cass_dev->cdev,
+		   "sl config init (platform = %d, cxi = %u, nic = %d)\n",
+		   HW_PLATFORM(cass_dev), cass_dev->cdev.cxi_num, cass_dev->uc_nic);
 
-	cass_dev->sl.hw_attr.magic    = SL_HW_ATTR_MAGIC;
-	cass_dev->sl.hw_attr.ver      = SL_HW_ATTR_VER;
-	cass_dev->sl.hw_attr.board    = cass_dev->uc_platform;
-	cass_dev->sl.hw_attr.nic_num  = cass_dev->uc_nic;
-	cass_dev->sl.hw_attr.cxi_num  = cass_dev->cdev.cxi_num;
+	cass_dev->sl.hw_attr.magic   = SL_HW_ATTR_MAGIC;
+	cass_dev->sl.hw_attr.ver     = SL_HW_ATTR_VER;
+	cass_dev->sl.hw_attr.nic_num = cass_dev->uc_nic;
+	cass_dev->sl.hw_attr.cxi_num = cass_dev->cdev.cxi_num;
 
 	cass_dev->sl.ldev_config.magic     = SL_LDEV_ATTR_MAGIC;
 	cass_dev->sl.ldev_config.ver       = SL_LDEV_ATTR_VER;
