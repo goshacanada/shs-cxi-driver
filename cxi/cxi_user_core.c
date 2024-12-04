@@ -2920,6 +2920,350 @@ cxi_user_rx_profile_get_ac_entry_id_by_user(struct user_client *client,
 			     resp_out, resp_out_len);
 }
 
+static int cxi_user_dev_alloc_tx_profile(struct user_client *client,
+					 const void *cmd_in,
+					 void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_dev_alloc_tx_profile_cmd  *cmd = cmd_in;
+	struct cxi_dev_alloc_tx_profile_resp       resp;
+	struct cxi_tx_attr   tx_attr;
+	int                  ret;
+
+	tx_attr.vni_attr.match    = cmd->vni_attr.match;
+	tx_attr.vni_attr.ignore   = cmd->vni_attr.ignore;
+	strncpy(tx_attr.vni_attr.name, cmd->vni_attr.name,
+		ARRAY_SIZE(tx_attr.vni_attr.name));
+
+	/* TODO: other TX attributes for creation */
+
+	ret = cxi_dev_alloc_tx_profile(client->ucxi->dev, &tx_attr, &resp.id);
+	if (ret)
+		return ret;
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
+static int cxi_user_dev_get_tx_profile_ids(struct user_client *client,
+					   const void *cmd_in,
+					   void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_dev_get_tx_profile_ids_cmd   *cmd = cmd_in;
+	struct cxi_dev_get_tx_profile_ids_resp        resp;
+	unsigned int   *ids;
+	size_t         bytes;
+	int            ret, ret2;
+
+	if (cmd->max_ids && !cmd->ids)
+		return -EINVAL;
+
+	/* allocate bounce buffer */
+
+	ids = kcalloc(cmd->max_ids, sizeof(*ids), GFP_KERNEL);
+	if (cmd->max_ids && !ids)
+		return -ENOMEM;
+
+	/* retrieve the ids */
+
+	ret = cxi_dev_get_tx_profile_ids(client->ucxi->dev,
+					 cmd->max_ids,
+					 ids,
+					 &resp.num_ids);
+
+	if (ret)
+		kfree(ids);
+
+	switch (ret) {
+	case 0:
+		break;
+	case -ENOSPC:
+		goto copy_response;
+	default:
+		return ret;
+	}
+
+	ret = copy_response(client, ids, resp.num_ids * sizeof(*ids),
+			    cmd->ids, &bytes);
+	kfree(ids);
+	if (ret)
+		return ret;
+
+copy_response:
+	ret2 = copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+
+	return (ret2) ? ret2 : ret;
+}
+
+static int cxi_user_tx_profile_get_info(struct user_client *client,
+					const void *cmd_in,
+					void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_get_info_cmd  *cmd = cmd_in;
+	struct cxi_tx_profile_get_info_resp       resp;
+	struct cxi_tx_attr              tx_attr;
+	struct cxi_rxtx_profile_state   state;
+	int   ret;
+
+	ret = cxi_tx_profile_get_info(client->ucxi->dev, cmd->id,
+				      &tx_attr, &state);
+
+	if (ret)
+		return ret;
+
+	resp.vni_attr.match    = tx_attr.vni_attr.match;
+	resp.vni_attr.ignore   = tx_attr.vni_attr.ignore;
+	strncpy(resp.vni_attr.name, tx_attr.vni_attr.name,
+		ARRAY_SIZE(resp.vni_attr.name));
+
+	/* TODO: other TX attributes */
+
+	resp.state.released  = atomic_read(&state.released);
+	resp.state.revoked   = state.revoked;
+	resp.state.refcount  = refcount_read(&state.refcount);
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
+static int cxi_user_tx_profile_release(struct user_client *client,
+				       const void *cmd_in,
+				       void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_release_cmd   *cmd = cmd_in;
+
+	return cxi_tx_profile_release(client->ucxi->dev, cmd->id);
+}
+
+static int cxi_user_tx_profile_revoke(struct user_client *client,
+				      const void *cmd_in,
+				      void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_revoke_cmd   *cmd = cmd_in;
+
+	return cxi_tx_profile_revoke(client->ucxi->dev, cmd->id);
+}
+
+static int
+cxi_user_tx_profile_add_ac_entry(struct user_client *client,
+				 const void *cmd_in,
+				 void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_add_ac_entry_cmd  *cmd = cmd_in;
+	struct cxi_tx_profile_add_ac_entry_resp       resp;
+	struct cxi_dev        *dev = client->ucxi->dev;
+	struct cxi_tx_profile *tx_profile;
+	union cxi_ac_data     data;
+	int    ret;
+
+	switch (cmd->type) {
+	case CXI_AC_UID:
+		data.uid = cmd->uid;
+		break;
+	case CXI_AC_GID:
+		data.gid = cmd->gid;
+		break;
+	case CXI_AC_OPEN:
+		break;
+	default:
+		return -EDOM;
+	}
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					       cmd->tx_profile_id,
+					       &tx_profile);
+
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_add_ac_entry(tx_profile, cmd->type,
+					  &data, &resp.ac_entry_id);
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+
+	if (ret)
+		return ret;
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
+static int
+cxi_user_tx_profile_remove_ac_entry(struct user_client *client,
+				   const void *cmd_in,
+				   void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_remove_ac_entry_cmd  *cmd = cmd_in;
+	struct cxi_dev         *dev = client->ucxi->dev;
+	struct cxi_tx_profile  *tx_profile;
+	int    ret;
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					      cmd->tx_profile_id,
+					      &tx_profile);
+
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_remove_ac_entry(tx_profile,
+					     cmd->ac_entry_id);
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+
+	return ret;
+}
+
+static int
+cxi_user_tx_profile_get_ac_entry_ids(struct user_client *client,
+				    const void *cmd_in,
+				    void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_get_ac_entry_ids_cmd  *cmd = cmd_in;
+	struct cxi_tx_profile_get_ac_entry_ids_resp       resp;
+	struct cxi_dev         *dev = client->ucxi->dev;
+	struct cxi_tx_profile  *tx_profile;
+	int    ret;
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					      cmd->tx_profile_id,
+					      &tx_profile);
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_get_ac_entry_ids(tx_profile, cmd->max_ids,
+					     cmd->ac_entry_ids, &resp.num_ids);
+
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+
+	switch (ret) {
+	case 0:
+		return copy_response(client, &resp, sizeof(resp),
+				     resp_out, resp_out_len);
+	case -ENOSPC:
+		ret = copy_response(client, &resp, sizeof(resp),
+				     resp_out, resp_out_len);
+		return (ret) ? ret : -ENOSPC;
+	default:
+		return ret;
+	}
+}
+
+static int
+cxi_user_tx_profile_get_ac_entry_data_by_id(struct user_client *client,
+					   const void *cmd_in,
+					   void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_get_ac_entry_data_by_id_cmd   *cmd = cmd_in;
+	struct cxi_tx_profile_get_ac_entry_data_by_id_resp        resp;
+	struct cxi_dev         *dev = client->ucxi->dev;
+	struct cxi_tx_profile   *tx_profile;
+	enum cxi_ac_type       ac_type;
+	union cxi_ac_data      ac_data;
+	int    ret;
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					      cmd->tx_profile_id,
+					      &tx_profile);
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_get_ac_entry_data(tx_profile, cmd->ac_entry_id,
+					       &ac_type, &ac_data);
+
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+	if (ret)
+		return ret;
+
+	resp.type = ac_type;
+
+	switch (ac_type) {
+	case CXI_AC_UID:
+		resp.uid = ac_data.uid;
+		break;
+	case CXI_AC_GID:
+		resp.gid = ac_data.gid;
+		break;
+	default:
+		break;
+	}
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
+static int
+cxi_user_tx_profile_get_ac_entry_id_by_data(struct user_client *client,
+					   const void *cmd_in,
+					   void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_get_ac_entry_id_by_data_cmd   *cmd = cmd_in;
+	struct cxi_tx_profile_get_ac_entry_id_by_data_resp        resp;
+	struct cxi_dev        *dev = client->ucxi->dev;
+	struct cxi_tx_profile  *tx_profile;
+	union cxi_ac_data     data;
+	int    ret;
+
+	switch (cmd->type) {
+	case CXI_AC_UID:
+		data.uid = cmd->uid;
+		break;
+	case CXI_AC_GID:
+		data.gid = cmd->gid;
+		break;
+	case CXI_AC_OPEN:
+		break;
+	default:
+		return -EDOM;
+	}
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					      cmd->tx_profile_id,
+					      &tx_profile);
+
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_get_ac_entry_id_by_data(tx_profile, cmd->type,
+						    &data, &resp.ac_entry_id);
+
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+	if (ret)
+		return ret;
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
+
+static int
+cxi_user_tx_profile_get_ac_entry_id_by_user(struct user_client *client,
+					   const void *cmd_in,
+					   void *resp_out, size_t *resp_out_len)
+{
+	const struct cxi_tx_profile_get_ac_entry_id_by_user_cmd   *cmd = cmd_in;
+	struct cxi_tx_profile_get_ac_entry_id_by_user_resp        resp;
+	struct cxi_dev         *dev = client->ucxi->dev;
+	struct cxi_tx_profile  *tx_profile;
+	int    ret;
+
+	ret = cxi_tx_profile_find_inc_refcount(dev,
+					      cmd->tx_profile_id,
+					      &tx_profile);
+
+	if (ret)
+		return ret;
+
+	ret = cxi_tx_profile_get_ac_entry_id_by_user(tx_profile, cmd->uid,
+						     cmd->gid,
+						     cmd->desired_types,
+						     &resp.ac_entry_id);
+
+	cxi_tx_profile_dec_refcount(dev, tx_profile);
+	if (ret)
+		return ret;
+
+	return copy_response(client, &resp, sizeof(resp),
+			     resp_out, resp_out_len);
+}
+
 static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 	[CXI_OP_LNI_ALLOC] = {
 		.req_size   = sizeof(struct cxi_lni_alloc_cmd),
@@ -3247,6 +3591,61 @@ static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 		.req_size   = sizeof(struct cxi_rx_profile_get_ac_entry_id_by_user_cmd),
 		.name       = "RX_PROFILE_GET_AC_ENTRY_ID_BY_USER",
 		.handler    = cxi_user_rx_profile_get_ac_entry_id_by_user,
+		.admin_only = true, },
+	[CXI_OP_DEV_ALLOC_TX_PROFILE] = {
+		.req_size   = sizeof(struct cxi_dev_alloc_tx_profile_cmd),
+		.name       = "DEV_ALLOC_TX_PROFILE",
+		.handler    = cxi_user_dev_alloc_tx_profile,
+		.admin_only = true, },
+	[CXI_OP_DEV_GET_TX_PROFILE_IDS] = {
+		.req_size   = sizeof(struct cxi_dev_get_tx_profile_ids_cmd),
+		.name       = "DEV_GET_TX_PROFILES",
+		.handler    = cxi_user_dev_get_tx_profile_ids,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_RELEASE] = {
+		.req_size   = sizeof(struct cxi_tx_profile_release_cmd),
+		.name       = "TX_PROFILE_RELEASE",
+		.handler    = cxi_user_tx_profile_release,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_REVOKE] = {
+		.req_size   = sizeof(struct cxi_tx_profile_revoke_cmd),
+		.name       = "TX_PROFILE_REVOKE",
+		.handler    = cxi_user_tx_profile_revoke,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_GET_INFO] = {
+		.req_size   = sizeof(struct cxi_tx_profile_get_info_cmd),
+		.name       = "TX_PROFILE_GET_INFO",
+		.handler    = cxi_user_tx_profile_get_info,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_ADD_AC_ENTRY] = {
+		.req_size   = sizeof(struct cxi_tx_profile_add_ac_entry_cmd),
+		.name       = "TX_PROFILE_ADD_AC_ENTRY",
+		.handler    = cxi_user_tx_profile_add_ac_entry,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_REMOVE_AC_ENTRY] = {
+		.req_size   = sizeof(struct cxi_tx_profile_remove_ac_entry_cmd),
+		.name       = "TX_PROFILE_REMOVE_AC_ENTRY",
+		.handler    = cxi_user_tx_profile_remove_ac_entry,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_GET_AC_ENTRY_IDS] = {
+		.req_size   = sizeof(struct cxi_tx_profile_get_ac_entry_ids_cmd),
+		.name       = "TX_PROFILE_GET_AC_ENTRY_IDS",
+		.handler    = cxi_user_tx_profile_get_ac_entry_ids,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_GET_AC_ENTRY_DATA_BY_ID] = {
+		.req_size   = sizeof(struct cxi_tx_profile_get_ac_entry_data_by_id_cmd),
+		.name       = "TX_PROFILE_GET_AC_ENTRY_DATA_BY_ID",
+		.handler    = cxi_user_tx_profile_get_ac_entry_data_by_id,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_DATA] = {
+		.req_size   = sizeof(struct cxi_tx_profile_get_ac_entry_id_by_data_cmd),
+		.name       = "TX_PROFILE_GET_AC_ENTRY_ID_BY_DATA",
+		.handler    = cxi_user_tx_profile_get_ac_entry_id_by_data,
+		.admin_only = true, },
+	[CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_USER] = {
+		.req_size   = sizeof(struct cxi_tx_profile_get_ac_entry_id_by_user_cmd),
+		.name       = "TX_PROFILE_GET_AC_ENTRY_ID_BY_USER",
+		.handler    = cxi_user_tx_profile_get_ac_entry_id_by_user,
 		.admin_only = true, },
 };
 

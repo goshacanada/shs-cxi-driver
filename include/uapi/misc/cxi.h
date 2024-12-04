@@ -116,6 +116,20 @@ enum cxi_command_opcode {
 		CXI_OP_RX_PROFILE_GET_AC_ENTRY_ID_BY_DATA,
 		CXI_OP_RX_PROFILE_GET_AC_ENTRY_ID_BY_USER,
 
+		CXI_OP_DEV_ALLOC_TX_PROFILE,
+		CXI_OP_DEV_GET_TX_PROFILE_IDS,
+
+		CXI_OP_TX_PROFILE_RELEASE,
+		CXI_OP_TX_PROFILE_REVOKE,
+		CXI_OP_TX_PROFILE_GET_INFO,
+
+		CXI_OP_TX_PROFILE_ADD_AC_ENTRY,
+		CXI_OP_TX_PROFILE_REMOVE_AC_ENTRY,
+		CXI_OP_TX_PROFILE_GET_AC_ENTRY_IDS,
+		CXI_OP_TX_PROFILE_GET_AC_ENTRY_DATA_BY_ID,
+		CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_DATA,
+		CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_USER,
+
 		CXI_OP_MAX,
 };
 
@@ -1539,6 +1553,126 @@ struct cxi_rx_profile_get_ac_entry_id_by_user_cmd {
 };
 
 struct cxi_rx_profile_get_ac_entry_id_by_user_resp {
+	unsigned int           ac_entry_id;
+};
+
+/* TX Profile API */
+
+struct cxi_dev_alloc_tx_profile_cmd {
+	struct cxi_common_cmd      common;
+	struct vni_attr {
+		uint16_t   match;
+		uint16_t   ignore;
+		char       name[CXI_VNI_NAME_LEN];
+	} vni_attr;
+	/* TODO: other TX attributes */
+};
+
+struct cxi_dev_alloc_tx_profile_resp {
+	unsigned int    id;
+};
+
+struct cxi_dev_get_tx_profile_ids_cmd {
+	struct cxi_common_cmd   common;
+	size_t                  max_ids;
+	unsigned int            *ids;
+};
+
+struct cxi_dev_get_tx_profile_ids_resp {
+	size_t                  num_ids;
+};
+
+struct cxi_tx_profile_get_info_cmd {
+	struct cxi_common_cmd   common;
+	unsigned int            id;
+};
+
+struct cxi_tx_profile_get_info_resp {
+	struct {
+		uint16_t   match;
+		uint16_t   ignore;
+		char       name[CXI_VNI_NAME_LEN];
+	} vni_attr;
+	/* TODO: other TX attributes */
+	struct {
+		bool       released;
+		bool       revoked;
+		int        refcount;
+	} state;
+};
+
+struct cxi_tx_profile_release_cmd {
+	struct cxi_common_cmd   common;
+	unsigned int            id;
+};
+
+struct cxi_tx_profile_revoke_cmd {
+	struct cxi_common_cmd   common;
+	unsigned int            id;
+};
+
+struct cxi_tx_profile_add_ac_entry_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	int                    type;
+	uid_t                  uid;
+	gid_t                  gid;
+};
+
+struct cxi_tx_profile_add_ac_entry_resp {
+	unsigned int           ac_entry_id;
+};
+
+struct cxi_tx_profile_remove_ac_entry_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	unsigned int           ac_entry_id;
+};
+
+struct cxi_tx_profile_get_ac_entry_ids_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	size_t                 max_ids;
+	unsigned int           *ac_entry_ids;
+};
+
+struct cxi_tx_profile_get_ac_entry_ids_resp {
+	size_t                 num_ids;
+};
+
+struct cxi_tx_profile_get_ac_entry_data_by_id_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	unsigned int           ac_entry_id;
+};
+
+struct cxi_tx_profile_get_ac_entry_data_by_id_resp {
+	int                    type;
+	uid_t                  uid;
+	gid_t                  gid;
+};
+
+struct cxi_tx_profile_get_ac_entry_id_by_data_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	int                    type;
+	uid_t                  uid;
+	gid_t                  gid;
+};
+
+struct cxi_tx_profile_get_ac_entry_id_by_data_resp {
+	unsigned int           ac_entry_id;
+};
+
+struct cxi_tx_profile_get_ac_entry_id_by_user_cmd {
+	struct cxi_common_cmd  common;
+	unsigned int           tx_profile_id;
+	unsigned int           desired_types;
+	uid_t                  uid;
+	gid_t                  gid;
+};
+
+struct cxi_tx_profile_get_ac_entry_id_by_user_resp {
 	unsigned int           ac_entry_id;
 };
 
