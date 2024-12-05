@@ -38,12 +38,6 @@ MODULE_PARM_DESC(enable_fgfc, "Enable/disable fine grain flow control");
 #define OUTSTANDING_LIMIT_MAX 2047U
 #define OUTSTANDING_LIMIT_MIN 1U
 #define OUTSTANDING_LIMIT_DEFAULT 64U
-#define OUTSTANDING_LIMIT_LL_DEFAULT 4U
-
-static unsigned int low_latency_pkt_limit = OUTSTANDING_LIMIT_LL_DEFAULT;
-module_param(low_latency_pkt_limit, uint, 0444);
-MODULE_PARM_DESC(low_latency_pkt_limit,
-		 "Maximum number of outstanding packets per low latency MCU");
 
 static unsigned int get_pkt_limit;
 module_param(get_pkt_limit, uint, 0444);
@@ -160,6 +154,7 @@ static unsigned int calculate_packets_inflight(struct cass_dev *hw)
  */
 void cass_set_outstanding_limit(struct cass_dev *hw)
 {
+	int i;
 	unsigned int packets_inflight;
 	union c_oxe_cfg_outstanding_limit outstanding_limit;
 
@@ -206,26 +201,16 @@ void cass_set_outstanding_limit(struct cass_dev *hw)
 		ioi_unord_limit = OUTSTANDING_LIMIT_DEFAULT;
 	}
 
-	if (low_latency_pkt_limit < OUTSTANDING_LIMIT_MIN ||
-	    low_latency_pkt_limit > OUTSTANDING_LIMIT_MAX) {
-		pr_err("Invalid low_latency_pkt_limit %u. Setting to %u\n",
-		       low_latency_pkt_limit, OUTSTANDING_LIMIT_LL_DEFAULT);
-		low_latency_pkt_limit = OUTSTANDING_LIMIT_DEFAULT;
+	for (i = 0; i < C_OXE_CFG_OUTSTANDING_LIMIT_ENTRIES; i++) {
+		cass_read(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
+			  &outstanding_limit, sizeof(outstanding_limit));
+		outstanding_limit.get_limit = get_pkt_limit;
+		outstanding_limit.put_limit = put_pkt_limit;
+		outstanding_limit.ioi_ord_limit = ioi_ord_limit;
+		outstanding_limit.ioi_unord_limit = ioi_unord_limit;
+		cass_write(hw, C_OXE_CFG_OUTSTANDING_LIMIT(i),
+			   &outstanding_limit, sizeof(outstanding_limit));
 	}
-
-	outstanding_limit.get_limit = get_pkt_limit;
-	outstanding_limit.put_limit = put_pkt_limit;
-	outstanding_limit.ioi_ord_limit = ioi_ord_limit;
-	outstanding_limit.ioi_unord_limit = ioi_unord_limit;
-	cass_write(hw, C_OXE_CFG_OUTSTANDING_LIMIT(BANDWIDTH_MCU_LIMIT_ID),
-		   &outstanding_limit, sizeof(outstanding_limit));
-
-	outstanding_limit.get_limit = low_latency_pkt_limit;
-	outstanding_limit.put_limit = low_latency_pkt_limit;
-	outstanding_limit.ioi_ord_limit = low_latency_pkt_limit;
-	outstanding_limit.ioi_unord_limit = low_latency_pkt_limit;
-	cass_write(hw, C_OXE_CFG_OUTSTANDING_LIMIT(LOW_LATENCY_MCU_LIMIT_ID),
-		   &outstanding_limit, sizeof(outstanding_limit));
 }
 
 /* Initialize OXE registers. */
