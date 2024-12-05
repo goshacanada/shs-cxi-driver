@@ -5,7 +5,7 @@
 
 . ./preamble.sh
 
-test_description="Basic tests for UCXI VNI Entry"
+test_description="Basic tests for UCXI RX Profiles"
 
 . ./sharness.sh
 
