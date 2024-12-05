@@ -354,6 +354,12 @@ struct cxi_tx_config {
 	int              cp_id;  /* this is a guess */
 };
 
+/* Struct for creation and listing */
+struct cxi_tx_attr {
+	struct cxi_rxtx_vni_attr        vni_attr;
+	/* TODO: other TX specific attributes */
+};
+
 struct cxi_tx_profile {
 	struct cxi_rxtx_profile         profile_common;
 	struct cxi_tx_config            config;
@@ -409,7 +415,7 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 					   unsigned int *ac_entry_id);
 
 int cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
-			     const struct cxi_rxtx_vni_attr *vni_attr,
+			     const struct cxi_tx_attr *tx_attr,
 			     unsigned int *tx_profile_id);
 int cxi_dev_get_tx_profile_ids(struct cxi_dev *dev,
 			       size_t max_entries,
@@ -422,7 +428,7 @@ int cxi_tx_profile_revoke(struct cxi_dev *dev,
 
 int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    unsigned int tx_profile_id,
-			    struct cxi_rxtx_vni_attr *vni_attr,
+			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
 int cxi_tx_profile_find_inc_refcount(struct cxi_dev *dev,

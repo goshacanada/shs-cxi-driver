@@ -1425,8 +1425,8 @@ struct cxi_rgroup_get_ac_entry_id_by_user_resp {
 #define CXI_VNI_NAME_LEN    64
 
 struct cxi_dev_alloc_rx_profile_cmd {
-	struct cxi_common_cmd      common;
-	struct vni_attr {
+	struct cxi_common_cmd   common;
+	struct {
 		uint16_t   match;
 		uint16_t   ignore;
 		char       name[CXI_VNI_NAME_LEN];

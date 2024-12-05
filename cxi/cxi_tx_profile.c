@@ -47,13 +47,13 @@ static int tx_profile_find_inc_refcount(struct cass_dev *hw,
  * cxi_dev_alloc_tx_profile() - Allocate a TX Profile
  *
  * @dev: Cassini Device
- * @vni_attr: Attributes of the VNI Entry Requested
+ * @tx_attr: TX attributes for the Profile
  * @tx_profile_id: set to id value on success
  *
  * Return: 0 on success, or a negative errno value.
  */
 int cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
-			     const struct cxi_rxtx_vni_attr *vni_attr,
+			     const struct cxi_tx_attr *tx_attr,
 			     unsigned int *tx_profile_id)
 {
 	int                    ret = 0;
@@ -62,7 +62,7 @@ int cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
 
 	hw = get_cass_dev(dev);
 
-	if (!vni_well_formed(vni_attr))
+	if (!vni_well_formed(&tx_attr->vni_attr))
 		return -EDOM;
 
 	/* Allocate memory */
@@ -72,7 +72,7 @@ int cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
 
 	/* initialize common profile and cassini config members */
 	cxi_rxtx_profile_init(&tx_profile->profile_common,
-			      hw, vni_attr);
+			      hw, &tx_attr->vni_attr);
 	cass_tx_profile_init(hw, tx_profile);
 
 	/* make sure the VNI space is unique */
@@ -282,7 +282,7 @@ EXPORT_SYMBOL(cxi_tx_profile_revoke);
  *
  * @dev: Cassini Device
  * @tx_profile_id: ID of the Profile
- * @vni_attr: location to place attributes
+ * @tx_attr: location to place attributes
  * @state: location to put state
  *
  * Note: vni_attr and/or state may be NULL.  If both are NULL,
@@ -295,7 +295,7 @@ EXPORT_SYMBOL(cxi_tx_profile_revoke);
  */
 int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    unsigned int tx_profile_id,
-			    struct cxi_rxtx_vni_attr *vni_attr,
+			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state)
 {
 	struct cass_dev        *hw;
@@ -309,7 +309,9 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 		return ret;
 
 	cxi_rxtx_profile_get_info(&tx_profile->profile_common,
-				  vni_attr, state);
+				  &tx_attr->vni_attr, state);
+
+	/* TODO: gather other TX attributes */
 
 	return cxi_tx_profile_dec_refcount(dev, tx_profile);
 }
