@@ -20,8 +20,6 @@
 DEFINE_STATIC_KEY_FALSE(avoid_writecombine);
 #endif
 
-#define C1_RESET_OCUSET_FQ_THRESH (4 * 1024 * 1024)
-
 /* Lower bound for number of 64 byte commands. */
 #define MIN_CQ_COUNT (PAGE_SIZE / C_CQ_CMD_SIZE)
 
@@ -63,11 +61,6 @@ void cass_cq_init(struct cass_dev *hw)
 	if (pci_get_device(PCI_VENDOR_ID_AMPERE, 0xe100, NULL))
 		static_branch_enable(&avoid_writecombine);
 #endif
-
-	if (cass_version(hw, CASSINI_1))
-		hw->bw_fq_thresh = C1_RESET_OCUSET_FQ_THRESH;
-	else
-		hw->bw_fq_thresh = C1_RESET_OCUSET_FQ_THRESH * 2;
 }
 
 static phys_addr_t
