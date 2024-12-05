@@ -968,6 +968,303 @@ int rx_profile_get_ac_id_by_user(struct cass_dev *dev,
 	return 0;
 }
 
+int alloc_tx_profile(struct cass_dev *dev,
+		     const struct ucxi_tx_attr *tx_attr,
+		     unsigned int *tx_profile_id)
+{
+	int    ret;
+	struct cxi_dev_alloc_tx_profile_resp  resp = {};
+	struct cxi_dev_alloc_tx_profile_cmd   cmd = {
+		.common.op   = CXI_OP_DEV_ALLOC_TX_PROFILE,
+		.common.resp = &resp,
+	};
+
+	if (!tx_attr || !tx_profile_id)
+		return -EINVAL;
+
+	cmd.vni_attr.match  = tx_attr->vni_attr.match;
+	cmd.vni_attr.ignore = tx_attr->vni_attr.ignore;
+	strncpy(cmd.vni_attr.name, tx_attr->vni_attr.name,
+		ARRAY_SIZE(cmd.vni_attr.name));
+
+	ret = write_device(dev, &cmd, sizeof(cmd));
+	if (ret)
+		return ret;
+
+	*tx_profile_id = resp.id;
+
+	return ret;
+}
+
+int release_tx_profile(struct cass_dev *dev,
+		       unsigned int tx_profile_id)
+{
+	struct cxi_tx_profile_release_cmd   cmd = {
+		.common.op   = CXI_OP_TX_PROFILE_RELEASE,
+		.common.resp = NULL,
+		.id          = tx_profile_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int revoke_tx_profile(struct cass_dev *dev,
+		      unsigned int tx_profile_id)
+{
+	struct cxi_tx_profile_revoke_cmd   cmd = {
+		.common.op   = CXI_OP_TX_PROFILE_REVOKE,
+		.common.resp = NULL,
+		.id          = tx_profile_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int get_tx_profile_ids(struct cass_dev *dev,
+		       size_t max_ids,
+		       unsigned int *ids,
+		       size_t *num_ids)
+{
+	int    ret;
+	struct cxi_dev_get_tx_profile_ids_resp  resp = {};
+	struct cxi_dev_get_tx_profile_ids_cmd   cmd = {
+		.common.op   = CXI_OP_DEV_GET_TX_PROFILE_IDS,
+		.common.resp = &resp,
+		.max_ids     = max_ids,
+		.ids         = ids,
+	};
+
+	ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (!num_ids)
+		return -EINVAL;
+
+	switch (ret) {
+	case 0:
+	case -ENOSPC:
+		*num_ids = resp.num_ids;
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+int get_tx_profile_info(struct cass_dev *dev,
+			unsigned int tx_profile_id,
+			struct ucxi_tx_attr *tx_attr,
+			struct ucxi_rxtx_state *state)
+{
+	int    ret;
+	struct cxi_tx_profile_get_info_resp  resp = {};
+	struct cxi_tx_profile_get_info_cmd   cmd = {
+		.common.op   = CXI_OP_TX_PROFILE_GET_INFO,
+		.common.resp = &resp,
+		.id          = tx_profile_id,
+	};
+
+	ret = write_device(dev, &cmd, sizeof(cmd));
+	if (ret)
+		return ret;
+
+	if (!tx_attr || !state)
+		return -EINVAL;
+
+	tx_attr->vni_attr.match  = resp.vni_attr.match;
+	tx_attr->vni_attr.ignore = resp.vni_attr.ignore;
+	strncpy(tx_attr->vni_attr.name, resp.vni_attr.name,
+		ARRAY_SIZE(tx_attr->vni_attr.name));
+
+	/* TODO: other TX attributes */
+
+	state->released = resp.state.released;
+	state->revoked  = resp.state.revoked;
+	state->refcount = resp.state.refcount;
+
+	return 0;
+}
+
+int tx_profile_add_ac(struct cass_dev *dev,
+		      unsigned int tx_profile_id,
+		      enum ucxi_ac_type type,
+		      const union ucxi_ac_data *data,
+		      unsigned int *ac_entry_id)
+{
+	if (!ac_entry_id)
+		return -EINVAL;
+
+	switch (type) {
+	case UCXI_AC_UID:
+	case UCXI_AC_GID:
+		if (!data)
+			return -EINVAL;
+	case UCXI_AC_OPEN:
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	struct cxi_tx_profile_add_ac_entry_resp   resp = {};
+	struct cxi_tx_profile_add_ac_entry_cmd    cmd = {
+		.common.op     = CXI_OP_TX_PROFILE_ADD_AC_ENTRY,
+		.common.resp   = &resp,
+		.tx_profile_id = tx_profile_id,
+		.type          = type,
+		.uid           = (type == UCXI_AC_UID) ? data->uid : 0,
+		.gid           = (type == UCXI_AC_GID) ? data->gid : 0,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	*ac_entry_id = resp.ac_entry_id;
+	return 0;
+}
+
+int tx_profile_remove_ac(struct cass_dev *dev,
+			 unsigned int tx_profile_id,
+			 unsigned int ac_entry_id)
+{
+	struct cxi_tx_profile_remove_ac_entry_cmd    cmd = {
+		.common.op     = CXI_OP_TX_PROFILE_REMOVE_AC_ENTRY,
+		.common.resp   = NULL,
+		.tx_profile_id = tx_profile_id,
+		.ac_entry_id   = ac_entry_id,
+	};
+
+	return write_device(dev, &cmd, sizeof(cmd));
+}
+
+int tx_profile_get_ac_ids(struct cass_dev *dev,
+			  unsigned int tx_profile_id,
+			  size_t max_ids,
+			  unsigned int *ids,
+			  size_t *num_ids)
+{
+	struct cxi_tx_profile_get_ac_entry_ids_resp   resp = {};
+	struct cxi_tx_profile_get_ac_entry_ids_cmd    cmd  = {
+		.common.op     = CXI_OP_TX_PROFILE_GET_AC_ENTRY_IDS,
+		.common.resp   = &resp,
+		.tx_profile_id = tx_profile_id,
+		.max_ids       = max_ids,
+		.ac_entry_ids  = ids,
+	};
+
+	if (!num_ids)
+		return -EINVAL;
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+	*num_ids = resp.num_ids;
+
+	return ret;
+}
+
+int tx_profile_get_ac_data(struct cass_dev *dev,
+			   unsigned int tx_profile_id,
+			   unsigned int ac_entry_id,
+			   enum ucxi_ac_type *type,
+			   union ucxi_ac_data *data)
+{
+	struct cxi_tx_profile_get_ac_entry_data_by_id_resp  resp = {};
+	struct cxi_tx_profile_get_ac_entry_data_by_id_cmd   cmd  = {
+		.common.op     = CXI_OP_TX_PROFILE_GET_AC_ENTRY_DATA_BY_ID,
+		.common.resp   = &resp,
+		.tx_profile_id = tx_profile_id,
+		.ac_entry_id   = ac_entry_id,
+	};
+
+	if (!type || !data)
+		return -EINVAL;
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	*type = resp.type;
+
+	switch (resp.type) {
+	case UCXI_AC_UID:
+		data->uid = resp.uid;
+		break;
+	case UCXI_AC_GID:
+		data->gid = resp.gid;
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+int tx_profile_get_ac_id_by_data(struct cass_dev *dev,
+				 unsigned int tx_profile_id,
+				 enum ucxi_ac_type type,
+				 union ucxi_ac_data *data,
+				 unsigned int *ac_entry_id)
+{
+	if (!ac_entry_id)
+		return -EINVAL;
+
+	switch (type) {
+	case UCXI_AC_UID:
+	case UCXI_AC_GID:
+		if (!data)
+			return -EINVAL;
+	default:
+		break;
+	}
+
+	struct cxi_tx_profile_get_ac_entry_id_by_data_resp  resp = {};
+	struct cxi_tx_profile_get_ac_entry_id_by_data_cmd   cmd  = {
+		.common.op     = CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_DATA,
+		.common.resp   = &resp,
+		.tx_profile_id = tx_profile_id,
+		.type          = type,
+		.uid           = data->uid,
+		.gid           = data->gid,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	*ac_entry_id = resp.ac_entry_id;
+	return 0;
+}
+
+int tx_profile_get_ac_id_by_user(struct cass_dev *dev,
+				 unsigned int tx_profile_id,
+				 uid_t uid,
+				 gid_t gid,
+				 unsigned int desired_types,
+				 unsigned int *ac_entry_id)
+{
+	if (!ac_entry_id)
+		return -EINVAL;
+
+	struct cxi_tx_profile_get_ac_entry_id_by_user_resp  resp = {};
+	struct cxi_tx_profile_get_ac_entry_id_by_user_cmd   cmd  = {
+		.common.op     = CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_USER,
+		.common.resp   = &resp,
+		.tx_profile_id = tx_profile_id,
+		.desired_types = desired_types,
+		.uid           = uid,
+		.gid           = gid,
+	};
+
+	int ret = write_device(dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		return ret;
+
+	*ac_entry_id = resp.ac_entry_id;
+	return 0;
+}
+
 int svc_alloc(struct cass_dev *dev, struct cxi_svc_desc *svc_desc)
 {
 	int rc;

@@ -21,6 +21,7 @@
 /ucxi/test_nlmsg
 /ucxi/test_rgroup
 /ucxi/test_rx_profile
+/ucxi/test_tx_profile
 /ucxi/test_ucxi
 /ucxi/test_ucxi_atu
 /tests/output/*
