@@ -296,9 +296,10 @@ struct cxi_md_priv {
 };
 
 struct cxi_cp_priv {
-	struct cxi_lni_priv *lni_priv;
 	struct cass_cp *cass_cp;
 	struct cxi_cp cp;
+	refcount_t refcount;
+	unsigned int rgid;
 };
 
 /* EQ buffer description */

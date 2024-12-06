@@ -86,15 +86,15 @@ void cass_lac_put(struct cass_dev *hw, int id, int lac)
  * @return: 0 or positive value on success or negative error
  */
 int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid)
+	__must_hold(&hw->cp_lock)
 {
-	int rc;
 	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
 
 	if (!rgid_priv)
 		return 0;
 
 	return idr_alloc(&rgid_priv->lcid_table, cp_priv, 0, C_COMM_PROF_PER_CQ,
-			 GFP_NOWAIT);
+			 GFP_KERNEL);
 }
 
 /**
@@ -105,6 +105,7 @@ int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid)
  * @lcid: LCID to free
  */
 void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid)
+	__must_hold(&hw->cp_lock)
 {
 	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
 
@@ -115,20 +116,65 @@ void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid)
 }
 
 /**
- * cass_lcid_get() - Get an LCID
+ * cass_cp_find() - Get the CP accociated with an RGID and LCID
  *
  * @hw: Cassini device
- * @rgid: Value of RGID to get an LCID from
+ * @rgid: Value of RGID
+ * @lcid: Value of LCID
  * @return: CP object on success or NULL on error
  */
 struct cxi_cp_priv *cass_cp_find(struct cass_dev *hw, int rgid, int lcid)
 {
+	struct cxi_cp_priv *cp_priv;
 	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
 
 	if (!rgid_priv)
 		return NULL;
 
-	return idr_find(&rgid_priv->lcid_table, lcid);
+	mutex_lock(&hw->cp_lock);
+	cp_priv = idr_find(&rgid_priv->lcid_table, lcid);
+	mutex_unlock(&hw->cp_lock);
+
+	return cp_priv;
+}
+
+/**
+ * cass_cp_rgid_find() - Get the CP accociated with an RGID that matches
+ *                       the {vni_pcp,tc,tc_type} tupple
+ *
+ * @hw: Cassini device
+ * @rgid: Value of RGID
+ * @vni_pcp: VNI of communication profile. If using an ethernet tc
+ *           this argument is treated as PCP.
+ * @tc: Traffic class of the communication profile
+ * @tc_type: Traffic class type of the communication profile
+ * @return: CP object on success or NULL on error
+ */
+struct cxi_cp_priv *cass_cp_rgid_find(struct cass_dev *hw, int rgid,
+				      unsigned int vni_pcp, unsigned int tc,
+				      enum cxi_traffic_class_type tc_type)
+{
+	int lcid;
+	struct cxi_cp_priv *cp_priv;
+	struct cass_rgid_priv *rgid_priv = xa_load(&hw->rgid_array, rgid);
+
+	if (!rgid_priv)
+		return NULL;
+
+	for (lcid = 0; lcid < C_COMM_PROF_PER_CQ; lcid++) {
+		cp_priv = idr_find(&rgid_priv->lcid_table, lcid);
+		if (!cp_priv)
+			continue;
+
+		if (vni_pcp == cp_priv->cp.vni_pcp && tc == cp_priv->cp.tc &&
+		    tc_type == cp_priv->cass_cp->tc_type) {
+			refcount_inc(&cp_priv->refcount);
+
+			return cp_priv;
+		}
+	}
+
+	return NULL;
 }
 
 /**

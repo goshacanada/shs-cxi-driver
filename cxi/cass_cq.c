@@ -361,10 +361,7 @@ struct cxi_cq *cxi_cq_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 		if ((opts->flags & CXI_CQ_TX_WITH_TRIG_CMDS) && opts->lcid != 0)
 			return ERR_PTR(-EINVAL);
 
-		spin_lock(&lni_priv->res_lock);
 		cp_priv = cass_cp_find(hw, lni_priv->lni.rgid, opts->lcid);
-		spin_unlock(&lni_priv->res_lock);
-
 		if (!cp_priv)
 			return ERR_PTR(-EINVAL);
 	}

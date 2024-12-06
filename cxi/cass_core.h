@@ -1325,6 +1325,9 @@ void cass_rgid_put(struct cass_dev *hw, int id);
 int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid);
 void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid);
 struct cxi_cp_priv *cass_cp_find(struct cass_dev *hw, int rgid, int lcid);
+struct cxi_cp_priv *cass_cp_rgid_find(struct cass_dev *hw, int rgid,
+				      unsigned int vni_pcp, unsigned int tc,
+				      enum cxi_traffic_class_type tc_type);
 
 int cass_telem_init(struct cass_dev *hw);
 void cass_telem_fini(struct cass_dev *hw);

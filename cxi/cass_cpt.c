@@ -179,15 +179,10 @@ error_free_cp:
  * @cp: Communication profile where reference should be put.
  */
 static void cass_cp_put(struct cass_cp *cp)
+	__must_hold(&hw->cp_lock)
 {
-	struct cass_dev *hw = cp->hw;
-
-	mutex_lock(&hw->cp_lock);
-
 	if (refcount_dec_and_test(&cp->ref))
 		cass_cp_free(cp);
-
-	mutex_unlock(&hw->cp_lock);
 }
 
 /**
@@ -206,18 +201,15 @@ static void cass_cp_put(struct cass_cp *cp)
 static struct cass_cp *cass_cp_get(struct cass_dev *hw, unsigned int vni_pcp,
 				   unsigned int tc,
 				   enum cxi_traffic_class_type tc_type)
+	__must_hold(&hw->cp_lock)
 {
 	struct cass_cp *cp;
-
-	mutex_lock(&hw->cp_lock);
 
 	cp = cp_find(&hw->cp_tree, vni_pcp, tc, tc_type);
 	if (cp)
 		refcount_inc(&cp->ref);
 	else
 		cp = cass_cp_alloc(hw, vni_pcp, tc, tc_type);
-
-	mutex_unlock(&hw->cp_lock);
 
 	return cp;
 }
@@ -270,14 +262,28 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 			return ERR_PTR(-EINVAL);
 	}
 
+	mutex_lock(&hw->cp_lock);
+
+	cp_priv = cass_cp_rgid_find(hw, lni_priv->lni.rgid, vni_pcp, tc,
+				    tc_type);
+	if (cp_priv) {
+		refcount_inc(&cp_priv->refcount);
+		mutex_unlock(&hw->cp_lock);
+		pr_debug("Reuse cp:%u rgid:%u lcid:%u refcount:%d\n",
+			 cp_priv->cass_cp->id, cp_priv->rgid,
+			 cp_priv->cp.lcid, refcount_read(&cp_priv->refcount));
+		return &cp_priv->cp;
+	}
+
 	cp_priv = kzalloc(sizeof(*cp_priv), GFP_KERNEL);
 	if (!cp_priv)
 		return ERR_PTR(-ENOMEM);
 
-	cp_priv->lni_priv = lni_priv;
+	cp_priv->rgid = lni_priv->lni.rgid;
 	cp_priv->cp.vni_pcp = vni_pcp;
 	cp_priv->cp.tc = tc;
 	cp_priv->cp.tc_type = tc_type;
+	refcount_set(&cp_priv->refcount, 1);
 
 	/* Allocate the communication profile. */
 	cass_cp = cass_cp_get(hw, vni_pcp, tc, tc_type);
@@ -288,15 +294,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	cp_priv->cass_cp = cass_cp;
 
 	/* Mapped the communication profile to LCID. */
-	idr_preload(GFP_KERNEL);
-	spin_lock(&lni_priv->res_lock);
-
 	lcid = cass_lcid_get(hw, cp_priv, lni_priv->lni.rgid);
-	refcount_inc(&lni_priv->refcount);
-
-	spin_unlock(&lni_priv->res_lock);
-	idr_preload_end();
-
 	if (lcid < 0) {
 		cxidev_dbg(dev, "%s rgid=%u lcids exhausted\n", dev->name,
 			   lni_priv->lni.rgid);
@@ -304,6 +302,8 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 		goto free_cp;
 	}
 	cp_priv->cp.lcid = lcid;
+
+	mutex_unlock(&hw->cp_lock);
 
 	cass_set_cid(hw, lni_priv->lni.rgid, lcid, cass_cp->id);
 
@@ -317,6 +317,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 free_cp:
 	cass_cp_put(cass_cp);
 free_cp_priv:
+	mutex_unlock(&hw->cp_lock);
 	kfree(cp_priv);
 
 	return ERR_PTR(rc);
@@ -331,22 +332,28 @@ EXPORT_SYMBOL(cxi_cp_alloc);
 void cxi_cp_free(struct cxi_cp *cp)
 {
 	struct cxi_cp_priv *cp_priv = container_of(cp, struct cxi_cp_priv, cp);
-	struct cxi_lni_priv *lni_priv = cp_priv->lni_priv;
-	struct cass_dev *hw =
-		container_of(lni_priv->dev, struct cass_dev, cdev);
+	struct cass_dev *hw = cp_priv->cass_cp->hw;
+
+	mutex_lock(&hw->cp_lock);
+
+	if (!refcount_dec_and_test(&cp_priv->refcount)) {
+		mutex_unlock(&hw->cp_lock);
+		pr_debug("Return cp:%u rgid:%u lcid:%u refcount:%d\n",
+			 cp_priv->cass_cp->id, cp_priv->rgid,
+			 cp_priv->cp.lcid, refcount_read(&cp_priv->refcount));
+		return;
+	}
 
 	cxidev_dbg(&hw->cdev, "%s lcid freed: rgid=%u lcid=%u cp=%u\n",
-		   hw->cdev.name, lni_priv->lni.rgid, cp_priv->cp.lcid,
+		   hw->cdev.name, cp_priv->rgid, cp_priv->cp.lcid,
 		   cp_priv->cass_cp->id);
 
-	cass_set_cid(hw, lni_priv->lni.rgid, cp_priv->cp.lcid, 0);
+	cass_set_cid(hw, cp_priv->rgid, cp_priv->cp.lcid, 0);
 
-	spin_lock(&lni_priv->res_lock);
-	cass_lcid_put(hw, lni_priv->lni.rgid, cp_priv->cp.lcid);
-	refcount_dec(&lni_priv->refcount);
-	spin_unlock(&lni_priv->res_lock);
-
+	cass_lcid_put(hw, cp_priv->rgid, cp_priv->cp.lcid);
 	cass_cp_put(cp_priv->cass_cp);
+
+	mutex_unlock(&hw->cp_lock);
 
 	kfree(cp_priv);
 
