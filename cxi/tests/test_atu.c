@@ -1874,7 +1874,7 @@ static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc)
 	}
 
 	lpr = cxi_svc_get_lpr(dev, desc->svc_id);
-	if (lpr != desc->svc_id) {
+	if (lpr != LNIS_PER_RGID) {
 		pr_err("cxi_svc_get_lpr failed: %d\n", lpr);
 		goto update_err;
 	}
