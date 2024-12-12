@@ -346,13 +346,13 @@ static void eq_cb(void *context)
 	atomic_inc(&eq_cb_called);
 }
 
-static int test_setup(struct tdev *tdev)
+static int test_setup(struct tdev *tdev, int svc_id)
 {
 	int rc;
 	int retry;
 	struct cxi_eq_attr eq_attr = {};
 
-	tdev->lni = cxi_lni_alloc(tdev->dev, CXI_DEFAULT_SVC_ID);
+	tdev->lni = cxi_lni_alloc(tdev->dev, svc_id);
 	if (IS_ERR(tdev->lni)) {
 		rc = PTR_ERR(tdev->lni);
 		goto out;
@@ -814,7 +814,7 @@ static int test_sgtable1(struct tdev *tdev)
 
 	pr_info("%s\n", __func__);
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 	if (rc)
 		return rc;
 
@@ -887,7 +887,7 @@ static int test_sgtable2(struct tdev *tdev)
 
 	pr_info("%s\n", __func__);
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 	if (rc)
 		return rc;
 
@@ -1050,7 +1050,7 @@ static int test_sgtable3(struct tdev *tdev)
 
 	pr_info("%s\n", __func__);
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 	if (rc)
 		return rc;
 
@@ -1281,7 +1281,7 @@ static int test_rma(struct tdev *tdev, bool phys)
 	rma_mem.md = &rma_md;
 	snd_mem.md = &snd_md;
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 	if (rc)
 		return rc;
 
@@ -1438,7 +1438,7 @@ static int test_bvec_rma(struct tdev *tdev)
 
 	pr_info("%s\n", __func__);
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 
 	rc = init_bvec(tdev, &src_bi, nbv, len);
 	if (rc)
@@ -1554,7 +1554,7 @@ static int test_alloc_md(struct tdev *tdev)
 
 	pr_info("%s\n", __func__);
 
-	rc = test_setup(tdev);
+	rc = test_setup(tdev, CXI_DEFAULT_SVC_ID);
 
 	src_bi.md = cxi_map(tdev->lni, 0, nbv * PAGE_SIZE,
 			    MAP_NTA_RW | CXI_MAP_ALLOC_MD, NULL);
@@ -1840,7 +1840,8 @@ out:
 }
 
 #define LNIS_PER_RGID 2
-static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc)
+static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc,
+			 bool restricted_vnis)
 {
 	int rc;
 	int lpr;
@@ -1848,6 +1849,7 @@ static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc)
 
 	desc->enable = 1,
 	desc->is_system_svc = 1,
+	desc->restricted_vnis = restricted_vnis,
 	desc->num_vld_vnis = 1,
 	desc->vnis[0] = 8U,
 	desc->resource_limits = false,
@@ -1904,7 +1906,7 @@ static int test_lni_alloc(struct tdev *tdev)
 	pr_info("%s\n", __func__);
 	INIT_LIST_HEAD(&lni_list);
 
-	rc = build_service(tdev->dev, &desc);
+	rc = build_service(tdev->dev, &desc, true);
 	if (rc)
 		return rc;
 
@@ -1942,9 +1944,140 @@ static int test_lni_alloc(struct tdev *tdev)
 	return rc;
 }
 
+static int test_share_lcid(struct tdev *tdev)
+{
+	int i;
+	int rc;
+	int lac = 0;
+	int errors = 0;
+	struct cxi_cp *cp;
+	struct cxi_lni *lni;
+	struct cxi_svc_desc desc = {};
+	struct cxi_md snd_md = {};
+	struct cxi_md rma_md = {};
+	struct mem_window snd_mem;
+	struct mem_window rma_mem;
+	size_t len = 256 * 1024;
+
+	pr_info("%s\n", __func__);
+
+	rma_mem.length = len;
+	snd_mem.length = len;
+	rma_mem.md = &rma_md;
+	snd_mem.md = &snd_md;
+
+	rc = build_service(tdev->dev, &desc, false);
+	if (rc)
+		return rc;
+
+	rc = test_setup(tdev, desc.svc_id);
+	if (rc)
+		goto svc_destroy;
+
+	/*
+	 * Check if CP/LCID cleanup is working correctly.
+	 * Allocate an LNI and CP and then free them.
+	 */
+	lni = cxi_lni_alloc(tdev->dev, desc.svc_id);
+	if (IS_ERR(lni)) {
+		rc = PTR_ERR(lni);
+		goto teardown;
+	}
+
+	cp = cxi_cp_alloc(lni, tdev->vni, CXI_TC_BEST_EFFORT,
+			  CXI_TC_TYPE_DEFAULT);
+	if (IS_ERR(cp)) {
+		rc = PTR_ERR(cp);
+		cxi_lni_free(lni);
+		goto teardown;
+	}
+
+	cxi_cp_free(cp);
+	cxi_lni_free(lni);
+
+	rma_mem.buffer = kzalloc(rma_mem.length, GFP_KERNEL);
+	if (!rma_mem.buffer) {
+		rc = -ENOMEM;
+		goto teardown;
+	}
+
+	snd_mem.buffer = kzalloc(snd_mem.length, GFP_KERNEL);
+	if (!snd_mem.buffer) {
+		rc = -ENOMEM;
+		goto free_rma;
+	}
+
+	rc = test_map(tdev, &snd_mem, false, lac);
+	if (rc < 0) {
+		pr_err("cxi_map failed %d\n", rc);
+		goto free_snd;
+	}
+
+	rc = test_map(tdev, &rma_mem, false, lac);
+	if (rc < 0) {
+		pr_err("cxi_map failed %d\n", rc);
+		goto unmap_snd;
+	}
+
+	test_append_le(tdev, len, rma_mem.md, 0);
+
+	WARN_ON(tdev->cq_target->status->rd_ptr != 2 + C_CQ_FIRST_WR_PTR);
+
+	for (i = 0; i < snd_mem.length; i++)
+		snd_mem.buffer[i] = i;
+
+	memset(rma_mem.buffer, 0, len);
+
+	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
+	if (rc < 0) {
+		pr_err("test_do_put failed %d\n", rc);
+		goto unmap_rma;
+	}
+
+	for (i = 0; i < len; i++) {
+		if (snd_mem.buffer[i] != rma_mem.buffer[i]) {
+			pr_info("Data mismatch: idx %2d - %02x != %02x\n",
+				i, snd_mem.buffer[i], rma_mem.buffer[i]);
+			errors++;
+		}
+
+		if (errors > 10)
+			break;
+	}
+
+	if (!errors)
+		pr_info("%s success\n", __func__);
+
+unmap_rma:
+	rc = test_unmap(tdev, &rma_mem, false);
+	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
+unmap_snd:
+	rc = test_unmap(tdev, &snd_mem, false);
+	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
+free_snd:
+	kfree(snd_mem.buffer);
+free_rma:
+	kfree(rma_mem.buffer);
+teardown:
+	test_teardown(tdev);
+svc_destroy:
+	cxi_svc_destroy(tdev->dev, desc.svc_id);
+
+	if (errors)
+		rc = -1;
+
+	return rc;
+}
+
 static int test_rgid(struct tdev *tdev)
 {
-	return test_lni_alloc(tdev);
+	int rc;
+
+	rc = test_lni_alloc(tdev);
+	if (rc)
+		return rc;
+
+	return test_share_lcid(tdev);
 }
 
 /* Core is adding a new device */
