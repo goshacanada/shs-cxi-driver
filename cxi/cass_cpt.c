@@ -257,7 +257,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	} else {
 		/* Perform VNI checks. */
 		if (!is_vni_valid(vni_pcp) ||
-		    !valid_svc_vni(svc_priv, vni_pcp) ||
+		    !valid_vni(dev, svc_priv, CXI_PROF_TX, vni_pcp) ||
 		    !valid_svc_tc(svc_priv, tc))
 			return ERR_PTR(-EINVAL);
 	}

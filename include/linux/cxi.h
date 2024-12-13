@@ -554,6 +554,7 @@ struct cxi_rgroup {
 	struct cxi_resource_entry_list resource_entry_list;
 	struct cxi_ac_entry_list       ac_entry_list;
 	struct cxi_rgroup_pools        pools;
+	struct cxi_svc_priv *svc_priv;
 };
 
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);

@@ -7,6 +7,8 @@
 #include <linux/cred.h>
 
 #include "cass_core.h"
+#include "cxi_rxtx_profile.h"
+#include "cxi_rxtx_profile_list.h"
 
 #define DEFAULT_LE_POOL_ID 0
 #define DEFAULT_TLE_POOL_ID 0
@@ -56,20 +58,48 @@ static enum cxi_resource_type stype_to_rtype(enum cxi_rsrc_type type, int pe)
 	}
 }
 
-/* Check if a service allows a particular VNI to be used */
-bool valid_svc_vni(const struct cxi_svc_priv *svc_priv, unsigned int vni)
+struct valid_vni_data {
+	unsigned int vni;
+	unsigned int valid;
+};
+
+static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
+			      void *user_data)
 {
-	int i;
+	struct cxi_rxtx_vni_attr vni_attr;
+	struct cxi_rxtx_profile_state state;
+	struct valid_vni_data *vni_data = user_data;
+
+	cxi_rxtx_profile_get_info(rxtx_profile, &vni_attr, &state);
+
+	if (((vni_data->vni & ~vni_attr.ignore) == vni_attr.match) &&
+	    !atomic_read(&state.released) && !state.revoked)
+		vni_data->valid = 1;
+
+	return vni_data->valid;
+}
+
+/* Check if a service allows a particular VNI to be used */
+bool valid_vni(struct cxi_dev *dev, const struct cxi_svc_priv *svc_priv,
+	       enum cxi_profile_type type, unsigned int vni)
+{
+	struct cxi_rxtx_profile_list *list;
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct valid_vni_data vni_data = {
+		.vni = vni,
+		.valid = 0,
+	};
 
 	if (!svc_priv->svc_desc.restricted_vnis)
 		return true;
 
-	for (i = 0; (i < svc_priv->svc_desc.num_vld_vnis &&
-		     i < CXI_SVC_MAX_VNIS); i++) {
-		if (svc_priv->svc_desc.vnis[i] == vni)
-			return true;
-	}
-	return false;
+	if (type == CXI_PROF_RX)
+		list = &hw->rx_profile_list;
+	else
+		list = &hw->tx_profile_list;
+
+	return cxi_rxtx_profile_list_iterate(list, valid_vni_operator,
+					     &vni_data);
 }
 
 /* Check if a service allows a particular TC to be used */
@@ -618,6 +648,60 @@ static int validate_descriptor(struct cass_dev *hw,
 	return 0;
 }
 
+static void release_rxtx_profiles(struct cxi_dev *dev,
+				  struct cxi_svc_priv *svc_priv)
+{
+	int i;
+
+	for (i = 0; i < svc_priv->num_vld_rx_profiles; i++)
+		cxi_rx_profile_release(dev, svc_priv->rx_profile_ids[i]);
+
+	for (i = 0; i < svc_priv->num_vld_tx_profiles; i++)
+		cxi_tx_profile_release(dev, svc_priv->tx_profile_ids[i]);
+}
+
+static int alloc_rxtx_profiles(struct cxi_dev *dev,
+			       struct cxi_svc_priv *svc_priv)
+{
+	int i;
+	int rc;
+	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
+
+	svc_priv->num_vld_rx_profiles = svc_desc->num_vld_vnis;
+	svc_priv->num_vld_tx_profiles = svc_desc->num_vld_vnis;
+
+	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
+		struct cxi_rxtx_vni_attr vni_attr = {
+			.ignore = 0,
+			.match = svc_desc->vnis[i],
+			.name = "",
+		};
+		struct cxi_tx_attr tx_attr = {
+			.vni_attr = vni_attr
+		};
+		struct cxi_rx_attr rx_attr = {
+			.vni_attr = vni_attr
+		};
+
+		rc = cxi_dev_alloc_tx_profile(dev, &tx_attr,
+					      &svc_priv->tx_profile_ids[i]);
+		if (rc)
+			goto release_profiles;
+
+		rc = cxi_dev_alloc_rx_profile(dev, &rx_attr,
+					      &svc_priv->rx_profile_ids[i]);
+		if (rc)
+			goto release_profiles;
+	}
+
+	return 0;
+
+release_profiles:
+	release_rxtx_profiles(dev, svc_priv);
+
+	return rc;
+}
+
 /**
  * cxi_svc_alloc() - Allocate a service
  *
@@ -662,6 +746,10 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	if (rc)
 		goto release_rgroup;
 
+	rc = alloc_rxtx_profiles(dev, svc_priv);
+	if (rc)
+		goto rgroup_dec_refcount;
+
 	mutex_lock(&hw->svc_lock);
 	idr_preload(GFP_KERNEL);
 	rc = idr_alloc(&hw->svc_ids, svc_priv, 1, -1, GFP_NOWAIT);
@@ -670,7 +758,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 	if (rc < 0) {
 		cxidev_dbg(&hw->cdev, "%s service IDs exhausted\n", hw->cdev.name);
-		goto rgroup_dec_refcount;
+		goto release_rxtx_profs;
 	}
 
 	svc_priv->svc_desc.svc_id = rc;
@@ -690,7 +778,6 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	list_add_tail(&svc_priv->list, &hw->svc_list);
 	hw->svc_count++;
 	mutex_unlock(&hw->svc_lock);
-
 	refcount_inc(&hw->refcount);
 
 	return svc_priv->svc_desc.svc_id;
@@ -698,6 +785,8 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 free_id:
 	idr_remove(&hw->svc_ids, svc_priv->svc_desc.svc_id);
 	mutex_unlock(&hw->svc_lock);
+release_rxtx_profs:
+	release_rxtx_profiles(dev, svc_priv);
 rgroup_dec_refcount:
 	cxi_rgroup_dec_refcount(rgroup);
 	/* The rgroup pointer is no longer usable. */
@@ -716,6 +805,8 @@ static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 	int svc_id = svc_priv->rgroup->id;
 
 	free_rsrcs(svc_priv);
+
+	release_rxtx_profiles(&hw->cdev, svc_priv);
 
 	rc = cxi_rgroup_dec_refcount(svc_priv->rgroup);
 	if (rc)
