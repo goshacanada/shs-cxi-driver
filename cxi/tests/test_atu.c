@@ -2069,7 +2069,7 @@ static int test_lni_alloc(struct tdev *tdev)
 	int i;
 	struct lnis_list *lni_l;
 	struct lnis_list *entry, *tmp;
-	struct cxi_svc_desc desc;
+	struct cxi_svc_desc desc = {};
 
 	pr_info("%s\n", __func__);
 	INIT_LIST_HEAD(&lni_list);
