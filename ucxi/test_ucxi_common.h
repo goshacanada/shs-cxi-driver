@@ -92,7 +92,7 @@ struct ucxi_resource_limits {
 struct ucxi_rgroup_attr {
 	unsigned int    cntr_pool_id;
 	bool            system_service;
-	char            name[50];
+	char            name[CXI_RGROUP_NAME_LEN];
 };
 
 struct ucxi_rgroup_state {

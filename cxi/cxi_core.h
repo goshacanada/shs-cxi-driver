@@ -33,9 +33,11 @@
 	CONFIG_SUSE_PATCHLEVEL >= 5
 #define HAVE_GET_SINGLETON
 #define HAVE_IOVA_INIT_RCACHES
-#ifndef AARCH64
-#endif
 #include <linux/mmu_notifier.h>
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+#define HAVE_GET_SINGLETON
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)

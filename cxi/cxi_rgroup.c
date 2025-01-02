@@ -842,7 +842,7 @@ static int get_types_operator(struct cxi_resource_entry *resource_entry,
  */
 int cxi_rgroup_get_resource_types(struct cxi_rgroup *rgroup,
 				  size_t max_resources,
-				  unsigned int *resource_types,
+				  enum cxi_resource_type *resource_types,
 				  size_t *num_resources)
 {
 	struct resource_types_data  data = {

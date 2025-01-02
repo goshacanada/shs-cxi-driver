@@ -441,9 +441,9 @@ int rgroup_get_resource_types(struct cass_dev *dev,
 
 	int   ret = write_device(dev, &cmd, sizeof(cmd));
 
-	*num_types = resp.num_types;
-
 	if (!ret) {
+		*num_types = resp.num_types;
+
 		for (size_t i = 0; i < *num_types; i++)
 			resource_types[i] = types[i];
 	}
