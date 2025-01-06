@@ -84,64 +84,6 @@ static void cass_sl_write64(void *pci_accessor, long addr, u64 data64)
 	cxidev_dbg(&cass_dev->cdev, "sl write64 0x%lX <- 0x%llX\n", addr, data64);
 }
 
-static int cass_sl_fec_limit_calc(struct cass_dev *cass_dev,
-				  uint32_t speed_mode, uint32_t mant,
-				  int32_t exp, uint32_t *limit)
-{
-	u64 rate;
-	int i;
-
-	/* Values based on max u32 size */
-	if ((exp < -10) || (exp > -4)) {
-		cxidev_err(&cass_dev->cdev,
-			"ber exponent invalid (exponent = %d)\n", exp);
-		return -EINVAL;
-	}
-
-	if (mant > 99) {
-		cxidev_err(&cass_dev->cdev,
-			"ber mantissa invalid (mantissa = %u)\n", mant);
-		return -EINVAL;
-	}
-
-	switch (speed_mode) {
-	case SL_LGRP_CONFIG_TECH_BS_200G:
-		rate = CASS_SL_SERDES_RATE_50 * 4;	/* Uses 4 SerDes lanes */
-		break;
-	case SL_LGRP_CONFIG_TECH_BJ_100G:
-		rate = CASS_SL_SERDES_RATE_25 * 4;	/* Uses 4 SerDes lanes */
-		break;
-	case SL_LGRP_CONFIG_TECH_CD_100G:
-		rate = CASS_SL_SERDES_RATE_50 * 2;	/* Uses 2 SerDes lanes */
-		break;
-	case SL_LGRP_CONFIG_TECH_CD_50G:
-		rate = CASS_SL_SERDES_RATE_50;
-		break;
-	case SL_LGRP_CONFIG_TECH_CK_400G:
-		rate = CASS_SL_SERDES_RATE_100 * 4;	/* Uses 4 SerDes lanes */
-		break;
-	case SL_LGRP_CONFIG_TECH_CK_200G:
-		rate = CASS_SL_SERDES_RATE_100 * 2;	/* Uses 2 Serdes lanes */
-		break;
-	case SL_LGRP_CONFIG_TECH_CK_100G:
-		rate = CASS_SL_SERDES_RATE_100;
-		break;
-	default:
-		cxidev_err(&cass_dev->cdev,
-			"pcs mode invalid (speed_mode = %u)\n", speed_mode);
-		return EINVAL;
-	};
-
-	rate *= mant;
-
-	for (i = exp; i < 0; ++i)
-		rate /= 10;
-
-	*limit = rate;
-
-	return 0;
-}
-
 bool cass_sl_is_pcs_aligned(struct cass_dev *cass_dev)
 {
 	union ss2_port_pml_sts_rx_pcs_subport sts;
@@ -237,9 +179,6 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 	u32                    an_mode;
 	u32                    speed_mode;
 	bool                   is_mode_changed;
-	u32                    ucw_limit;
-	u32                    ccw_limit;
-	int                    rtn;
 
 	cxidev_dbg(&cass_dev->cdev, "sl mode set\n");
 
@@ -273,25 +212,6 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 		cass_dev->sl.lgrp_config.tech_map =
 			((cass_dev->sl.lgrp_config.tech_map & ~SL_LGRP_CONFIG_TECH_MASK) |
 			speed_mode);
-
-		rtn = cass_sl_fec_limit_calc(cass_dev, speed_mode, CASS_SL_DEFAULT_BER_MANT_UCW,
-					     CASS_SL_DEFAULT_BER_EXP_UCW, &ucw_limit);
-		if (rtn) {
-			ucw_limit = 0;
-			cxidev_warn(&cass_dev->cdev, "sl_fec_limit_calc UCW failed [%d]", rtn);
-		}
-
-		cass_dev->sl.link_policy.fec_mon_ucw_down_limit = ucw_limit;
-
-		rtn = cass_sl_fec_limit_calc(cass_dev, speed_mode, CASS_SL_DEFAULT_BER_MANT_CCW,
-					     CASS_SL_DEFAULT_BER_EXP_CCW, &ccw_limit);
-		if (rtn) {
-			ccw_limit = 0;
-			cxidev_warn(&cass_dev->cdev, "sl_fec_limit_calc CCW failed [%d]", rtn);
-		}
-
-		cass_dev->sl.link_policy.fec_mon_ccw_down_limit = ccw_limit;
-
 		is_mode_changed = true;
 	}
 
@@ -1200,10 +1120,6 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 #define CASS_SL_LLR_START_TIMEOUT_MS  3000
 static void cass_sl_config_init(struct cass_dev *cass_dev)
 {
-	int           rtn;
-	u32           ucw_limit;
-	u32           ccw_limit;
-
 	cxidev_dbg(&cass_dev->cdev,
 		   "sl config init (platform = %d, cxi = %u, nic = %d)\n",
 		   HW_PLATFORM(cass_dev), cass_dev->cdev.cxi_num, cass_dev->uc_nic);
@@ -1226,33 +1142,14 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.lgrp_config.tech_map  = SL_LGRP_CONFIG_TECH_BS_200G;
 	cass_dev->sl.lgrp_config.fec_map   = SL_LGRP_CONFIG_FEC_RS;
 
-	cxidev_dbg(&cass_dev->cdev, "sl config init (tech_map = 0x%X)\n",
-		cass_dev->sl.lgrp_config.tech_map);
-
-	rtn = cass_sl_fec_limit_calc(cass_dev, SL_LGRP_CONFIG_TECH_BS_200G,
-			             CASS_SL_DEFAULT_BER_MANT_UCW,
-			             CASS_SL_DEFAULT_BER_EXP_UCW, &ucw_limit);
-	if (rtn) {
-		cxidev_warn(&cass_dev->cdev, "sl_fec_limit_calc UCW failed [%d]\n", rtn);
-		ucw_limit = 0;
-	}
-
-	rtn = cass_sl_fec_limit_calc(cass_dev, SL_LGRP_CONFIG_TECH_BS_200G,
-			             CASS_SL_DEFAULT_BER_MANT_CCW,
-			             CASS_SL_DEFAULT_BER_EXP_CCW, &ccw_limit);
-	if (rtn) {
-		cxidev_warn(&cass_dev->cdev, "sl_fec_limit_calc CCW failed [%d]\n", rtn);
-		ccw_limit = 0;
-	}
-
 	cass_dev->sl.link_config.magic                 = SL_LINK_CONFIG_MAGIC;
 	cass_dev->sl.link_config.ver                   = SL_LINK_CONFIG_VER;
 	cass_dev->sl.link_config.link_up_timeout_ms    = CASS_SL_LINK_UP_TIMEOUT_MS;
 	cass_dev->sl.link_config.link_up_tries_max     = 1;
 	cass_dev->sl.link_config.fec_up_settle_wait_ms = 250;
 	cass_dev->sl.link_config.fec_up_check_wait_ms  = 500;
-	cass_dev->sl.link_config.fec_up_ucw_limit      = ucw_limit;
-	cass_dev->sl.link_config.fec_up_ccw_limit      = ccw_limit;
+	cass_dev->sl.link_config.fec_up_ucw_limit      = -1;
+	cass_dev->sl.link_config.fec_up_ccw_limit      = -1;
 	if (!HW_PLATFORM_Z1(cass_dev))
 		cass_dev->sl.link_config.options       = SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
 	cass_dev->sl.link_config.pause_map             = 0;
@@ -1262,7 +1159,7 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 
 	cass_dev->sl.link_policy.magic                   = SL_LINK_POLICY_MAGIC;
 	cass_dev->sl.link_policy.ver                     = SL_LINK_POLICY_VER;
-	cass_dev->sl.link_policy.fec_mon_ucw_down_limit  = ucw_limit;
+	cass_dev->sl.link_policy.fec_mon_ucw_down_limit  = -1;
 	cass_dev->sl.link_policy.fec_mon_ucw_warn_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_ccw_down_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_ccw_warn_limit  = 0;
