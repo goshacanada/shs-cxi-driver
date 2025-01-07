@@ -276,8 +276,10 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	}
 
 	cp_priv = kzalloc(sizeof(*cp_priv), GFP_KERNEL);
-	if (!cp_priv)
+	if (!cp_priv) {
+		mutex_unlock(&hw->cp_lock);
 		return ERR_PTR(-ENOMEM);
+	}
 
 	cp_priv->rgid = lni_priv->lni.rgid;
 	cp_priv->cp.vni_pcp = vni_pcp;
@@ -293,7 +295,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	}
 	cp_priv->cass_cp = cass_cp;
 
-	/* Mapped the communication profile to LCID. */
+	/* Map the communication profile to LCID. */
 	lcid = cass_lcid_get(hw, cp_priv, lni_priv->lni.rgid);
 	if (lcid < 0) {
 		cxidev_dbg(dev, "%s rgid=%u lcids exhausted\n", dev->name,
