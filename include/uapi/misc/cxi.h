@@ -455,7 +455,7 @@ enum cxi_atu_map_flags {
 	CXI_MAP_ATS_PT    = (1 << 7),
 	CXI_MAP_ATS_DYN   = (1 << 8),
 	CXI_MAP_DEVICE    = (1 << 9),
-	CXI_MAP_IOVA_ALLOC = (1 << 10),
+	CXI_MAP_UNUSED    = (1 << 10),
 	CXI_MAP_ALLOC_MD  = (1 << 11),
 	CXI_MAP_PREFETCH  = (1 << 12),
 };
