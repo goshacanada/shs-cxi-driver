@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2022,2023,2024 Hewlett Packard Enterprise Development LP */
+/* Copyright 2022,2023,2024,2025 Hewlett Packard Enterprise Development LP */
 
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -1106,6 +1106,10 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		cass_dev->sl.llr_state = SL_LLR_STATE_RUNNING;
 		complete(&(cass_dev->sl.step_complete));
 		break;
+	case SL_LGRP_NOTIF_LINK_DOWN:
+		cass_dev->sl.link_state = SL_LINK_STATE_DOWN;
+		complete(&(cass_dev->sl.step_complete));
+		break;
 	default:
 		cxidev_err(&cass_dev->cdev, "callback error (type = 0x%X)\n", msg->type);
 		cass_dev->sl.link_state = SL_LINK_STATE_ERROR;
@@ -1514,29 +1518,40 @@ out_no_link:
 	return -ENOLINK;
 }
 
+#define CASS_SL_LINK_DOWN_TIMEOUT_MS  5000
 int cass_sl_link_down(struct cass_dev *cass_dev)
 {
-	int rtn;
+	int          rtn;
+	unsigned int timeleft;
 
 	cxidev_dbg(&cass_dev->cdev, "sl link down\n");
 
 	/* stop llr */
 	rtn = sl_llr_stop(cass_dev->sl.llr);
-	if (rtn != 0)
+	if (rtn)
 		cxidev_warn(&cass_dev->cdev, "sl_llr_stop failed [%d]\n", rtn);
 
-	/* disable MAC */
+	/* stop MAC */
 	rtn = sl_mac_tx_stop(cass_dev->sl.mac);
-	if (rtn != 0)
+	if (rtn)
 		cxidev_warn(&cass_dev->cdev, "sl_mac_tx_stop failed [%d]\n", rtn);
 	rtn = sl_mac_rx_stop(cass_dev->sl.mac);
-	if (rtn != 0)
+	if (rtn)
 		cxidev_warn(&cass_dev->cdev, "sl_mac_rx_stop failed [%d]\n", rtn);
 
 	/* down link */
-	rtn = sl_link_down(cass_dev->sl.link);
-	if (rtn != 0)
-		cxidev_warn(&cass_dev->cdev, "sl_link_down failed [%d]\n", rtn);
+	if (cass_dev->sl.link_state != SL_LINK_STATE_DOWN) {
+		reinit_completion(&(cass_dev->sl.step_complete));
+		rtn = sl_link_down(cass_dev->sl.link);
+		if (rtn) {
+			cxidev_warn(&cass_dev->cdev, "sl_link_down failed [%d]\n", rtn);
+		} else {
+			timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
+				msecs_to_jiffies(2*CASS_SL_LINK_DOWN_TIMEOUT_MS));
+			if (timeleft == 0)
+				cxidev_warn(&cass_dev->cdev, "sl_link_down timeout\n");
+		}
+	}
 
 	cass_link_set_state(cass_dev, CASS_LINK_STATUS_DOWN, 0);
 
