@@ -907,6 +907,8 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* Enable DMA */
 	pci_set_master(pdev);
 
+	dma_set_max_seg_size(&hw->cdev.pdev->dev, UINT_MAX);
+
 	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(57));
 	if (rc) {
 		cxidev_err(&hw->cdev, "dma_set_mask_and_coherent failed: %d\n", rc);
