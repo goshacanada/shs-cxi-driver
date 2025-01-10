@@ -747,7 +747,16 @@ static int cass_kvec(struct cass_dev *hw, const struct iov_iter *iter,
 
 	return 0;
 }
-
+/* cass_sgtable_is_valid() - Check for invalid sgt
+ *
+ * Requirements for entries in sgt:
+ * one entry:
+ *     offset < PAGE_SIZE
+ * multiple entries:
+ *     first:  offset < PAGE_SIZE, (len + offset) % PAGE_SIZE
+ *     middle: offset == 0, len % PAGE_SIZE
+ *     last:   offset == 0
+ */
 static bool cass_sgtable_is_valid(struct cass_dev *hw,
 				  const struct sg_table *sgt, size_t *length)
 {
@@ -760,10 +769,21 @@ static bool cass_sgtable_is_valid(struct cass_dev *hw,
 	for_each_sgtable_dma_sg(sgt, sg, i) {
 		size_t len = sg_dma_len(sg);
 
-		if ((!i && ((len + sg->offset) % PAGE_SIZE)) || // first entry
-			    (i == last_entry && sg->offset) ||  // last entry
-			    (i && i < last_entry && (sg->offset ||
-						len % PAGE_SIZE))) { // rest
+		if (sg->offset > PAGE_SIZE) {
+			cxidev_err(&hw->cdev,
+				   "Entry %d offset:%x > PAGE_SIZE\n",
+				   i, sg->offset);
+
+			return false;
+		}
+
+		/* first of multiple entries */
+		if ((!i && i != last_entry && ((len + sg->offset) % PAGE_SIZE)) ||
+		    /* last entry */
+		    (i && i == last_entry && sg->offset) ||
+		    /* middle entries */
+		    (i && i < last_entry && (sg->offset ||
+					     len % PAGE_SIZE))) {
 			cxidev_err(&hw->cdev, "Hole in sg_table at entry %d offset:%x len:%lx\n",
 				   i, sg->offset, len);
 
