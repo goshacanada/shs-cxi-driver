@@ -1017,6 +1017,24 @@ free_pages:
 	return rc;
 }
 
+static bool check_md_length(struct cxi_md *md, int nentries,
+			       struct scatterdata *sd)
+{
+	int i;
+	size_t expected_len;
+
+	for (i = 0, expected_len = 0; i < nentries; i++)
+		expected_len += PAGE_ALIGN(sd->offset + sd->length);
+
+	if (md->len != expected_len) {
+		pr_err("MD length incorrect expected:%lx have:%lx\n",
+		       expected_len, md->len);
+		return false;
+	}
+
+	return true;
+}
+
 static int test_sgtable3(struct tdev *tdev)
 {
 	int i;
@@ -1147,6 +1165,13 @@ static int test_sgtable3(struct tdev *tdev)
 		pr_err("cxi_map_sgtable should succeed %d\n", rc);
 		goto free_sgtable;
 	}
+
+	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata0), good_sdata0)) {
+		ret = cxi_unmap(sg_md);
+		WARN(ret < 0, "cxi_unmap failed %d", ret);
+		goto free_sgtable;
+	}
+
 	ret = cxi_unmap(sg_md);
 	WARN(ret < 0, "cxi_unmap failed %d", ret);
 	unmap_free_sgtable(tdev, &sgt);
@@ -1162,6 +1187,13 @@ static int test_sgtable3(struct tdev *tdev)
 		pr_err("cxi_map_sgtable should succeed %d\n", rc);
 		goto free_sgtable;
 	}
+
+	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata1), good_sdata1)) {
+		ret = cxi_unmap(sg_md);
+		WARN(ret < 0, "cxi_unmap failed %d", ret);
+		goto free_sgtable;
+	}
+
 	ret = cxi_unmap(sg_md);
 	WARN(ret < 0, "cxi_unmap failed %d", ret);
 	unmap_free_sgtable(tdev, &sgt);
@@ -1177,6 +1209,13 @@ static int test_sgtable3(struct tdev *tdev)
 		pr_err("cxi_map_sgtable should succeed %d\n", rc);
 		goto free_sgtable;
 	}
+
+	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata2), good_sdata2)) {
+		ret = cxi_unmap(sg_md);
+		WARN(ret < 0, "cxi_unmap failed %d", ret);
+		goto free_sgtable;
+	}
+
 	ret = cxi_unmap(sg_md);
 	WARN(ret < 0, "cxi_unmap failed %d", ret);
 	unmap_free_sgtable(tdev, &sgt);
