@@ -979,7 +979,7 @@ struct scatterdata {
 } sd_t;
 
 static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
-			struct scatterdata *sdata, size_t *length)
+			struct scatterdata *sdata, size_t *length, bool init)
 {
 	int i;
 	int rc;
@@ -998,7 +998,10 @@ static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
 			goto free_pages;
 		}
 		sg_set_page(sg, page, sdata[i].length, sdata[i].offset);
-		memset(sg_virt(sg), 0, sdata[i].length);
+
+		if (init)
+			memset(sg_virt(sg), 0, sdata[i].length);
+
 		*length += sdata[i].length;
 	}
 
@@ -1060,7 +1063,8 @@ static int test_sgtable3(struct tdev *tdev)
 	if (rc)
 		return rc;
 
-	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata0), bad_sdata0, &len);
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata0), bad_sdata0,
+			  &len, false);
 	if (rc)
 		goto teardown;
 
@@ -1072,7 +1076,9 @@ static int test_sgtable3(struct tdev *tdev)
 	}
 
 	unmap_free_sgtable(tdev, &sgt_bad);
-	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata1), bad_sdata1, &len);
+
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata1), bad_sdata1,
+			  &len, false);
 	if (rc)
 		goto teardown;
 
@@ -1083,7 +1089,8 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_bad_sgtable;
 	}
 
-	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata2), bad_sdata2, &len);
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata2), bad_sdata2,
+			  &len, false);
 	if (rc)
 		goto teardown;
 
@@ -1094,7 +1101,8 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_bad_sgtable;
 	}
 
-	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(good_sdata0), good_sdata0, &len);
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(good_sdata0), good_sdata0,
+			  &len, true);
 	if (rc)
 		goto teardown;
 
@@ -1109,7 +1117,8 @@ static int test_sgtable3(struct tdev *tdev)
 
 	unmap_free_sgtable(tdev, &sgt);
 
-	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(good_sdata1), good_sdata1, &len);
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(good_sdata1), good_sdata1,
+			  &len, true);
 	if (rc)
 		goto teardown;
 
@@ -1125,7 +1134,7 @@ static int test_sgtable3(struct tdev *tdev)
 	unmap_free_sgtable(tdev, &sgt);
 
 	len = 0;
-	rc = fill_sgtable(tdev, &sgt, 4, sdata, &len);
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(sdata), sdata, &len, true);
 	if (rc)
 		goto free_bad_sgtable;
 
