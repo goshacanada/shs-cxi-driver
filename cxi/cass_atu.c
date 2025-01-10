@@ -749,11 +749,13 @@ static int cass_kvec(struct cass_dev *hw, const struct iov_iter *iter,
 }
 
 static bool cass_sgtable_is_valid(struct cass_dev *hw,
-				  const struct sg_table *sgt)
+				  const struct sg_table *sgt, size_t *length)
 {
 	int i;
 	struct scatterlist *sg;
 	int last_entry = sgt->nents - 1;
+
+	*length = 0;
 
 	for_each_sgtable_dma_sg(sgt, sg, i) {
 		size_t len = sg_dma_len(sg);
@@ -767,6 +769,8 @@ static bool cass_sgtable_is_valid(struct cass_dev *hw,
 
 			return false;
 		}
+
+		*length += ALIGN(len + sg->offset, PAGE_SIZE);
 	}
 
 	return true;
@@ -1212,6 +1216,7 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 			       u32 flags)
 {
 	int ret;
+	size_t len;
 	struct cxi_md *md;
 	struct cass_ac *cac;
 	struct cxi_md_priv *md_priv;
@@ -1227,12 +1232,12 @@ struct cxi_md *cxi_map_sgtable(struct cxi_lni *lni, struct sg_table *sgt,
 	if (flags & CXI_MAP_ATS)
 		return ERR_PTR(-EINVAL);
 
-	if (!cass_sgtable_is_valid(hw, sgt))
+	if (!cass_sgtable_is_valid(hw, sgt, &len))
 		return ERR_PTR(-EINVAL);
 
 	m_opts.va_start = 0;
 	m_opts.flags = flags;
-	m_opts.va_len = sgt->orig_nents * PAGE_SIZE;
+	m_opts.va_len = len;
 	m_opts.va_end = m_opts.va_len;
 	m_opts.ptg_mode = default_ptg_mode;
 
@@ -1300,6 +1305,7 @@ EXPORT_SYMBOL(cxi_map_sgtable);
 int cxi_update_sgtable(struct cxi_md *md, struct sg_table *sgt)
 {
 	int ret;
+	size_t len;
 	struct cxi_md_priv *md_priv = container_of(md, struct cxi_md_priv, md);
 	struct cxi_dev *cdev = md_priv->lni_priv->dev;
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
@@ -1309,7 +1315,7 @@ int cxi_update_sgtable(struct cxi_md *md, struct sg_table *sgt)
 		return -EINVAL;
 	}
 
-	if (!cass_sgtable_is_valid(hw, sgt))
+	if (!cass_sgtable_is_valid(hw, sgt, &len))
 		return -EINVAL;
 
 	md_priv->sgt = sgt;
