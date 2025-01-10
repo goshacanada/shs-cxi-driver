@@ -734,7 +734,7 @@ static void free_sgtable(struct sg_table *sgt)
 
 	for_each_sgtable_sg(sgt, sg, i)
 		if (sg_page(sg))
-			__free_page(sg_page(sg));
+			__free_pages(sg_page(sg), get_order(sg->length));
 
 	sg_free_table(sgt);
 }
@@ -992,7 +992,7 @@ static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
 		return rc;
 
 	for_each_sgtable_sg(sgt, sg, i) {
-		page = alloc_page(GFP_KERNEL);
+		page = alloc_pages(GFP_KERNEL, get_order(sdata[i].length));
 		if (!page) {
 			pr_info("failed alloc_page\n");
 			goto free_pages;
