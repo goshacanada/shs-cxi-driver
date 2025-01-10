@@ -1084,6 +1084,9 @@ static int test_sgtable3(struct tdev *tdev)
 	struct scatterdata good_sdata2[] = {
 		{.offset = 0, .length = PAGE_SIZE * 2},
 	};
+	struct scatterdata good_sdata3[] = {
+		{.offset = QPAGE * 3, .length = HPAGE},
+	};
 
 	pr_info("%s\n", __func__);
 
@@ -1211,6 +1214,28 @@ static int test_sgtable3(struct tdev *tdev)
 	}
 
 	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata2), good_sdata2)) {
+		ret = cxi_unmap(sg_md);
+		WARN(ret < 0, "cxi_unmap failed %d", ret);
+		goto free_sgtable;
+	}
+
+	ret = cxi_unmap(sg_md);
+	WARN(ret < 0, "cxi_unmap failed %d", ret);
+	unmap_free_sgtable(tdev, &sgt);
+
+	rc = fill_sgtable(tdev, &sgt, ARRAY_SIZE(good_sdata3), good_sdata3,
+			  &len, true);
+	if (rc)
+		goto teardown;
+
+	sg_md = cxi_map_sgtable(tdev->lni, &sgt, 0);
+	if (IS_ERR(sg_md)) {
+		rc = PTR_ERR(sg_md);
+		pr_err("cxi_map_sgtable should succeed %d\n", rc);
+		goto free_sgtable;
+	}
+
+	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata3), good_sdata3)) {
 		ret = cxi_unmap(sg_md);
 		WARN(ret < 0, "cxi_unmap failed %d", ret);
 		goto free_sgtable;
