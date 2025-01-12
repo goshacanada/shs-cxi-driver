@@ -1087,6 +1087,13 @@ static int test_sgtable3(struct tdev *tdev)
 	struct scatterdata good_sdata3[] = {
 		{.offset = QPAGE * 3, .length = HPAGE},
 	};
+	struct scatterdata too_big[] = {
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = PAGE_SIZE},
+		{.offset = 0, .length = PAGE_SIZE},
+	};
 
 	pr_info("%s\n", __func__);
 
@@ -1278,6 +1285,19 @@ static int test_sgtable3(struct tdev *tdev)
 		goto unmap_sg;
 	}
 
+	unmap_free_sgtable(tdev, &sgt_bad);
+
+	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(too_big), too_big,
+			  &len, false);
+	if (rc)
+		goto unmap_sg;
+
+	rc = cxi_update_sgtable(sg_md, &sgt_bad);
+	if (rc != -EINVAL) {
+		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
+		goto unmap_sg;
+	}
+
 	offset = (u64)sg_virt(sgt.sgl) - (u64)page_address(sg_page(sgt.sgl));
 	test_append_le(tdev, len, sg_md, offset);
 
@@ -1293,14 +1313,6 @@ static int test_sgtable3(struct tdev *tdev)
 	rc = check_sgtable_result(snd_mem.buffer, &sgt);
 	if (rc)
 		goto unmap_sg;
-
-	rc = test_do_put(tdev, &snd_mem, len, 0, 0, tdev->index_ext);
-	if (rc < 0) {
-		pr_err("test_do_put failed %d\n", rc);
-		goto unmap_sg;
-	}
-
-	rc = check_sgtable_result(snd_mem.buffer, &sgt);
 
 unmap_sg:
 	ret = cxi_unmap(sg_md);
