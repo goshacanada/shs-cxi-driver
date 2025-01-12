@@ -1169,7 +1169,7 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_sgtable;
 	}
 
-	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata0), good_sdata0)) {
+	if (!check_md_length(sg_md, ARRAY_SIZE(good_sdata0), good_sdata0)) {
 		ret = cxi_unmap(sg_md);
 		WARN(ret < 0, "cxi_unmap failed %d", ret);
 		goto free_sgtable;
@@ -1191,7 +1191,7 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_sgtable;
 	}
 
-	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata1), good_sdata1)) {
+	if (!check_md_length(sg_md, ARRAY_SIZE(good_sdata1), good_sdata1)) {
 		ret = cxi_unmap(sg_md);
 		WARN(ret < 0, "cxi_unmap failed %d", ret);
 		goto free_sgtable;
@@ -1213,7 +1213,7 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_sgtable;
 	}
 
-	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata2), good_sdata2)) {
+	if (!check_md_length(sg_md, ARRAY_SIZE(good_sdata2), good_sdata2)) {
 		ret = cxi_unmap(sg_md);
 		WARN(ret < 0, "cxi_unmap failed %d", ret);
 		goto free_sgtable;
@@ -1235,7 +1235,7 @@ static int test_sgtable3(struct tdev *tdev)
 		goto free_sgtable;
 	}
 
-	if (check_md_length(sg_md, ARRAY_SIZE(good_sdata3), good_sdata3)) {
+	if (!check_md_length(sg_md, ARRAY_SIZE(good_sdata3), good_sdata3)) {
 		ret = cxi_unmap(sg_md);
 		WARN(ret < 0, "cxi_unmap failed %d", ret);
 		goto free_sgtable;
