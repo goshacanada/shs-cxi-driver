@@ -17,13 +17,13 @@
 #include "cxi_core.h"
 #include "cass_core.h"
 
-struct cxi_dev *cdev;
+static struct cxi_dev *cdev;
 
 #define PLEC_SIZE 256U
 #define PTE_COUNT (PLEC_SIZE + 1)
 
-struct cxi_lni *lni;
-struct cxi_pte *ptes[PTE_COUNT] = {};
+static struct cxi_lni *lni;
+static struct cxi_pte *ptes[PTE_COUNT] = {};
 
 static int test_1_verify_plec_limit(void)
 {

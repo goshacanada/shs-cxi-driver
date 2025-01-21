@@ -20,7 +20,7 @@ static const struct xa_limit ac_entry_id_limits  = AC_ENTRY_ID_LIMITS;
 static const uid_t  invalid_uid = (uid_t) -1;
 static const gid_t  invalid_gid = (gid_t) -1;
 
-static bool validate_ac_data(unsigned int ac_type,
+static bool validate_ac_data(cxi_ac_typeset_t ac_type,
 			     const union cxi_ac_data *data)
 {
 	switch (ac_type) {

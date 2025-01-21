@@ -143,7 +143,7 @@ static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 	}
 }
 
-int rsrc_dump_order[] = {
+static const int rsrc_dump_order[] = {
 	CXI_RESOURCE_AC,
 	CXI_RESOURCE_CT,
 	CXI_RESOURCE_EQ,

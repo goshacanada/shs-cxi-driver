@@ -38,35 +38,25 @@ static inline struct cxi_dev *get_cxi_dev(struct cass_dev *hw)
 static struct xa_limit   rgroup_id_limits = RGROUP_ID_LIMITS;
 
 /**
- * rgroup_list_lock() - take the device lock for rgroups
+ * dev_lock_rgroup_list() - take the device lock for rgroups
  *
- * @list: rgroup list pointer
+ * @hw: Cassini device
  */
-static void rgroup_list_lock(struct cxi_rgroup_list *list)
-	__acquires(&list->xarray.xa_lock)
-{
-	xa_lock_nested(&list->xarray, SINGLE_DEPTH_NESTING);
-}
-
 static void dev_lock_rgroup_list(struct cass_dev *hw)
+	__acquires(&hw->rgroup_list.xarray.xa_lock)
 {
-	return rgroup_list_lock(&hw->rgroup_list);
+	xa_lock_nested(&hw->rgroup_list.xarray, SINGLE_DEPTH_NESTING);
 }
 
 /**
- * rgroup_list_unlock() - release the device lock for rgroups
+ * dev_unlock_rgroup_list() - release the device lock for rgroups
  *
- * @list: rgroup list pointer
+ * @hw: Cassini device
  */
-static void rgroup_list_unlock(struct cxi_rgroup_list *list)
-	__releases(&list->xarray.xa_lock)
-{
-	xa_unlock(&list->xarray);
-}
-
 static void dev_unlock_rgroup_list(struct cass_dev *hw)
+	__releases(&hw->rgroup_list.xarray.xa_lock)
 {
-	return rgroup_list_unlock(&hw->rgroup_list);
+	xa_unlock(&hw->rgroup_list.xarray);
 }
 
 /**
@@ -496,13 +486,12 @@ static int find_rgroup_inc_refcount(struct cxi_dev *dev,
 				    struct cxi_rgroup **rgroup)
 {
 	struct cass_dev         *hw          = get_cass_dev(dev);
-	struct cxi_rgroup_list  *rgroup_list = &hw->rgroup_list;
 	struct cxi_rgroup       *found_rgroup;
 	int    ret = 0;
 
-	rgroup_list_lock(rgroup_list);
+	dev_lock_rgroup_list(hw);
 
-	ret = rgroup_list_retrieve_rgroup(rgroup_list, id, &found_rgroup);
+	ret = rgroup_list_retrieve_rgroup(&hw->rgroup_list, id, &found_rgroup);
 	if (ret)
 		goto unlock_return;
 
@@ -514,7 +503,7 @@ static int find_rgroup_inc_refcount(struct cxi_dev *dev,
 	*rgroup = found_rgroup;
 
 unlock_return:
-	rgroup_list_unlock(rgroup_list);
+	dev_unlock_rgroup_list(hw);
 	return ret;
 }
 

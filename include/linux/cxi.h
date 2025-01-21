@@ -230,18 +230,15 @@ int cxi_dev_info_get(struct cxi_dev *dev,
 		     struct cxi_dev_info_use *devinfo);
 
 /* Access Control Entries */
-
+typedef unsigned int __bitwise cxi_ac_typeset_t;
 enum cxi_ac_type {
-	CXI_AC_UID  = BIT(0),
-	CXI_AC_GID  = BIT(1),
-	CXI_AC_OPEN = BIT(2),
+	CXI_AC_UID  = (__force cxi_ac_typeset_t)BIT(0),
+	CXI_AC_GID  = (__force cxi_ac_typeset_t)BIT(1),
+	CXI_AC_OPEN = (__force cxi_ac_typeset_t)BIT(2),
 };
 
-typedef unsigned int __bitwise cxi_ac_typeset_t;
-
 /* Parameter for use with the 'by_user' retrieve functions */
-#define CXI_AC_ANY \
-	((__force cxi_ac_typeset_t) (CXI_AC_UID | CXI_AC_GID | CXI_AC_OPEN))
+#define CXI_AC_ANY (CXI_AC_UID | CXI_AC_GID | CXI_AC_OPEN)
 
 union cxi_ac_data {
 	uid_t     uid;

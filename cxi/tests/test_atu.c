@@ -976,7 +976,7 @@ teardown:
 struct scatterdata {
 	size_t offset;
 	size_t length;
-} sd_t;
+};
 
 static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
 			struct scatterdata *sdata, size_t *length, bool init)
@@ -2063,7 +2063,7 @@ struct lnis_list {
 	struct cxi_lni *lni;
 };
 
-struct list_head lni_list;
+static struct list_head lni_list;
 static int test_lni_alloc(struct tdev *tdev)
 {
 	int rc;
