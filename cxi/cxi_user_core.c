@@ -874,18 +874,15 @@ static int cxi_user_svc_update(struct user_client *client,
 			       void *resp_out, size_t *resp_out_len)
 {
 	const struct cxi_svc_update_cmd *cmd = cmd_in;
-	struct cxi_svc_fail_info fail_info = {};
 	struct cxi_svc_update_resp resp = {};
 	int rc;
 
-	rc = cxi_svc_update(client->ucxi->dev, &cmd->svc_desc, &fail_info);
-	if (rc < 0) {
-		resp.fail_info = fail_info;
-	}
+	rc = cxi_svc_update(client->ucxi->dev, &cmd->svc_desc);
 
 	/* fail_info is not currently filled out */
 	if (copy_response(client, &resp, sizeof(resp), resp_out, resp_out_len))
 		return -EFAULT;
+
 	return rc;
 }
 

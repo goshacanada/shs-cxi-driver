@@ -232,7 +232,7 @@ static int test_service_modify(struct cxi_dev *dev)
 	}
 
 	/* Should not be able to modify service while it is being used. */
-	rc = cxi_svc_update(dev, &desc, &info);
+	rc = cxi_svc_update(dev, &desc);
 	if (rc != -EBUSY) {
 		rc = -EINVAL;
 		test_err("cxi_svc_update did not returned -EBUSY\n");
@@ -242,7 +242,7 @@ static int test_service_modify(struct cxi_dev *dev)
 	cxi_lni_free(lni);
 
 	/* Should be able to modify service since it is not being used. */
-	rc = cxi_svc_update(dev, &desc, &info);
+	rc = cxi_svc_update(dev, &desc);
 	if (rc) {
 		test_err("cxi_svc_update failed: %d\n", rc);
 		goto err_free_svc;
@@ -327,7 +327,7 @@ static int test_disabled_service(struct cxi_dev *dev)
 
 	desc.svc_id = rc;
 
-	rc = cxi_svc_update(dev, &desc, &info);
+	rc = cxi_svc_update(dev, &desc);
 	if (rc) {
 		test_err("cxi_svc_update failed: %d\n", rc);
 		goto err_free_svc;
@@ -356,7 +356,6 @@ static int test_default_service(struct cxi_dev *dev)
 	struct cxi_cp *cp;
 	struct cxi_lni *lni;
 	struct cxi_svc_desc desc;
-	struct cxi_svc_fail_info info;
 
 	/* Get the updated descriptor back from the kernel */
 	rc = cxi_svc_get(dev, CXI_DEFAULT_SVC_ID, &desc);
@@ -367,7 +366,7 @@ static int test_default_service(struct cxi_dev *dev)
 
 	/* Enable Default Service */
 	desc.enable = true;
-	rc = cxi_svc_update(dev, &desc, &info);
+	rc = cxi_svc_update(dev, &desc);
 	if (rc) {
 		test_err("cxi_svc_update failed: %d\n", rc);
 		goto err;

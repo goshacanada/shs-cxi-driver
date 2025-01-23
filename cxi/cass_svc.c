@@ -991,14 +991,12 @@ unlock:
  * @svc_desc: A service descriptor that contains requests for various resources,
  *            and optionally identifies member processes, tcs, vnis, etc. see
  *            cxi_svc_desc.
- * @fail_info: extra information when a failure occurs
  *
  * Currently does not honor changes to resource limits in a svc_desc.
  *
  * Return: 0 on success. Else, negative errno value.
  */
-int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
-		   struct cxi_svc_fail_info *fail_info)
+int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc)
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;

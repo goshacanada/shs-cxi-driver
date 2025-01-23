@@ -2014,7 +2014,6 @@ static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc,
 {
 	int rc;
 	int lpr;
-	struct cxi_svc_fail_info *fail_info;
 
 	desc->enable = 1,
 	desc->is_system_svc = 1,
@@ -2032,7 +2031,7 @@ static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc,
 
 	desc->svc_id = rc;
 
-	rc = cxi_svc_update(dev, desc, fail_info);
+	rc = cxi_svc_update(dev, desc);
 	if (rc < 0) {
 		pr_err("cxi_svc_update_priv failed: %d\n", rc);
 		goto update_err;
