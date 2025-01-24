@@ -336,14 +336,16 @@ static void cass_sl_intr_hdlr(struct cass_dev *cass_dev,
 			      unsigned int irq, bool is_ext, unsigned int bitn)
 {
 	struct cass_sl_intr_entry *intr;
+	DECLARE_BITMAP(ss2_port_pml_err_flgs, MAX_ERR_FLAG_BITLEN);
 
 	cxidev_dbg(&cass_dev->cdev, "sl intr handler (bit = %d)\n", bitn);
 
 	list_for_each_entry(intr, &cass_dev->sl.intr_list, list) {
 		if (test_bit(bitn, intr->reg.err_flags.mask)) {
 			cxidev_dbg(&cass_dev->cdev, "call handler\n");
-			intr->hdlr(&(intr->reg.err_flags.ss2_port_pml.qw[0]),
-				   4, intr->data);
+			bitmap_zero(ss2_port_pml_err_flgs, MAX_ERR_FLAG_BITLEN);
+			set_bit(bitn, ss2_port_pml_err_flgs);
+			intr->hdlr((u64 *)ss2_port_pml_err_flgs, 4, intr->data);
 			break;
 		}
 	}
