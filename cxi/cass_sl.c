@@ -22,6 +22,8 @@
 #define CASS_SL_SERDES_RATE_50  53125000000ULL
 #define CASS_SL_SERDES_RATE_100 106250000000ULL
 
+#define CASS_SL_LINK_DOWN_TIMEOUT_MS  5000
+
 /* Default BER goals for FEC
  * The maximum rate LLR can incur UCWs (1e-10). Typically a burst error
  */
@@ -1055,6 +1057,7 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 			   SL_LGRP_NOTIF_LINK_UP           | \
 			   SL_LGRP_NOTIF_LINK_UP_FAIL      | \
 			   SL_LGRP_NOTIF_LINK_ASYNC_DOWN   | \
+			   SL_LGRP_NOTIF_LINK_DOWN         | \
 			   SL_LGRP_NOTIF_LINK_ERROR        | \
 			   SL_LGRP_NOTIF_LLR_DATA          | \
 			   SL_LGRP_NOTIF_LLR_START_TIMEOUT |\
@@ -1193,7 +1196,7 @@ int cass_sl_init(struct cass_dev *cass_dev)
 	cxidev_dbg(&cass_dev->cdev, "sl init (cxi_num = %u)\n", cass_dev->cdev.cxi_num);
 
 	if (cass_dev->sl.is_initialized) {
-		cxidev_err(&cass_dev->cdev, "sl already initialized\n");
+		cxidev_dbg(&cass_dev->cdev, "sl already initialized\n");
 		return -EBADRQC;
 	}
 
@@ -1434,7 +1437,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 		goto out_link_down;
 	}
 	if (cass_dev->sl.link_state != SL_LINK_STATE_UP) {
-		cxidev_err(&cass_dev->cdev, "sl_link_up not up\n");
+		cxidev_dbg(&cass_dev->cdev, "sl_link_up not up\n");
 		goto out_link_down;
 	}
 
@@ -1480,7 +1483,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 			goto out_llr_stop;
 		}
 		if (cass_dev->sl.llr_state != SL_LLR_STATE_BUSY) {
-			cxidev_err(&cass_dev->cdev, "sl_llr_start no data\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_start no data\n");
 			goto out_llr_stop;
 		}
 		reinit_completion(&(cass_dev->sl.step_complete));
@@ -1491,7 +1494,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 			goto out_llr_stop;
 		}
 		if (cass_dev->sl.llr_state != SL_LLR_STATE_RUNNING) {
-			cxidev_err(&cass_dev->cdev, "sl_llr_start not running\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_start not running\n");
 			goto out_llr_stop;
 		}
 	}
@@ -1514,13 +1517,23 @@ out_mac_tx_stop:
 
 out_link_down:
 	sl_link_down(cass_dev->sl.link);
+	reinit_completion(&(cass_dev->sl.step_complete));
+	rtn = sl_link_down(cass_dev->sl.link);
+	if (rtn) {
+		if (rtn != -EALREADY)
+			cxidev_warn(&cass_dev->cdev, "sl_link_down failed [%d]\n", rtn);
+	} else {
+		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
+			msecs_to_jiffies(2*CASS_SL_LINK_DOWN_TIMEOUT_MS));
+		if (timeleft == 0)
+			cxidev_warn(&cass_dev->cdev, "sl_link_down (link_up) timeout\n");
+	}
 
 out_no_link:
 
 	return -ENOLINK;
 }
 
-#define CASS_SL_LINK_DOWN_TIMEOUT_MS  5000
 int cass_sl_link_down(struct cass_dev *cass_dev)
 {
 	int          rtn;
@@ -1546,12 +1559,13 @@ int cass_sl_link_down(struct cass_dev *cass_dev)
 		reinit_completion(&(cass_dev->sl.step_complete));
 		rtn = sl_link_down(cass_dev->sl.link);
 		if (rtn) {
-			cxidev_warn(&cass_dev->cdev, "sl_link_down failed [%d]\n", rtn);
+			if (rtn != -EALREADY)
+				cxidev_warn(&cass_dev->cdev, "sl_link_down failed [%d]\n", rtn);
 		} else {
 			timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 				msecs_to_jiffies(2*CASS_SL_LINK_DOWN_TIMEOUT_MS));
 			if (timeleft == 0)
-				cxidev_warn(&cass_dev->cdev, "sl_link_down timeout\n");
+				cxidev_warn(&cass_dev->cdev, "sl_link_down (link_down) timeout\n");
 		}
 	}
 
