@@ -54,8 +54,6 @@ void cxi_rxtx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile)
 
 	/* cass_vni_entry_disable_hw(vni_entry); */
 	cxi_ac_entry_list_destroy(&rxtx_profile->ac_entry_list);
-	/* refcount_dec(&rxtx_profile->hw->refcount); */
-	/* kfree(rxtx_entry); */
 }
 
 /**
@@ -78,25 +76,23 @@ void cxi_rxtx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile)
 int cxi_rxtx_profile_find_inc_refcount(struct cxi_rxtx_profile_list *list,
 				       unsigned int profile_id,
 				       struct cxi_rxtx_profile **rxtx_profile)
+	__must_hold(&list->xarray.xa_lock)
 {
 	struct cxi_rxtx_profile    *profile;
 	int    ret = 0;
 
-	cxi_rxtx_profile_list_lock(list);
-
 	ret = cxi_rxtx_profile_list_retrieve(list, profile_id, &profile);
 	if (ret)
-		goto unlock_return;
+		goto out;
 
 	if (!refcount_inc_not_zero(&profile->state.refcount)) {
 		ret = -EBADR;
-		goto unlock_return;
+		goto out;
 	}
 
 	*rxtx_profile = profile;
 
-unlock_return:
-	cxi_rxtx_profile_list_unlock(list);
+out:
 	return ret;
 }
 
@@ -193,10 +189,6 @@ void cxi_rxtx_profile_get_info(struct cxi_rxtx_profile *rxtx_profile,
 		state->released = rxtx_profile->state.released;
 		state->revoked  = rxtx_profile->state.revoked;
 		state->refcount = rxtx_profile->state.refcount;
-
-		/* this function holds one reference, don't count it. */
-
-		refcount_dec(&state->refcount);
 	}
 }
 
