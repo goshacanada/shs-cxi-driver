@@ -30,6 +30,8 @@ module_param_array(default_vnis, uint, NULL, 0444);
 MODULE_PARM_DESC(default_vnis,
 		 "Default VNIS. Should be consistent at the fabric level");
 
+static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv);
+
 static enum cxi_resource_type stype_to_rtype(enum cxi_rsrc_type type, int pe)
 {
 	switch (type) {
@@ -392,7 +394,7 @@ int cass_svc_init(struct cass_dev *hw)
 
 	return 0;
 destroy:
-	cxi_svc_destroy(&hw->cdev, svc_id);
+	svc_destroy(hw, svc_priv);
 	return rc;
 }
 
@@ -710,6 +712,23 @@ EXPORT_SYMBOL(cxi_svc_alloc);
 
 static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 {
+	int rc;
+	int svc_id = svc_priv->rgroup->id;
+
+	free_rsrcs(svc_priv);
+
+	rc = cxi_rgroup_dec_refcount(svc_priv->rgroup);
+	if (rc)
+		pr_err("cxi_rgroup_dec_refcount failed %d\n", rc);
+
+	rc = cxi_dev_rgroup_release(&hw->cdev, svc_id);
+	if (rc)
+		pr_err("cxi_dev_release_rgroup_by_id failed %d\n", rc);
+
+	idr_remove(&hw->svc_ids, svc_id);
+	list_del(&svc_priv->list);
+	hw->svc_count--;
+
 	refcount_dec(&hw->refcount);
 	kfree(svc_priv);
 }
@@ -724,10 +743,8 @@ static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
  */
 int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 {
-	int rc;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
-	int rgroup_id;
 
 	/* Don't destroy default svc */
 	if (svc_id == CXI_DEFAULT_SVC_ID)
@@ -735,7 +752,6 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 
 	mutex_lock(&hw->svc_lock);
 
-	/* Look up svc */
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	if (!svc_priv) {
 		mutex_unlock(&hw->svc_lock);
@@ -743,25 +759,14 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 	}
 
 	/* Don't delete if an LNI is still using this SVC */
-	if (refcount_read(&svc_priv->refcount) == 1) {
-		free_rsrcs(svc_priv);
-		idr_remove(&hw->svc_ids, svc_id);
-	} else {
+	if (refcount_read(&svc_priv->refcount) != 1) {
 		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
 
-	rgroup_id = svc_priv->rgroup->id;
-	cxi_rgroup_dec_refcount(svc_priv->rgroup);
-	rc = cxi_dev_rgroup_release(dev, rgroup_id);
-	if (rc)
-		pr_debug("cxi_dev_release_rgroup_by_id failed %d\n", rc);
-
-	list_del(&svc_priv->list);
-	hw->svc_count--;
-	mutex_unlock(&hw->svc_lock);
-
 	svc_destroy(hw, svc_priv);
+
+	mutex_unlock(&hw->svc_lock);
 
 	return 0;
 }
