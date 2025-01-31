@@ -106,6 +106,16 @@ void cxi_link_use_unsupported_cable(struct cxi_dev *cxi_dev, bool use)
 }
 EXPORT_SYMBOL(cxi_link_use_unsupported_cable);
 
+void cxi_link_fec_monitor(struct cxi_dev *cxi_dev, bool on)
+{
+	struct cass_dev *hw = container_of(cxi_dev, struct cass_dev, cdev);
+
+	cxidev_dbg(&hw->cdev, "fec_monitor\n");
+
+	hw->sl.link_policy.fec_mon_period_ms = on ? 2000 : 0;
+}
+EXPORT_SYMBOL(cxi_link_fec_monitor);
+
 void cxi_pml_recovery_set(struct cxi_dev *cxi_dev, bool set)
 {
 	struct cass_dev *hw = container_of(cxi_dev, struct cass_dev, cdev);

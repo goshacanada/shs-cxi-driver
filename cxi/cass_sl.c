@@ -169,6 +169,10 @@ void cass_sl_mode_get(struct cass_dev *cass_dev, struct cxi_link_info *link_info
 	if (cass_dev->sl.ck_speed)
 		link_info->flags |= CXI_ETH_PF_CK_SPEED;
 
+	/* FEC Monitor */
+	if (cass_dev->sl.link_policy.fec_mon_period_ms > 0)
+		link_info->flags |= CXI_ETH_PF_FEC_MONITOR;
+
 	cxidev_dbg(&cass_dev->cdev, "sl mode get - AN = %d, speed = %d, llr = %ld, LB = %ld\n",
 		   link_info->autoneg, link_info->speed,
 		   link_info->flags & CXI_ETH_PF_LLR,
@@ -302,6 +306,17 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 		cass_dev->sl.old_an_mode = link_info->autoneg;
 		cass_dev->sl.old_lt_mode = (link_config->hpe_map & SL_LINK_CONFIG_HPE_LINKTRAIN);
 		link_config->hpe_map &= ~SL_LINK_CONFIG_HPE_LINKTRAIN;
+		is_mode_changed = true;
+		break;
+	}
+
+	switch (link_info->flags & CXI_ETH_PF_FEC_MONITOR) {
+	case 0:
+		cxidev_dbg(&cass_dev->cdev, "sl mode set - fec_monitor to off\n");
+		is_mode_changed = true;
+		break;
+	case CXI_ETH_PF_FEC_MONITOR:
+		cxidev_dbg(&cass_dev->cdev, "sl mode set - fec_monitor to on\n");
 		is_mode_changed = true;
 		break;
 	}

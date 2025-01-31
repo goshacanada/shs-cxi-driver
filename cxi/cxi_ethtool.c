@@ -32,6 +32,7 @@ static const char priv_flags_str[PRIV_FLAGS_COUNT][ETH_GSTRING_LEN] = {
 	"ck-speed",
 	"remote-fault-recovery",
 	"use-unsupported-cable",
+	"fec_monitor",
 };
 
 /* ethtool ops */
@@ -573,6 +574,16 @@ static int cxi_set_priv_flags(struct net_device *ndev, u32 flags)
 			netdev_err(dev->ndev,
 				   "Loopback private flags are mutually exclusive\n");
 			return -EINVAL;
+		}
+	}
+
+	if (changes & CXI_ETH_PF_FEC_MONITOR) {
+		if (flags & CXI_ETH_PF_FEC_MONITOR) {
+			dev->priv_flags |= CXI_ETH_PF_FEC_MONITOR;
+			cxi_link_fec_monitor(dev->cxi_dev, true);
+		} else {
+			dev->priv_flags &= ~CXI_ETH_PF_FEC_MONITOR;
+			cxi_link_fec_monitor(dev->cxi_dev, false);
 		}
 	}
 
