@@ -771,14 +771,11 @@ static int cxi_set_ringparam(struct net_device *ndev,
 					    1, CXI_MAX_CQ_COUNT);
 
 	if (netif_running(ndev)) {
-		netif_tx_stop_all_queues(ndev);
 		hw_cleanup(dev);
 		rc = hw_setup(dev);
 		if (rc)
 			netdev_err(ndev,
 				   "Failed to restart after ringparam change\n");
-		else
-			netif_tx_start_all_queues(ndev);
 	}
 
 	return rc;

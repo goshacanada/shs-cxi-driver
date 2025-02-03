@@ -1224,6 +1224,8 @@ int hw_setup(struct cxi_eth *dev)
 		goto err_set_rx_queues;
 	}
 
+	cxi_eth_set_rx_mode(ndev);
+	netif_tx_start_all_queues(ndev);
 	dev->is_active = true;
 
 	return 0;
@@ -1271,6 +1273,8 @@ void hw_cleanup(struct cxi_eth *dev)
 
 	if (!dev->is_active)
 		return;
+
+	netif_tx_stop_all_queues(dev->ndev);
 
 	dev->is_active = false;
 
@@ -2271,10 +2275,8 @@ int cxi_change_mtu(struct net_device *ndev, int new_mtu)
 	int rc;
 
 	was_running = netif_running(ndev);
-	if (was_running) {
-		netif_tx_stop_all_queues(ndev);
+	if (was_running)
 		hw_cleanup(dev);
-	}
 
 	rc = cxi_set_max_eth_rxsize(dev->cxi_dev, new_mtu + VLAN_ETH_HLEN);
 	if (rc)
@@ -2290,10 +2292,6 @@ int cxi_change_mtu(struct net_device *ndev, int new_mtu)
 			netdev_err(ndev,
 				   "Failed to setup resources after an MTU change\n");
 			rc = rc2;
-		} else {
-			cxi_eth_set_rx_mode(ndev);
-			netif_tx_start_all_queues(ndev);
-
 		}
 	}
 
