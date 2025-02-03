@@ -1095,7 +1095,7 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 
 	switch (msg->type) {
 	case SL_LGRP_NOTIF_MEDIA_PRESENT:
-		cass_dev->sl.media_attr = *(struct sl_media_attr *)(msg->info);
+		cass_dev->sl.media_attr = msg->info.media_attr;
 		cass_dev->sl.has_cable = true;
 		break;
 	case SL_LGRP_NOTIF_LINK_UP:
@@ -1118,7 +1118,7 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		break;
 	case SL_LGRP_NOTIF_LLR_DATA:
 		cass_dev->sl.llr_state = SL_LLR_STATE_BUSY;
-		cass_dev->sl.llr_data  = *(struct sl_llr_data *)(msg->info);
+		cass_dev->sl.llr_data = msg->info.llr_data;
 		complete(&(cass_dev->sl.step_complete));
 		break;
 	case SL_LGRP_NOTIF_LLR_RUNNING:
@@ -1134,8 +1134,6 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		cass_dev->sl.link_state = SL_LINK_STATE_ERROR;
 		break;
 	}
-
-	sl_lgrp_notif_info_free(cass_dev->sl.lgrp, msg->info);
 }
 
 #define CASS_SL_LINK_UP_TIMEOUT_MS    10000
