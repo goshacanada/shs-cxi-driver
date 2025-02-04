@@ -369,6 +369,12 @@ int cxi_dev_get_rx_profile_ids(struct cxi_dev *dev,
 			       size_t max_entries,
 			       unsigned int *rx_profile_ids,
 			       size_t *num_entries);
+int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
+				    uid_t uid, gid_t gid,
+				    unsigned int rx_profile_id,
+				    unsigned int *ac_entry_id);
+int cxi_dev_rx_profile_remove_ac_entries(struct cxi_dev *dev,
+					 unsigned int rx_profile_id);
 
 int cxi_rx_profile_find_inc_refcount(struct cxi_dev *dev,
 				     unsigned int vni_entry_id,
@@ -418,6 +424,13 @@ int cxi_dev_get_tx_profile_ids(struct cxi_dev *dev,
 			       size_t max_entries,
 			       unsigned int *tx_profile_ids,
 			       size_t *num_entries);
+int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
+				    uid_t uid, gid_t gid,
+				    unsigned int tx_profile_id,
+				    unsigned int *ac_entry_id);
+int cxi_dev_tx_profile_remove_ac_entries(struct cxi_dev *dev,
+					 unsigned int tx_profile_id);
+
 int cxi_tx_profile_release(struct cxi_dev *dev,
 			   unsigned int tx_profile_id);
 int cxi_tx_profile_revoke(struct cxi_dev *dev,

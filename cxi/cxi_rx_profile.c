@@ -468,3 +468,81 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 							ac_entry_id);
 }
 EXPORT_SYMBOL(cxi_rx_profile_get_ac_entry_id_by_user);
+
+/**
+ * cxi_dev_rx_profile_add_ac_entry() - add an Access Control entry to
+ *                                     an existing Profile
+ *
+ * @dev: Cassini Device
+ * @type: type of AC Entry to add
+ * @uid: UID for AC Entry
+ * @gid: UID for AC Entry
+ * @rx_profile_id: id of tx profile to add AC Entry
+ * @ac_entry_id: location to put AC Entry id on success
+ *
+ * Return:
+ * * 0       - success
+ * * -EEXIST - AC Entry already exists
+ */
+int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
+				    uid_t uid, gid_t gid,
+				    unsigned int rx_profile_id,
+				    unsigned int *ac_entry_id)
+{
+	int ret;
+	union cxi_ac_data data = {};
+	struct cxi_rx_profile *rx_profile;
+
+	switch (type) {
+	case CXI_AC_UID:
+		data.uid = uid;
+		break;
+	case CXI_AC_GID:
+		data.gid = gid;
+		break;
+	case CXI_AC_OPEN:
+		break;
+	default:
+		return -EDOM;
+	}
+
+	ret = cxi_rx_profile_find_inc_refcount(dev,
+					       rx_profile_id,
+					       &rx_profile);
+	if (ret)
+		return ret;
+
+	ret = cxi_rxtx_profile_add_ac_entry(&rx_profile->profile_common,
+					     type, &data, ac_entry_id);
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
+
+	return ret;
+}
+EXPORT_SYMBOL(cxi_dev_rx_profile_add_ac_entry);
+
+/**
+ * cxi_dev_rx_profile_remove_ac_entries() - remove Access Control entries
+ *                                          from existing profile
+ *
+ * @dev: Cassini Device
+ * @rx_profile_id: id of tx profile to remove AC entries
+ *
+ * Return: 0 on success or error code
+ */
+int cxi_dev_rx_profile_remove_ac_entries(struct cxi_dev *dev,
+					 unsigned int rx_profile_id)
+{
+	int rc;
+	struct cxi_rx_profile *rx_profile;
+
+	rc = cxi_rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
+	if (rc)
+		return rc;
+
+	cxi_ac_entry_list_destroy(&rx_profile->profile_common.ac_entry_list);
+
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
+
+	return rc;
+}
+EXPORT_SYMBOL(cxi_dev_rx_profile_remove_ac_entries);
