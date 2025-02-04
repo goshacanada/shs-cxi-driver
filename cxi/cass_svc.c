@@ -648,10 +648,83 @@ static int validate_descriptor(struct cass_dev *hw,
 	return 0;
 }
 
+static enum cxi_ac_type svc_mbr_to_ac_type(enum cxi_svc_member_type type)
+{
+	switch (type) {
+	case CXI_SVC_MEMBER_UID:
+		return CXI_AC_UID;
+	case CXI_SVC_MEMBER_GID:
+		return CXI_AC_GID;
+	case CXI_SVC_MEMBER_IGNORE:
+		return CXI_AC_OPEN;
+	default:
+		return -EDOM;
+	}
+}
+
+static void remove_ac_entries(struct cxi_dev *dev,
+			      struct cxi_svc_priv *svc_priv)
+{
+	int i;
+	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
+
+	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
+		cxi_dev_tx_profile_remove_ac_entries(dev,
+					svc_priv->tx_profile_ids[i]);
+		cxi_dev_rx_profile_remove_ac_entries(dev,
+					svc_priv->rx_profile_ids[i]);
+	}
+}
+
+static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
+{
+	int i;
+	int j;
+	int rc;
+	enum cxi_ac_type type;
+	unsigned int ac_entry_id;
+	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
+
+	if (!svc_desc->restricted_members)
+		return 0;
+
+	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
+		for (j = 0; j < CXI_SVC_MAX_MEMBERS; j++) {
+			/* Type members.type have been validated */
+			type = svc_mbr_to_ac_type(svc_desc->members[j].type);
+
+			rc = cxi_dev_tx_profile_add_ac_entry(dev, type,
+					svc_desc->members[j].svc_member.uid,
+					svc_desc->members[j].svc_member.gid,
+					svc_priv->tx_profile_ids[i],
+					&ac_entry_id);
+			if (rc)
+				goto cleanup;
+
+			rc = cxi_dev_rx_profile_add_ac_entry(dev, type,
+					svc_desc->members[j].svc_member.uid,
+					svc_desc->members[j].svc_member.gid,
+					svc_priv->rx_profile_ids[i],
+					&ac_entry_id);
+			if (rc)
+				goto cleanup;
+		}
+	}
+
+	return 0;
+
+cleanup:
+	remove_ac_entries(dev, svc_priv);
+
+	return rc;
+}
+
 static void release_rxtx_profiles(struct cxi_dev *dev,
 				  struct cxi_svc_priv *svc_priv)
 {
 	int i;
+
+	remove_ac_entries(dev, svc_priv);
 
 	for (i = 0; i < svc_priv->num_vld_rx_profiles; i++)
 		cxi_rx_profile_release(dev, svc_priv->rx_profile_ids[i]);
@@ -690,6 +763,10 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 
 		rc = cxi_dev_alloc_rx_profile(dev, &rx_attr,
 					      &svc_priv->rx_profile_ids[i]);
+		if (rc)
+			goto release_profiles;
+
+		rc = alloc_ac_entries(dev, svc_priv);
 		if (rc)
 			goto release_profiles;
 	}
