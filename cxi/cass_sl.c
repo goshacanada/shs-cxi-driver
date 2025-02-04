@@ -1170,8 +1170,8 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.link_config.ver                   = SL_LINK_CONFIG_VER;
 	cass_dev->sl.link_config.link_up_timeout_ms    = CASS_SL_LINK_UP_TIMEOUT_MS;
 	cass_dev->sl.link_config.link_up_tries_max     = 1;
-	cass_dev->sl.link_config.fec_up_settle_wait_ms = 250;
-	cass_dev->sl.link_config.fec_up_check_wait_ms  = 500;
+	cass_dev->sl.link_config.fec_up_settle_wait_ms = -1;
+	cass_dev->sl.link_config.fec_up_check_wait_ms  = -1;
 	cass_dev->sl.link_config.fec_up_ucw_limit      = -1;
 	cass_dev->sl.link_config.fec_up_ccw_limit      = -1;
 	if (!HW_PLATFORM_Z1(cass_dev))
@@ -1187,7 +1187,7 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.link_policy.fec_mon_ucw_warn_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_ccw_crit_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_ccw_warn_limit  = 0;
-	cass_dev->sl.link_policy.fec_mon_period_ms       = 2000;
+	cass_dev->sl.link_policy.fec_mon_period_ms       = -1;
 
 	cass_dev->sl.llr_config.magic            = SL_LLR_CONFIG_MAGIC;
 	cass_dev->sl.llr_config.ver              = SL_LLR_CONFIG_VER;

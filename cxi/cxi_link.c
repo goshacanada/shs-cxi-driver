@@ -112,7 +112,7 @@ void cxi_link_fec_monitor(struct cxi_dev *cxi_dev, bool on)
 
 	cxidev_dbg(&hw->cdev, "fec_monitor\n");
 
-	hw->sl.link_policy.fec_mon_period_ms = on ? 2000 : 0;
+	hw->sl.link_policy.fec_mon_period_ms = on ? -1 : 0;
 }
 EXPORT_SYMBOL(cxi_link_fec_monitor);
 
