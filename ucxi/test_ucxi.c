@@ -21,10 +21,29 @@
 #include "test_ucxi_common.h"
 
 #define LPR 3
+#define TEST_UID 789
+#define TEST_GID 1789
 
 static void wait_cb(void *data)
 {
 	printf("Got an event\n");
+}
+
+void dump_services(void)
+{
+	FILE *fp;
+
+	fp = popen("cat /sys/kernel/debug/cxi/cxi0/services", "r");
+	if (fp) {
+		char *line = NULL;
+		size_t len = 0;
+		ssize_t read;
+
+		while ((read = getline(&line, &len, fp)) != -1)
+		       printf("%s", line);
+
+		pclose(fp);
+	}
 }
 
 int main(void)
@@ -46,8 +65,38 @@ int main(void)
 	int retry;
 	int rc;
 	struct cxi_svc_desc svc_desc = {
-		.resource_limits = false,
+		.enable = 1,
+		.is_system_svc = 1,
+		.resource_limits = 1,
+		.limits.type[CXI_RSRC_TYPE_PTE].max = 100,
+		.limits.type[CXI_RSRC_TYPE_PTE].res = 100,
+		.limits.type[CXI_RSRC_TYPE_TXQ].max = 100,
+		.limits.type[CXI_RSRC_TYPE_TXQ].res = 100,
+		.limits.type[CXI_RSRC_TYPE_TGQ].max = 100,
+		.limits.type[CXI_RSRC_TYPE_TGQ].res = 100,
+		.limits.type[CXI_RSRC_TYPE_EQ].max = 100,
+		.limits.type[CXI_RSRC_TYPE_EQ].res = 100,
+		.limits.type[CXI_RSRC_TYPE_CT].max = 100,
+		.limits.type[CXI_RSRC_TYPE_CT].res = 100,
+		.limits.type[CXI_RSRC_TYPE_LE].max = 100,
+		.limits.type[CXI_RSRC_TYPE_LE].res = 100,
+		.limits.type[CXI_RSRC_TYPE_TLE].max = 100,
+		.limits.type[CXI_RSRC_TYPE_TLE].res = 100,
+		.limits.type[CXI_RSRC_TYPE_AC].max = 4,
+		.limits.type[CXI_RSRC_TYPE_AC].res = 4,
+		.restricted_vnis = 1,
+		.num_vld_vnis = 2,
+		.vnis[0] = 16,
+		.vnis[1] = 17,
+		.vnis[2] = 18,
+		.vnis[3] = 19,
+		.restricted_members = 1,
+		.members[0].type = CXI_SVC_MEMBER_UID,
+		.members[0].svc_member.uid = TEST_UID,
+		.members[1].type = CXI_SVC_MEMBER_GID,
+		.members[1].svc_member.gid = TEST_GID,
 	};
+
 	struct ucxi_wait *wait;
 	unsigned int ack_counter;
 	int reserved_fc;
@@ -68,6 +117,7 @@ int main(void)
 	}
 	printf("SVC Allocated: %d\n", rc);
 	svc_desc.svc_id = rc;
+	dump_services();
 
 	rc = set_svc_lpr(dev, svc_desc.svc_id, LPR);
 	if (rc <= 0) {
@@ -83,10 +133,22 @@ int main(void)
 	}
 	printf("Get lnis_per_rgid success\n");
 
+	lni = alloc_lni(dev, svc_desc.svc_id);
+	if (!lni) {
+		fprintf(stderr, "alloc_lni should fail %d\n", lni);
+		return 1;
+	}
+
+	rc = seteuid(TEST_UID);
+	if (rc) {
+		fprintf(stderr, "cannot seteuid rc:%d\n", rc);
+		return 1;
+	}
+
 	/* Get an LNI */
 	lni = alloc_lni(dev, svc_desc.svc_id);
 	if (lni < 0) {
-		fprintf(stderr, "cannot get an LNI\n");
+		fprintf(stderr, "cannot get an LNI %d\n", lni);
 		return 1;
 	}
 	printf("LNI allocated: %d\n", lni);
@@ -100,15 +162,32 @@ int main(void)
 	printf("Counting event allocated: %d\n", ct->ctn);
 
 	/* Get a domain */
-	domain = alloc_domain(dev, lni, 50, 40, 1024);
+	domain = alloc_domain(dev, lni, svc_desc.vnis[0], 40, 1024);
 	if (domain < 0) {
 		fprintf(stderr, "cannot get a domain\n");
 		return 1;
 	}
 	printf("Domain allocated: %d\n", domain);
 
-	/* TODO Verify CP used correct values for label */
-	cp = alloc_cp(dev, lni, 50, CXI_TC_BEST_EFFORT);
+	rc = seteuid(0);
+	if (rc) {
+		fprintf(stderr, "cannot seteuid rc:%d\n", rc);
+		return 1;
+	}
+
+	cp = alloc_cp(dev, lni, svc_desc.vnis[0], CXI_TC_BEST_EFFORT);
+	if (cp) {
+		fprintf(stderr, "get CP should fail %p\n", cp);
+		return 1;
+	}
+
+	rc = seteuid(TEST_UID);
+	if (rc) {
+		fprintf(stderr, "cannot seteuid rc:%d\n", rc);
+		return 1;
+	}
+
+	cp = alloc_cp(dev, lni, svc_desc.vnis[0], CXI_TC_BEST_EFFORT);
 	if (!cp) {
 		fprintf(stderr, "cannot get a CP\n");
 		return 1;
@@ -311,9 +390,17 @@ int main(void)
 	destroy_domain(dev, domain);
 	free_ct(dev, ct);
 	destroy_lni(dev, lni);
+
+	rc = seteuid(0);
+	if (rc) {
+		fprintf(stderr, "cannot seteuid rc:%d\n", rc);
+		return 1;
+	}
+
 	svc_destroy(dev, svc_desc.svc_id);
 
 	close_device(dev);
+	dump_services();
 
 	printf("good\n");
 
