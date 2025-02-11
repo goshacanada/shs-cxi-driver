@@ -76,6 +76,8 @@ MODULE_PARM_DESC(ioi_enable,
 
 static void cass_dev_release(struct device *dev)
 {
+	struct cass_dev *hw = container_of(dev, struct cass_dev, class_dev);
+	kfree(hw);
 }
 
 /**
@@ -1111,14 +1113,6 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* Set after TC/QOS init */
 	hw->cdev.untagged_eth_pcp = hw->qos.untagged_eth_pcp;
 
-	/* Register the device with sysfs */
-	hw->class_dev.class = &cxi_class;
-	hw->class_dev.parent = &pdev->dev;
-	hw->class_dev.release = cass_dev_release;
-	dev_set_drvdata(&hw->class_dev, hw);
-	if (device_register(&hw->class_dev))
-		goto cass_mst_fini;
-
 	hw->cdev.prop.device_rev = hw->rev.rev;
 	hw->cdev.prop.device_proto = hw->rev.proto;
 	hw->cdev.prop.device_platform = hw->rev.platform;
@@ -1225,6 +1219,16 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (is_physfn)
 		start_pcie_monitoring(hw);
 
+	/* Register the device with sysfs */
+	hw->class_dev.class = &cxi_class;
+	hw->class_dev.parent = &pdev->dev;
+	hw->class_dev.release = cass_dev_release;
+	dev_set_drvdata(&hw->class_dev, hw);
+	if (device_register(&hw->class_dev)) {
+		put_device(&hw->class_dev);
+		goto vf_fini;
+	}
+
 	return 0;
 
 vf_fini:
@@ -1236,7 +1240,6 @@ rgroup_fini:
 	cass_dev_rgroup_fini(hw);
 	cass_dev_rx_tx_profiles_fini(hw);
 	debugfs_remove_recursive(hw->debug_dir);
-	device_unregister(&hw->class_dev);
 cass_mst_fini:
 	dma_free_coherent(&pdev->dev, C_MST_DBG_MST_TABLE_SIZE,
 			  hw->mst_entries, hw->mst_entries_dma_addr);
@@ -1308,7 +1311,6 @@ static void cass_remove(struct pci_dev *pdev)
 
 	destroy_sysfs_properties(hw);
 	debugfs_remove_recursive(hw->debug_dir);
-	device_unregister(&hw->class_dev);
 
 	if (hw->cdev.is_physfn) {
 		if (hw->num_vfs)
@@ -1341,7 +1343,7 @@ static void cass_remove(struct pci_dev *pdev)
 	cxidev_WARN_ONCE(&hw->cdev, !refcount_dec_and_test(&hw->refcount),
 			 "Resource leaks - HW refcount not zero: %d\n",
 			 refcount_read(&hw->refcount));
-	kfree(hw);
+	device_unregister(&hw->class_dev);
 }
 
 void cass_disable_device(struct pci_dev *pdev)
