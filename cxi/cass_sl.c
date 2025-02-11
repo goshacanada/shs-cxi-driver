@@ -11,7 +11,6 @@
 #include "cxi_ethtool.h"
 
 #define CASS_SL_LGRP_NUM            0
-#define CASS_SL_LGRP_MAP            BIT_ULL(CASS_SL_LGRP_NUM)
 #define CASS_SL_LINK_NUM            0
 #define CASS_SL_LLR_NUM             0
 #define CASS_SL_MAC_NUM             0
@@ -1241,7 +1240,7 @@ int cass_sl_init(struct cass_dev *cass_dev)
 	}
 
 	cass_dev->sl.ldev = sl_ldev_new(cass_dev->cdev.cxi_num,
-		CASS_SL_LGRP_MAP, NULL, &(cass_dev->sl.ldev_config));
+		NULL, &(cass_dev->sl.ldev_config));
 	if (IS_ERR_OR_NULL(cass_dev->sl.ldev)) {
 		cxidev_err(&cass_dev->cdev, "sl_ldev_new failed\n");
 		goto out_kobject_put_port_num;
@@ -1264,6 +1263,12 @@ int cass_sl_init(struct cass_dev *cass_dev)
 	if (IS_ERR_OR_NULL(cass_dev->sl.lgrp)) {
 		cxidev_err(&cass_dev->cdev, "sl_lgrp_new failed\n");
 		goto out_ldev_del;
+	}
+
+	rtn = sl_ldev_serdes_init(cass_dev->sl.ldev);
+	if (rtn) {
+		cxidev_err(&cass_dev->cdev, "sl_ldev_serdes_init failed [%d]\n", rtn);
+		goto out_lgrp_del;
 	}
 
 	cass_dev->sl.link = sl_link_new(cass_dev->sl.lgrp,
