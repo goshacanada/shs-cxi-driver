@@ -362,6 +362,13 @@ struct cxi_tx_profile {
 	struct cxi_tx_config            config;
 };
 
+int tx_profile_find_inc_refcount(struct cxi_dev *dev,
+				 unsigned int tx_profile_id,
+				 struct cxi_tx_profile **tx_profile);
+int rx_profile_find_inc_refcount(struct cxi_dev *dev,
+				 unsigned int rx_profile_id,
+				 struct cxi_rx_profile **rx_profile);
+
 int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 			     const struct cxi_rx_attr *rx_attr,
 			     unsigned int *rx_profile_id);

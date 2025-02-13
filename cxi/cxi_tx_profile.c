@@ -25,12 +25,13 @@ static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
 	return overlap ? -EEXIST : 0;
 }
 
-static int tx_profile_find_inc_refcount(struct cass_dev *hw,
-					unsigned int tx_profile_id,
-					struct cxi_tx_profile **tx_profile)
+int tx_profile_find_inc_refcount(struct cxi_dev *dev,
+				 unsigned int tx_profile_id,
+				 struct cxi_tx_profile **tx_profile)
 {
-	struct cxi_rxtx_profile   *rxtx_profile;
 	int    ret;
+	struct cxi_rxtx_profile *rxtx_profile;
+	struct cass_dev *hw = get_cass_dev(dev);
 
 	ret = cxi_rxtx_profile_find_inc_refcount(&hw->tx_profile_list,
 						 tx_profile_id,
@@ -155,7 +156,7 @@ int cxi_tx_profile_find_inc_refcount(struct cxi_dev *dev,
 	struct cxi_tx_profile  *my_profile;
 	int    ret = 0;
 
-	ret = tx_profile_find_inc_refcount(get_cass_dev(dev),
+	ret = tx_profile_find_inc_refcount(dev,
 					   tx_profile_id,
 					   &my_profile);
 	if (ret)
@@ -227,12 +228,9 @@ int cxi_tx_profile_release(struct cxi_dev *dev,
 			   unsigned int tx_profile_id)
 {
 	int    ret;
-	struct cass_dev           *hw;
 	struct cxi_tx_profile     *tx_profile;
 
-	hw = get_cass_dev(dev);
-
-	ret = tx_profile_find_inc_refcount(hw, tx_profile_id, &tx_profile);
+	ret = tx_profile_find_inc_refcount(dev, tx_profile_id, &tx_profile);
 	if (ret)
 		return ret;
 
@@ -258,13 +256,10 @@ EXPORT_SYMBOL(cxi_tx_profile_release);
 int cxi_tx_profile_revoke(struct cxi_dev *dev,
 			  unsigned int tx_profile_id)
 {
-	struct cass_dev        *hw;
 	struct cxi_tx_profile  *tx_profile;
 	int    ret;
 
-	hw = get_cass_dev(dev);
-
-	ret = tx_profile_find_inc_refcount(hw, tx_profile_id, &tx_profile);
+	ret = tx_profile_find_inc_refcount(dev, tx_profile_id, &tx_profile);
 	if (ret)
 		return ret;
 
@@ -298,13 +293,10 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state)
 {
-	struct cass_dev        *hw;
 	struct cxi_tx_profile  *tx_profile;
 	int    ret;
 
-	hw = get_cass_dev(dev);
-
-	ret = tx_profile_find_inc_refcount(hw, tx_profile_id, &tx_profile);
+	ret = tx_profile_find_inc_refcount(dev, tx_profile_id, &tx_profile);
 	if (ret)
 		return ret;
 

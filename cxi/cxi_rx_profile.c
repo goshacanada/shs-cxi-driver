@@ -35,12 +35,13 @@ static void rx_profile_init(struct cxi_rx_profile *rx_profile,
 	/* TODO: extract additional parameters */
 }
 
-static int rx_profile_find_inc_refcount(struct cass_dev *hw,
+int rx_profile_find_inc_refcount(struct cxi_dev *dev,
 					unsigned int rx_profile_id,
 					struct cxi_rx_profile **rx_profile)
 {
-	struct cxi_rxtx_profile   *rxtx_profile;
-	int    ret;
+	int ret;
+	struct cxi_rxtx_profile *rxtx_profile;
+	struct cass_dev *hw = get_cass_dev(dev);
 
 	ret = cxi_rxtx_profile_find_inc_refcount(&hw->rx_profile_list,
 						 rx_profile_id,
@@ -165,9 +166,7 @@ int cxi_rx_profile_find_inc_refcount(struct cxi_dev *dev,
 	struct cxi_rx_profile  *my_profile;
 	int    ret = 0;
 
-	ret = rx_profile_find_inc_refcount(get_cass_dev(dev),
-					   rx_profile_id,
-					   &my_profile);
+	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &my_profile);
 	if (ret)
 		return ret;
 
@@ -237,12 +236,9 @@ int cxi_rx_profile_release(struct cxi_dev *dev,
 			   unsigned int rx_profile_id)
 {
 	int    ret;
-	struct cass_dev           *hw;
 	struct cxi_rx_profile     *rx_profile;
 
-	hw = get_cass_dev(dev);
-
-	ret = rx_profile_find_inc_refcount(hw, rx_profile_id, &rx_profile);
+	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
 	if (ret)
 		return ret;
 
@@ -268,13 +264,10 @@ EXPORT_SYMBOL(cxi_rx_profile_release);
 int cxi_rx_profile_revoke(struct cxi_dev *dev,
 			  unsigned int rx_profile_id)
 {
-	struct cass_dev        *hw;
 	struct cxi_rx_profile  *rx_profile;
 	int    ret;
 
-	hw = get_cass_dev(dev);
-
-	ret = rx_profile_find_inc_refcount(hw, rx_profile_id, &rx_profile);
+	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
 	if (ret)
 		return ret;
 
@@ -308,13 +301,10 @@ int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_rx_attr *rx_attr,
 			    struct cxi_rxtx_profile_state *state)
 {
-	struct cass_dev        *hw;
 	struct cxi_rx_profile  *rx_profile;
 	int    ret;
 
-	hw = get_cass_dev(dev);
-
-	ret = rx_profile_find_inc_refcount(hw, rx_profile_id, &rx_profile);
+	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
 	if (ret)
 		return ret;
 
