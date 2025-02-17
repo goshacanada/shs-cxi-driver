@@ -380,7 +380,7 @@ static int cass_lmon(void *data)
 	cass_lmon_wakeup_limiter_reset(hw);
 	cass_lmon_set_active(hw, true);
 
-        // FIXME: temp delay before first link up.  Relates to NETCASSINI-6454
+	// FIXME: temp delay before first link up.  Relates to NETCASSINI-6454
 	if (cass_version(hw, CASSINI_2))
 		msleep(5000);
 

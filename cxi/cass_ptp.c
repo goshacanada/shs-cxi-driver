@@ -139,7 +139,7 @@ static void adjust_rtc_freq(struct cass_dev *hw, long scaled_ppm)
 /* Initialize the time keeping CSRs before the clock is
  * started. Hopefully it's close enough to the RTC start that the
  * small time difference won't matter. RT_OFFSET could be calculated
- * later to compensate if needed. 
+ * later to compensate if needed.
  */
 static void set_elapsed_time(struct cass_dev *hw, const struct timespec64 *ts)
 {

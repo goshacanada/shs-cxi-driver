@@ -628,14 +628,14 @@ static void cass_sbl_link_down_async_handler(struct cass_dev *hw, int port_num,
 		down_reason = CASS_DOWN_ORIGIN_BL_LLR;
 		break;
 	case SBL_LINK_DOWN_ORIGIN_UCW:
-	   down_reason = CASS_DOWN_ORIGIN_LMON_UCW;
-	   break;
+		down_reason = CASS_DOWN_ORIGIN_LMON_UCW;
+		break;
 	case SBL_LINK_DOWN_ORIGIN_CCW:
-	   down_reason = CASS_DOWN_ORIGIN_LMON_CCW;
-	   break;
+		down_reason = CASS_DOWN_ORIGIN_LMON_CCW;
+		break;
 	case SBL_LINK_DOWN_ORIGIN_LLR_TX_REPLAY:
-	   down_reason = CASS_DOWN_ORIGIN_LLR_TX_REPLAY;
-	   break;
+		down_reason = CASS_DOWN_ORIGIN_LLR_TX_REPLAY;
+		break;
 	default:
 		down_reason = CASS_DOWN_ORIGIN_BL_UNKNOWN;
 		break;
@@ -1594,7 +1594,7 @@ static struct attribute *port_attrs[] = {
 };
 ATTRIBUTE_GROUPS(port);
 
-static struct kobj_type port_sysfs_entries = {
+static const struct kobj_type port_sysfs_entries = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = port_groups,
 };

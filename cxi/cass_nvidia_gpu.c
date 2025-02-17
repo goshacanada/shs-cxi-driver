@@ -257,7 +257,7 @@ static void nvidia_put_pages(struct cxi_md_priv *md_priv)
 
 	rc = nv_put_pages(p2p_info);
 	if (rc)
-		pr_info("nvidia_put_pages rc:%d md:%d va:%llx\n", rc,
+		pr_info("%s rc:%d md:%d va:%llx\n", __func__, rc,
 			md_priv->md.id, p2p_info->va);
 
 	pr_debug("md:%d va:%llx\n", md_priv->md.id, p2p_info->va);

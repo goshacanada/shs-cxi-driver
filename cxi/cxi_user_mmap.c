@@ -34,7 +34,7 @@ static void cxi_vma_close(struct vm_area_struct *vma)
 		atomic_dec(&ip->obj->mappings);
 }
 
-static struct vm_operations_struct cxi_vm_ops = {
+static const struct vm_operations_struct cxi_vm_ops = {
 	.open = cxi_vma_open,
 	.close = cxi_vma_close,
 };
@@ -62,14 +62,6 @@ static int ucxi_iomap_memory(struct vm_area_struct *vma, phys_addr_t start,
 	pages = (len + ~PAGE_MASK) >> PAGE_SHIFT;
 	if (pfn + pages < pfn)
 		return -EINVAL;
-
-#if 0
-	/* We start the mapping 'vm_pgoff' pages into the area */
-	if (vma->vm_pgoff > pages)
-		return -EINVAL;
-	pfn += vma->vm_pgoff;
-	pages -= vma->vm_pgoff;
-#endif
 
 	/* Can we fit all of the mapping? */
 	vm_len = vma->vm_end - vma->vm_start;

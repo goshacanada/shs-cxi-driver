@@ -1696,7 +1696,7 @@ static const struct sysfs_ops ucxi_sysfs_ops = {
 	.show   = ucxi_wait_show,
 };
 
-static struct kobj_type ktype_wait_attrs = {
+static const struct kobj_type ktype_wait_attrs = {
 	.sysfs_ops      = &ucxi_sysfs_ops,
 	.default_groups = ucxi_wait_groups,
 };
@@ -3656,7 +3656,7 @@ static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 
 /* Read and process a command from userspace or from a Virtual
  * Function.
- * The response will be be copied out by the handler.
+ * The response will be copied out by the handler.
  */
 static int dispatch(struct user_client *client,
 		    const void *cmd_in, size_t cmd_in_len,
@@ -4112,7 +4112,7 @@ static void release_dev(struct kobject *kobj)
 	kfree(ucxi);
 }
 
-static struct kobj_type dev_ktype = {
+static const struct kobj_type dev_ktype = {
 	.release = release_dev,
 };
 

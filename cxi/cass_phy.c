@@ -131,18 +131,9 @@ static void cass_phy_state_machine(struct work_struct *work)
 	if (needs_aneg)
 		cass_phy_start_aneg(hw);
 
-#if 0
-	if (err < 0)
-		phy_error(phydev);
-#endif
-
 	if (old_state != hw->phy.state) {
 		cxidev_dbg(&hw->cdev, "PHY state change %d -> %d\n",
 			   old_state, hw->phy.state);
-#if 0
-		if (hw->phy.drv && hw->phy.drv->link_change_notify)
-			hw->phy.drv->link_change_notify(phydev);
-#endif
 	}
 
 	mutex_lock(&hw->phy.lock);

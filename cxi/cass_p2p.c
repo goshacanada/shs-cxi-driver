@@ -239,8 +239,6 @@ void cass_device_hugepage_size(int contig_cnt, struct ac_map_opts *m_opts)
 
 	pr_debug("len:%lx align_shift:%d hs:%d is_hp:%d\n", m_opts->va_len,
 		 align_shift, m_opts->huge_shift, m_opts->is_huge_page);
-
-	return;
 }
 
 /**

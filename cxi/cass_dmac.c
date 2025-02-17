@@ -112,7 +112,7 @@ EXPORT_SYMBOL(cxi_dmac_desc_set_reset);
  * use the supplied parameters to write the appropriate values to the
  * next descriptor in the supplied dmac descriptor set id and
  * if this is not the first descriptor in the set written then set
- * set the continue flag of previous descriptor to true
+ * the continue flag of previous descriptor to true
  *
  * Return: 0 on success, negative errno on failure
  */
@@ -326,7 +326,7 @@ __cass_dmac_desc_set_common_alloc_0:
  * Return: dmac descriptor set id on success, negative errno on failure
  */
 int cxi_dmac_desc_set_reserve(struct cxi_dev *cdev, u16 num_descs,
-			      u16 desc_idx, const char* name)
+			      u16 desc_idx, const char *name)
 {
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	int retval;

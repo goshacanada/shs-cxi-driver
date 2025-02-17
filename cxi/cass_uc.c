@@ -935,7 +935,7 @@ static struct attribute *uc_attrs[] = {
 };
 ATTRIBUTE_GROUPS(uc);
 
-static struct kobj_type uc_sysfs_entries = {
+static const struct kobj_type uc_sysfs_entries = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = uc_groups,
 };
@@ -1311,8 +1311,7 @@ static void check_sensor_values(struct cass_dev *hw)
 				   result.present_reading,
 				   get_pldm_value(sensor, fatal_low),
 				   get_pldm_value(sensor, fatal_high));
-		}
-		else if (((thresh_mask & PLDM_THRESHOLD_LOWER_CRITICAL_MASK) &&
+		} else if (((thresh_mask & PLDM_THRESHOLD_LOWER_CRITICAL_MASK) &&
 			  result.present_reading <= get_pldm_value(sensor, critical_low)) ||
 			 ((thresh_mask & PLDM_THRESHOLD_UPPER_CRITICAL_MASK) &&
 			  result.present_reading >= get_pldm_value(sensor, critical_high))) {
@@ -1322,8 +1321,7 @@ static void check_sensor_values(struct cass_dev *hw)
 				    result.present_reading,
 				    get_pldm_value(sensor, critical_low),
 				    get_pldm_value(sensor, critical_high));
-		}
-		else if (((thresh_mask & PLDM_THRESHOLD_LOWER_WARNING_MASK) &&
+		} else if (((thresh_mask & PLDM_THRESHOLD_LOWER_WARNING_MASK) &&
 			  result.present_reading <= get_pldm_value(sensor, warning_low)) ||
 			 ((thresh_mask & PLDM_THRESHOLD_UPPER_WARNING_MASK) &&
 			  result.present_reading >= get_pldm_value(sensor, warning_high))) {

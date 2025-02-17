@@ -348,7 +348,8 @@ int cass_svc_init(struct cass_dev *hw)
 	hw->svc_count = 0;
 
 	/* Create default service. It will get the default ID of
-	 * CXI_DEFAULT_SVC_ID */
+	 * CXI_DEFAULT_SVC_ID
+	 */
 	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL);
 
 	if (svc_id < 0)

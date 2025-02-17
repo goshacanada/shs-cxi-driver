@@ -541,7 +541,7 @@ int cxi_eth_get_tx_timestamp(struct cxi_dev *cdev,
 	if (WARN_ON_ONCE(!tx_ts.timestamp_valid))
 		return -ENODATA;
 
-	switch(hw->tx_timestamp_shift) {
+	switch (hw->tx_timestamp_shift) {
 	case 0:
 		ts.tv_nsec = tx_ts.timestamp & (BIT(30) - 1) * 1;
 		ts_sec = tx_ts.timestamp >> 30;

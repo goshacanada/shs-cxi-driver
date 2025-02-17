@@ -33,11 +33,11 @@
 #define CASS_SL_DEFAULT_BER_MANT_CCW 2
 #define CASS_SL_DEFAULT_BER_EXP_CCW  -5
 
-static struct kobj_type cass_sl_port_sysfs = {
+static const struct kobj_type cass_sl_port_sysfs = {
 	.sysfs_ops = &kobj_sysfs_ops,
 };
 
-static struct kobj_type cass_sl_port_num_sysfs = {
+static const struct kobj_type cass_sl_port_num_sysfs = {
 	.sysfs_ops = &kobj_sysfs_ops,
 };
 
@@ -792,7 +792,7 @@ static int cass_sl_intr_enable(void *intr_accessor, u32 port_grp_num,
 }
 
 static int cass_sl_intr_disable(void *intr_accessor, u32 port_grp_num,
-			        u64 *err_flgs, sl_intr_handler_t handler)
+				u64 *err_flgs, sl_intr_handler_t handler)
 {
 	struct cass_dev *cass_dev = intr_accessor;
 
@@ -981,7 +981,6 @@ static int cass_sl_dmac_alloc(void *dmac_accessor, u32 offset, size_t size)
 	cass_dev->sl.fec.cntrs = dma_alloc_coherent(&cass_dev->cdev.pdev->dev, size,
 		&cass_dev->sl.fec.dma_addr, GFP_KERNEL);
 	if (!cass_dev->sl.fec.cntrs) {
-		cxidev_err(&cass_dev->cdev,"dma_alloc_coherent failed");
 		rtn = -ENOMEM;
 		goto out_dmac_fini;
 	}

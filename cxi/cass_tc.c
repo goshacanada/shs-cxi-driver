@@ -2279,7 +2279,7 @@ void cass_pause_debugfs_print(struct cass_dev *hw, struct seq_file *s)
 	default:
 		break;
 	}
-	seq_printf(s, "\n");
+	seq_puts(s, "\n");
 }
 
 int cass_pause_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size)
@@ -2468,12 +2468,12 @@ static struct attribute *tc_attrs[] = {
 };
 ATTRIBUTE_GROUPS(tc);
 
-static struct kobj_type tc_settings = {
+static const struct kobj_type tc_settings = {
 	.sysfs_ops	= &kobj_sysfs_ops,
 	.default_groups = tc_groups,
 };
 
-static struct kobj_type tc_dir = {
+static const struct kobj_type tc_dir = {
 	.sysfs_ops	= &kobj_sysfs_ops,
 };
 
@@ -2484,7 +2484,7 @@ static struct attribute *tc_top_attrs[] = {
 };
 ATTRIBUTE_GROUPS(tc_top);
 
-static struct kobj_type tc_top_info = {
+static const struct kobj_type tc_top_info = {
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = tc_top_groups,
 };

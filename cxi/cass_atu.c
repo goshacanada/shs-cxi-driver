@@ -117,6 +117,7 @@ static void cass_write_ac(struct cass_dev *hw, union c_atu_cfg_ac_table *ac,
 
 	if (ac_salt) {
 		u32 rand = get_random_u32();
+
 		ac->ptn_salt = rand;
 		ac->idx_salt = rand >> 2;
 	}

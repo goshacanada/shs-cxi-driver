@@ -1502,7 +1502,7 @@ int cass_pin_mirror(struct cxi_md_priv *md_priv, struct ac_map_opts *m_opts)
 	int npages = m_opts->va_len >> PAGE_SHIFT;
 	struct scatterlist *sg;
 
-	pages = kvmalloc(npages * sizeof(pages), GFP_KERNEL);
+	pages = kvmalloc_array(npages, sizeof(pages), GFP_KERNEL);
 	if (!pages)
 		return -ENOMEM;
 
@@ -1793,7 +1793,7 @@ static void cass_pri_fault(struct cass_dev *hw,
 		atomic_inc(&hw->atu_odp_fails);
 		cass_read(hw, C_ATU_STS_PRB_TABLE(index), &entry,
 			  sizeof(entry));
-		pr_warn("ODP failure rc:%d PRT:ac:%d iova:%llx mdva:%llx SPRBT:i:%d v:%d e:%d ac:%d client:%d addr:%lx w:%d r:%d \n",
+		pr_warn("ODP failure rc:%d PRT:ac:%d iova:%llx mdva:%llx SPRBT:i:%d v:%d e:%d ac:%d client:%d addr:%lx w:%d r:%d\n",
 			rc, pre->acid, iova, e->md.va,
 			index, entry.valid, entry.expired, entry.acid,
 			entry.client, (ulong)entry.addr << PAGE_SHIFT,

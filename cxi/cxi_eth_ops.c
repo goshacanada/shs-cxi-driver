@@ -138,6 +138,7 @@ static int prepare_frags(struct device *dma_dev, struct sk_buff *skb,
 						  dma_eth->len[i], DMA_TO_DEVICE);
 		} else {
 			const skb_frag_t *frag = &skb_shinfo(skb)->frags[i - 1];
+
 			dma_addr = dma_map_single(dma_dev, skb_frag_address(frag),
 						  dma_eth->len[i], DMA_TO_DEVICE);
 		}

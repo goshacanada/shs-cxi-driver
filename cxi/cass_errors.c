@@ -133,7 +133,7 @@ static void collect_flg_info(struct cass_dev *hw,
  */
 #define _dump_flg_info_logger(loglevel, hw, fmt, ...)			\
 	do {								\
-		switch (log_level) {					\
+		switch (loglevel) {					\
 		case LOGLEVEL_EMERG:					\
 			dev_emerg(&(hw)->cdev.pdev->dev,		\
 				"%s[%s]: " fmt,				\
@@ -480,7 +480,7 @@ static struct attribute *irq_attrs[] = {
 };
 ATTRIBUTE_GROUPS(irq);
 
-static struct kobj_type irq_kobj_type = {
+static const struct kobj_type irq_kobj_type = {
 	.sysfs_ops  = &kobj_sysfs_ops,
 	.default_groups = irq_groups,
 };

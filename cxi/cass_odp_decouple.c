@@ -5,7 +5,7 @@
 /*
  * ODP decoupling in software to work around Cassini ERRATA-3260
  *
- * Notes: 
+ * Notes:
  *
  * 1. We will enter ODP decoupling when an invalidation completion wait
  *    times out.
@@ -415,9 +415,9 @@ static bool ibw_epoch_cntr_is_stuck(struct cass_dev *hw)
  * bug
  *
  * WORKAROUND for Cassini ERRATA-3260
- * In specific conditions, writes can be acked with a spurious pending 
+ * In specific conditions, writes can be acked with a spurious pending
  * translation request remaining. If not addressed with this function,
- * then data corruption could occur. 
+ * then data corruption could occur.
  *
  * @hw: the device
  * Return: 0 on success, negative value on failure

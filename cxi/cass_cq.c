@@ -686,15 +686,17 @@ unsigned int cxi_cq_ack_counter(struct cxi_cq *cq)
 	unsigned int cq_n = cxi_cq_get_cqn(cq);
 	union c_cq_txq_ack_ctr txq_ack_ctr;
 	union c_cq_tgq_ack_ctr tgq_ack_ctr;
+	unsigned int ack_ctr;
 
 	if (cq_priv->flags & CXI_CQ_IS_TX) {
 		cass_read(hw, C_CQ_TXQ_ACK_CTR(cq_n), &txq_ack_ctr,
 			  sizeof(txq_ack_ctr));
-		return txq_ack_ctr.mem_q_ack_ctr;
+		ack_ctr = txq_ack_ctr.mem_q_ack_ctr;
 	} else {
 		cass_read(hw, C_CQ_TGQ_ACK_CTR(cq_n), &tgq_ack_ctr,
 			  sizeof(tgq_ack_ctr));
-		return tgq_ack_ctr.mem_q_ack_ctr;
+		ack_ctr = tgq_ack_ctr.mem_q_ack_ctr;
 	}
+	return ack_ctr;
 }
 EXPORT_SYMBOL(cxi_cq_ack_counter);

@@ -202,7 +202,7 @@ void cass_link_debugfs_print(struct cass_dev *hw, struct seq_file *s)
 		seq_printf(s, " (%s)\n",
 			   cass_link_down_origin_str(down_origin));
 	else
-		seq_printf(s, "\n");
+		seq_puts(s, "\n");
 }
 
 int cass_link_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size)

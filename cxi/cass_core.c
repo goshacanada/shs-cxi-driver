@@ -77,6 +77,7 @@ MODULE_PARM_DESC(ioi_enable,
 static void cass_dev_release(struct device *dev)
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, class_dev);
+
 	kfree(hw);
 }
 
@@ -1035,7 +1036,8 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 		if (HW_PLATFORM_ASIC(hw) || HW_PLATFORM_NETSIM(hw)) {
 			/* These platforms have a micro-controller to fetch the
-			 * NIC ID from */
+			 * NIC ID from
+			 */
 			rc = uc_cmd_get_nic_id(hw);
 			if (rc)
 				goto unregister_uc;
