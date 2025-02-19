@@ -354,3 +354,24 @@ interrupt after around pause_too_long_timeout milliseconds reporting
 it has been paused too long. While pause will not be deasserted when
 this error interrupt occurs, it is a sign of either bad congestion or
 a misconfiguration in the network.
+
+
+Debugging
+---------
+
+The driver can output more traces with the following commands:
+
+    echo 8 > /proc/sys/kernel/printk
+    echo -n 'module cxi_ss1 +p' >> /proc/dynamic_debug/control
+
+Fine-grained control at file or function level can also be
+enabled, like this:
+
+    echo 'file cxi/cass_atu.c +p' >> /proc/dynamic_debug/control
+    echo 'func cxi_cp_alloc +p' >> /proc/dynamic_debug/control
+
+On some kernels, /proc/dynamic_debug doesn't exist. Use
+/sys/kernel/debug/dynamic_debug instead.
+
+See the kernel's documentation for more information:
+Documentation/admin-guide/dynamic-debug-howto.rst
