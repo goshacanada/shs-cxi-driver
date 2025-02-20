@@ -1594,7 +1594,7 @@ static struct attribute *port_attrs[] = {
 };
 ATTRIBUTE_GROUPS(port);
 
-static const struct kobj_type port_sysfs_entries = {
+static struct kobj_type port_sysfs_entries = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = port_groups,
 };

@@ -935,7 +935,7 @@ static struct attribute *uc_attrs[] = {
 };
 ATTRIBUTE_GROUPS(uc);
 
-static const struct kobj_type uc_sysfs_entries = {
+static struct kobj_type uc_sysfs_entries = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = uc_groups,
 };

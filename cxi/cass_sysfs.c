@@ -476,7 +476,7 @@ static struct attribute *properties_attrs[] = {
 };
 ATTRIBUTE_GROUPS(properties);
 
-static const struct kobj_type properties_info = {
+static struct kobj_type properties_info = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = properties_groups,
 };
@@ -539,7 +539,7 @@ static struct attribute *fru_attrs[] = {
 };
 ATTRIBUTE_GROUPS(fru);
 
-static const struct kobj_type fru_info = {
+static struct kobj_type fru_info = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = fru_groups,
 };
@@ -584,7 +584,7 @@ static struct attribute *link_restarts_attrs[] = {
 };
 ATTRIBUTE_GROUPS(link_restarts);
 
-static const struct kobj_type link_restarts_info = {
+static struct kobj_type link_restarts_info = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = link_restarts_groups,
 };
@@ -685,7 +685,7 @@ static struct attribute *sensor_attrs[] = {
 };
 ATTRIBUTE_GROUPS(sensor);
 
-static const struct kobj_type sensor_settings = {
+static struct kobj_type sensor_settings = {
 	.sysfs_ops      = &kobj_sysfs_ops,
 	.default_groups = sensor_groups,
 };

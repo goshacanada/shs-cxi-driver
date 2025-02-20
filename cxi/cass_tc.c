@@ -2468,12 +2468,12 @@ static struct attribute *tc_attrs[] = {
 };
 ATTRIBUTE_GROUPS(tc);
 
-static const struct kobj_type tc_settings = {
+static struct kobj_type tc_settings = {
 	.sysfs_ops	= &kobj_sysfs_ops,
 	.default_groups = tc_groups,
 };
 
-static const struct kobj_type tc_dir = {
+static struct kobj_type tc_dir = {
 	.sysfs_ops	= &kobj_sysfs_ops,
 };
 
@@ -2484,7 +2484,7 @@ static struct attribute *tc_top_attrs[] = {
 };
 ATTRIBUTE_GROUPS(tc_top);
 
-static const struct kobj_type tc_top_info = {
+static struct kobj_type tc_top_info = {
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = tc_top_groups,
 };

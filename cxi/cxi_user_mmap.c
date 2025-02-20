@@ -34,7 +34,7 @@ static void cxi_vma_close(struct vm_area_struct *vma)
 		atomic_dec(&ip->obj->mappings);
 }
 
-static const struct vm_operations_struct cxi_vm_ops = {
+static struct vm_operations_struct cxi_vm_ops = {
 	.open = cxi_vma_open,
 	.close = cxi_vma_close,
 };

@@ -480,7 +480,7 @@ static struct attribute *irq_attrs[] = {
 };
 ATTRIBUTE_GROUPS(irq);
 
-static const struct kobj_type irq_kobj_type = {
+static struct kobj_type irq_kobj_type = {
 	.sysfs_ops  = &kobj_sysfs_ops,
 	.default_groups = irq_groups,
 };

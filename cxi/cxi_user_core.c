@@ -1696,7 +1696,7 @@ static const struct sysfs_ops ucxi_sysfs_ops = {
 	.show   = ucxi_wait_show,
 };
 
-static const struct kobj_type ktype_wait_attrs = {
+static struct kobj_type ktype_wait_attrs = {
 	.sysfs_ops      = &ucxi_sysfs_ops,
 	.default_groups = ucxi_wait_groups,
 };
@@ -4112,7 +4112,7 @@ static void release_dev(struct kobject *kobj)
 	kfree(ucxi);
 }
 
-static const struct kobj_type dev_ktype = {
+static struct kobj_type dev_ktype = {
 	.release = release_dev,
 };
 

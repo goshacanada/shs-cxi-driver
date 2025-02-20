@@ -32,11 +32,11 @@
 #define CASS_SL_DEFAULT_BER_MANT_CCW 2
 #define CASS_SL_DEFAULT_BER_EXP_CCW  -5
 
-static const struct kobj_type cass_sl_port_sysfs = {
+static struct kobj_type cass_sl_port_sysfs = {
 	.sysfs_ops = &kobj_sysfs_ops,
 };
 
-static const struct kobj_type cass_sl_port_num_sysfs = {
+static struct kobj_type cass_sl_port_num_sysfs = {
 	.sysfs_ops = &kobj_sysfs_ops,
 };
 
