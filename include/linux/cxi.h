@@ -577,6 +577,9 @@ struct cxi_rgroup {
 	struct cxi_svc_priv *svc_priv;
 };
 
+void cxi_dev_lock_rgroup_list(struct cass_dev *hw);
+void cxi_dev_unlock_rgroup_list(struct cass_dev *hw);
+
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
 
 void cxi_rgroup_disable(struct cxi_rgroup *rgroup);

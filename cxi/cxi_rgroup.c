@@ -38,22 +38,22 @@ static inline struct cxi_dev *get_cxi_dev(struct cass_dev *hw)
 static struct xa_limit   rgroup_id_limits = RGROUP_ID_LIMITS;
 
 /**
- * dev_lock_rgroup_list() - take the device lock for rgroups
+ * cxi_dev_lock_rgroup_list() - take the device lock for rgroups
  *
  * @hw: Cassini device
  */
-static void dev_lock_rgroup_list(struct cass_dev *hw)
+void cxi_dev_lock_rgroup_list(struct cass_dev *hw)
 	__acquires(&hw->rgroup_list.xarray.xa_lock)
 {
 	xa_lock_nested(&hw->rgroup_list.xarray, SINGLE_DEPTH_NESTING);
 }
 
 /**
- * dev_unlock_rgroup_list() - release the device lock for rgroups
+ * cxi_dev_unlock_rgroup_list() - release the device lock for rgroups
  *
  * @hw: Cassini device
  */
-static void dev_unlock_rgroup_list(struct cass_dev *hw)
+void cxi_dev_unlock_rgroup_list(struct cass_dev *hw)
 	__releases(&hw->rgroup_list.xarray.xa_lock)
 {
 	xa_unlock(&hw->rgroup_list.xarray);
@@ -489,7 +489,7 @@ static int find_rgroup_inc_refcount(struct cxi_dev *dev,
 	struct cxi_rgroup       *found_rgroup;
 	int    ret = 0;
 
-	dev_lock_rgroup_list(hw);
+	cxi_dev_lock_rgroup_list(hw);
 
 	ret = rgroup_list_retrieve_rgroup(&hw->rgroup_list, id, &found_rgroup);
 	if (ret)
@@ -503,7 +503,7 @@ static int find_rgroup_inc_refcount(struct cxi_dev *dev,
 	*rgroup = found_rgroup;
 
 unlock_return:
-	dev_unlock_rgroup_list(hw);
+	cxi_dev_unlock_rgroup_list(hw);
 	return ret;
 }
 
@@ -550,7 +550,7 @@ static int rgroup_dec_refcount_and_destroy(struct cxi_rgroup *rgroup)
 	 * refcount_dec() signals the error on decrement to zero.
 	 */
 
-	dev_lock_rgroup_list(hw);
+	cxi_dev_lock_rgroup_list(hw);
 
 	outstanding_refs = true;
 
@@ -576,7 +576,7 @@ static int rgroup_dec_refcount_and_destroy(struct cxi_rgroup *rgroup)
 		rgroup_destroy(rgroup);
 
 unlock_return:
-	dev_unlock_rgroup_list(hw);
+	cxi_dev_unlock_rgroup_list(hw);
 	return ret;
 }
 
@@ -593,14 +593,14 @@ int cxi_rgroup_enable(struct cxi_rgroup *rgroup)
 {
 	int   ret = 0;
 
-	dev_lock_rgroup_list(rgroup->hw);
+	cxi_dev_lock_rgroup_list(rgroup->hw);
 
 	if (!rgroup->state.released)
 		rgroup->state.enabled = true;
 	else
 		ret = -EBUSY;
 
-	dev_unlock_rgroup_list(rgroup->hw);
+	cxi_dev_unlock_rgroup_list(rgroup->hw);
 	return ret;
 }
 EXPORT_SYMBOL(cxi_rgroup_enable);
@@ -612,11 +612,11 @@ EXPORT_SYMBOL(cxi_rgroup_enable);
  */
 void cxi_rgroup_disable(struct cxi_rgroup *rgroup)
 {
-	dev_lock_rgroup_list(rgroup->hw);
+	cxi_dev_lock_rgroup_list(rgroup->hw);
 
 	rgroup->state.enabled = false;
 
-	dev_unlock_rgroup_list(rgroup->hw);
+	cxi_dev_unlock_rgroup_list(rgroup->hw);
 }
 EXPORT_SYMBOL(cxi_rgroup_disable);
 
@@ -1052,12 +1052,12 @@ void cxi_dev_rgroup_fini(struct cxi_dev *dev)
 	struct cxi_rgroup  *rgroup;
 	unsigned long id;
 
-	dev_lock_rgroup_list(hw);
+	cxi_dev_lock_rgroup_list(hw);
 
 	for_each_rgroup(id, rgroup)
 		rgroup_destroy(rgroup);
 
-	dev_unlock_rgroup_list(hw);
+	cxi_dev_unlock_rgroup_list(hw);
 
 	xa_destroy(&hw->rgroup_list.xarray);
 }
@@ -1218,7 +1218,7 @@ int cxi_dev_rgroup_release(struct cxi_dev *dev,
 	/* TODO: Don't delete default Resource Group ID */
 	/* TODO: see if we have to report busy or not */
 
-	dev_lock_rgroup_list(rgroup->hw);
+	cxi_dev_lock_rgroup_list(rgroup->hw);
 
 	/* Successful release decrements the refcount by one. */
 	if (!rgroup->state.released) {
@@ -1226,7 +1226,7 @@ int cxi_dev_rgroup_release(struct cxi_dev *dev,
 		refcount_dec(&rgroup->state.refcount);
 	}
 
-	dev_unlock_rgroup_list(rgroup->hw);
+	cxi_dev_unlock_rgroup_list(rgroup->hw);
 
 	return rgroup_dec_refcount_and_destroy(rgroup);
 }
