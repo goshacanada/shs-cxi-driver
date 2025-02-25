@@ -77,8 +77,7 @@ void cxi_dmabuf_put_pages(struct cxi_md_priv *md_priv)
 	md_priv->sgt = NULL;
 }
 
-/**
- * cp_md_sgtable - Copy dmabuf sgt entries bounded by dmabuf offset and
+/* cp_md_sgtable - Copy dmabuf sgt entries bounded by dmabuf offset and
  *                 length to a new sg table for use by the mirroring
  *                 subsystem.
  */
