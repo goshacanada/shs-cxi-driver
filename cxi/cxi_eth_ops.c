@@ -1050,6 +1050,7 @@ int hw_setup(struct cxi_eth *dev)
 		.limits = limits,
 		.is_system_svc = true,
 		.restricted_members = true,
+		.enable = true,
 		.members[0] = {
 			.type = CXI_SVC_MEMBER_UID,
 			.svc_member.uid = (current_euid()).val,
