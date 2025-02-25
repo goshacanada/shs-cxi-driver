@@ -7,6 +7,7 @@
 #define _CXI_RGROUP_H_
 
 #include <linux/xarray.h>
+#include "cass_core.h"
 
 struct cxi_rgroup_list {
 	struct xarray    xarray;
@@ -15,7 +16,7 @@ struct cxi_rgroup_list {
 /* Resource Groups contigurables */
 
 #define RGROUP_GFP_OPTS              (GFP_KERNEL)
-#define RGROUP_ID_MIN                (1)
+#define RGROUP_ID_MIN                (CXI_DEFAULT_SVC_ID)
 #define RGROUP_ID_MAX                (INT_MAX)
 #define RGROUP_ID_LIMITS             (XA_LIMIT(RGROUP_ID_MIN, \
 					       RGROUP_ID_MAX))
