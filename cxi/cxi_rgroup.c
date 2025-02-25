@@ -202,16 +202,18 @@ static void resource_entry_list_unlock(struct cxi_resource_entry_list *list)
  * resource_entry_list_destroy() - remove all resource entries and free
  *                                 list
  *
- * @list: list pointer
+ * @rgroup: rgroup pointer
  */
-static void resource_entry_list_destroy(struct cxi_resource_entry_list *list)
+static void resource_entry_list_destroy(struct cxi_rgroup *rgroup)
 {
-	unsigned long               index = resource_entry_id_limits.min;
-	struct cxi_resource_entry   *resource_entry;
+	struct cxi_resource_entry *resource_entry;
+	unsigned long index = resource_entry_id_limits.min;
+	struct cxi_resource_entry_list *list = &rgroup->resource_entry_list;
 
 	resource_entry_list_lock(list);
 
 	xa_for_each(&list->xarray, index, resource_entry) {
+		cass_rgroup_remove_resource(rgroup, resource_entry);
 		__xa_erase(&list->xarray, resource_entry->type);
 		kfree(resource_entry);
 	}
@@ -516,7 +518,7 @@ unlock_return:
 static void rgroup_destroy(struct cxi_rgroup *rgroup)
 {
 	cxi_ac_entry_list_destroy(&rgroup->ac_entry_list);
-	resource_entry_list_destroy(&rgroup->resource_entry_list);
+	resource_entry_list_destroy(rgroup);
 	refcount_dec(&rgroup->hw->refcount);
 	kfree(rgroup);
 }
