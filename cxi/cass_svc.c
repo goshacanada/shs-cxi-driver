@@ -10,9 +10,6 @@
 #include "cxi_rxtx_profile.h"
 #include "cxi_rxtx_profile_list.h"
 
-#define DEFAULT_LE_POOL_ID 0
-#define DEFAULT_TLE_POOL_ID 0
-
 static bool disable_default_svc = true;
 module_param(disable_default_svc, bool, 0444);
 MODULE_PARM_DESC(disable_default_svc, "Disable the default service.");

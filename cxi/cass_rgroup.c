@@ -90,7 +90,8 @@ int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
 		int le_pool_id;
 		int pe = resource->type - CXI_RESOURCE_PE0_LE;
 
-		le_pool_id = ida_simple_get(&hw->le_pool_ids[pe], 0,
+		le_pool_id = ida_simple_get(&hw->le_pool_ids[pe],
+					    DEFAULT_LE_POOL_ID,
 					    CASS_NUM_LE_POOLS, GFP_NOWAIT);
 		if (le_pool_id < 0) {
 			pr_debug("%s pool unavailable.\n",
@@ -103,7 +104,8 @@ int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	} else if (resource->type == CXI_RESOURCE_TLE) {
 		int tle_pool_id;
 
-		tle_pool_id = ida_simple_get(&hw->tle_pool_ids, 0,
+		tle_pool_id = ida_simple_get(&hw->tle_pool_ids,
+					     DEFAULT_TLE_POOL_ID,
 					     C_CQ_CFG_TLE_POOL_ENTRIES,
 					     GFP_NOWAIT);
 		if (tle_pool_id < 0) {
