@@ -162,7 +162,7 @@ void cxi_send_async_event(struct cxi_dev *cdev, enum cxi_async_event event)
 {
 	struct cxi_client *client;
 
-	mutex_lock(&dev_list_mutex);
+	mutex_lock_nested(&dev_list_mutex, SINGLE_DEPTH_NESTING);
 
 	list_for_each_entry(client, &client_list, list)
 		if (client->async_event)
