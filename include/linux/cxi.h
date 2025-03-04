@@ -574,7 +574,6 @@ struct cxi_rgroup {
 	struct cxi_resource_entry_list resource_entry_list;
 	struct cxi_ac_entry_list       ac_entry_list;
 	struct cxi_rgroup_pools        pools;
-	struct cxi_svc_priv *svc_priv;
 };
 
 void cxi_dev_lock_rgroup_list(struct cass_dev *hw);
@@ -583,6 +582,8 @@ void cxi_dev_unlock_rgroup_list(struct cass_dev *hw);
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
 
 void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
+
+bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
 
 void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 			struct cxi_rgroup_attr *attr,

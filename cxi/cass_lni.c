@@ -51,18 +51,18 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 		return ERR_PTR(-EINVAL);
 
 	/* Ensure service is enabled */
-	if (!svc_priv->svc_desc.enable) {
+	if (!cxi_rgroup_is_enabled(svc_priv->rgroup)) {
 		err = ERR_PTR(-EKEYREVOKED);
 		goto dec_svc;
 	}
 
 	/* Verify calling user/group has permission to use this service */
-	if (!valid_svc_user(svc_priv)) {
+	if (!valid_svc_user(svc_priv->rgroup)) {
 		err = ERR_PTR(-EPERM);
 		goto dec_svc;
 	}
 
-	rgid = cass_rgid_get(hw, svc_priv);
+	rgid = cass_rgid_get(hw, svc_priv->rgroup);
 	if (rgid < 0) {
 		err = ERR_PTR(rgid);
 		goto dec_svc;
@@ -108,7 +108,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	atomic_inc(&hw->stats.lni);
 	spin_unlock(&hw->lni_lock);
 
-	cxi_rgroup_inc_refcount(lni_priv->svc_priv->rgroup);
+	cxi_rgroup_inc_refcount(svc_priv->rgroup);
 	refcount_inc(&hw->refcount);
 
 	sprintf(name, "%d", lni_priv->lni.id);

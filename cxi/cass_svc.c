@@ -137,18 +137,18 @@ bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc)
 	return false;
 }
 
-bool valid_svc_user(const struct cxi_svc_priv *svc_priv)
+bool valid_svc_user(struct cxi_rgroup *rgroup)
 {
 	unsigned int ac_entry_id;
 	uid_t uid = __kuid_val(current_euid());
 	gid_t gid = __kgid_val(current_egid());
 
-	return !cxi_rgroup_get_ac_entry_by_user(svc_priv->rgroup, uid, gid,
+	return !cxi_rgroup_get_ac_entry_by_user(rgroup, uid, gid,
 						CXI_AC_ANY, &ac_entry_id);
 }
 
 static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
-			  struct cxi_svc_priv *svc_priv)
+			  struct cxi_rgroup *rgroup)
 {
 	int rc;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
@@ -160,16 +160,16 @@ static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 	for (type = 0; type < CXI_RSRC_TYPE_MAX; type++) {
 		rtype = stype_to_rtype(type, 0);
 		if (type == CXI_RSRC_TYPE_TLE) {
-			if (svc_priv->rgroup->pools.tle_pool_id == -1)
+			if (rgroup->pools.tle_pool_id == -1)
 				continue;
 
 			cass_read(hw,
-				  C_CQ_STS_TLE_IN_USE(svc_priv->rgroup->pools.tle_pool_id),
+				  C_CQ_STS_TLE_IN_USE(rgroup->pools.tle_pool_id),
 				  &tle_in_use, sizeof(tle_in_use));
 			rsrcs->in_use[type] = tle_in_use.count;
-			rsrcs->tle_pool_id = svc_priv->rgroup->pools.tle_pool_id;
+			rsrcs->tle_pool_id = rgroup->pools.tle_pool_id;
 		} else {
-			rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup,
+			rc = cxi_rgroup_get_resource_entry(rgroup,
 							   rtype, &entry);
 			if (rc) {
 				rsrcs->in_use[type] = 0;
@@ -342,7 +342,7 @@ int cass_svc_init(struct cass_dev *hw)
 	static struct cxi_svc_desc svc_desc = {
 		.resource_limits = true,
 	};
-	int i, svc_id, rc;
+	int i, svc_id;
 	struct cxi_svc_priv *svc_priv;
 	struct cxi_rsrc_limits limits;
 
@@ -389,39 +389,15 @@ int cass_svc_init(struct cass_dev *hw)
 	 * CXI_DEFAULT_SVC_ID
 	 */
 	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL);
-
 	if (svc_id < 0)
 		return svc_id;
-
-	if (svc_id != CXI_DEFAULT_SVC_ID) {
-		cxidev_err(&hw->cdev, "Got incorrect default service ID: %u\n",
-			   svc_id);
-		rc = -EINVAL;
-		goto destroy;
-	}
 
 	mutex_lock(&hw->svc_lock);
 	svc_priv = idr_find(&hw->svc_ids, svc_id);
 	mutex_unlock(&hw->svc_lock);
 
-	/* Ensure we got correct default Pool IDs */
-	if (svc_priv->rgroup->pools.tle_pool_id != DEFAULT_TLE_POOL_ID) {
-		cxidev_err(&hw->cdev, "Got incorrect TLE_POOL_ID: %d\n",
-			   svc_priv->rgroup->pools.tle_pool_id);
-		rc = -EINVAL;
-		goto destroy;
-	}
-	if (svc_priv->rgroup->pools.le_pool_id[0] != DEFAULT_LE_POOL_ID) {
-		cxidev_err(&hw->cdev, "Got incorrect LE_POOL_ID:  %d\n",
-			   svc_priv->rgroup->pools.le_pool_id[0]);
-		rc = -EINVAL;
-		goto destroy;
-	}
-
 	if (disable_default_svc) {
-		mutex_lock(&hw->svc_lock);
 		svc_priv->svc_desc.enable = 0;
-		mutex_unlock(&hw->svc_lock);
 		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
@@ -429,9 +405,6 @@ int cass_svc_init(struct cass_dev *hw)
 					    hw, &svc_debug_fops);
 
 	return 0;
-destroy:
-	svc_destroy(hw, svc_priv);
-	return rc;
 }
 
 /* Check if a there are enough unused instances of a particular resource */
@@ -841,53 +814,49 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 		goto release_rgroup;
 
 	svc_priv->rgroup = rgroup;
+	svc_priv->svc_desc.svc_id = rgroup_id;
+
+	rc = idr_alloc(&hw->svc_ids, svc_priv, rgroup_id, rgroup_id + 1,
+		       GFP_NOWAIT);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "%s Service idr could not be obtained for rgroup ID %d rc:%d\n",
+			   hw->cdev.name, rgroup_id, rc);
+		goto rgroup_dec_refcount;
+	}
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
 	if (rc)
 		goto rgroup_dec_refcount;
 
 	mutex_lock(&hw->svc_lock);
-	idr_preload(GFP_KERNEL);
-	rc = idr_alloc(&hw->svc_ids, svc_priv, 1, -1, GFP_NOWAIT);
-	idr_preload_end();
-	mutex_unlock(&hw->svc_lock);
-
-	if (rc < 0) {
-		cxidev_dbg(&hw->cdev, "%s service IDs exhausted\n", hw->cdev.name);
-		goto release_rxtx_profs;
-	}
-
-	svc_priv->svc_desc.svc_id = rc;
-	svc_priv->rgroup = rgroup;
-
-	/* Check if requested reserved resources are available */
-	mutex_lock(&hw->svc_lock);
 	rc = reserve_rsrcs(hw, svc_priv, fail_info);
 	if (rc)
-		goto free_id;
+		goto unlock;
 
+	/* By default a service is enabled for compatibility. */
+	svc_priv->svc_desc.enable = 1;
 	rc = cxi_rgroup_enable(rgroup);
 	if (rc)
-		goto free_id;
+		goto free_resources;
 
-	svc_priv->svc_desc.enable = 1;
 	list_add_tail(&svc_priv->list, &hw->svc_list);
 	hw->svc_count++;
 	mutex_unlock(&hw->svc_lock);
 	refcount_inc(&hw->refcount);
 
-	return svc_priv->svc_desc.svc_id;
+	return rgroup_id;
 
-free_id:
-	idr_remove(&hw->svc_ids, svc_priv->svc_desc.svc_id);
+free_resources:
+	free_rsrcs(svc_priv);
+unlock:
 	mutex_unlock(&hw->svc_lock);
-release_rxtx_profs:
 	release_rxtx_profiles(dev, svc_priv);
 rgroup_dec_refcount:
 	cxi_rgroup_dec_refcount(rgroup);
 	/* The rgroup pointer is no longer usable. */
 release_rgroup:
 	cxi_dev_rgroup_release(dev, rgroup_id);
+	return rc;
 free_svc:
 	kfree(svc_priv);
 
@@ -988,7 +957,7 @@ int cxi_svc_rsrc_list_get(struct cxi_dev *dev, int count,
 	}
 
 	list_for_each_entry(svc_priv, &hw->svc_list, list) {
-		copy_rsrc_use(dev, &rsrc_list[i], svc_priv);
+		copy_rsrc_use(dev, &rsrc_list[i], svc_priv->rgroup);
 		rsrc_list[i].svc_id = svc_priv->svc_desc.svc_id;
 		i++;
 	}
@@ -1003,7 +972,8 @@ EXPORT_SYMBOL(cxi_svc_rsrc_list_get);
  * cxi_svc_rsrc_get - Get rsrc_use from svc_id
  *
  * @dev: Cassini Device
- * @svc_id: svc_id of the descriptor to find
+ * @svc_id: svc_id of the descriptor to find which is equivalent to the
+ *          rgroup ID.
  * @rsrc_use: destination to land resource usage
  *
  * Return: 0 on success or a negative errno
@@ -1011,20 +981,15 @@ EXPORT_SYMBOL(cxi_svc_rsrc_list_get);
 int cxi_svc_rsrc_get(struct cxi_dev *dev, unsigned int svc_id,
 		     struct cxi_rsrc_use *rsrc_use)
 {
-	struct cxi_svc_priv *svc_priv;
-	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	int rc;
+	struct cxi_rgroup *rgroup;
 
-	mutex_lock(&hw->svc_lock);
-
-	/* Find priv descriptor */
-	svc_priv = idr_find(&hw->svc_ids, svc_id);
-	if (!svc_priv) {
-		mutex_unlock(&hw->svc_lock);
+	rc = cxi_dev_find_rgroup_inc_refcount(dev, svc_id, &rgroup);
+	if (rc)
 		return -EINVAL;
-	}
 
-	copy_rsrc_use(dev, rsrc_use, svc_priv);
-	mutex_unlock(&hw->svc_lock);
+	copy_rsrc_use(dev, rsrc_use, rgroup);
+	cxi_rgroup_dec_refcount(rgroup);
 
 	return 0;
 }
@@ -1072,7 +1037,8 @@ EXPORT_SYMBOL(cxi_svc_list_get);
  * cxi_svc_get - Get svc_desc from svc_id
  *
  * @dev: Cassini Device
- * @svc_id: svc_id of the descriptor to find
+ * @svc_id: svc_id of the descriptor to find which is equivalent to the
+ *          rgroup ID.
  * @svc_desc: destination to land service descriptor
  *
  * Return: 0 on success or a negative errno
@@ -1204,27 +1170,28 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc)
 	/* Find priv descriptor */
 	svc_priv = idr_find(&hw->svc_ids, svc_desc->svc_id);
 	if (!svc_priv) {
-		mutex_unlock(&hw->svc_lock);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto error;
 	}
 
 	/* Service must be unused for it to be updated. */
 	if (refcount_read(&svc_priv->refcount) != 1) {
-		mutex_unlock(&hw->svc_lock);
-		return -EBUSY;
+		rc = -EBUSY;
+		goto error;
 	}
 
 	/* TODO Handle Resource Reservation Changes */
 	if (svc_priv->svc_desc.resource_limits != svc_desc->resource_limits) {
-		mutex_unlock(&hw->svc_lock);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto error;
 	}
 
-	if (svc_priv->svc_desc.enable != svc_desc->enable) {
-		if (svc_desc->enable)
-			cxi_rgroup_enable(svc_priv->rgroup);
-		else
-			cxi_rgroup_disable(svc_priv->rgroup);
+	if (svc_desc->enable && !cxi_rgroup_is_enabled(svc_priv->rgroup)) {
+		rc = cxi_rgroup_enable(svc_priv->rgroup);
+		if (rc)
+			goto error;
+	} else if (!svc_desc->enable) {
+		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
 	/* Update TCs, VNIs, Members */
@@ -1239,8 +1206,9 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc)
 	memcpy(svc_priv->svc_desc.vnis, svc_desc->vnis, sizeof(svc_desc->vnis));
 	memcpy(svc_priv->svc_desc.members, svc_desc->members, sizeof(svc_desc->members));
 
+error:
 	mutex_unlock(&hw->svc_lock);
-	return 0;
+	return rc;
 }
 EXPORT_SYMBOL(cxi_svc_update);
 

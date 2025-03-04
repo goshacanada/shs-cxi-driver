@@ -583,6 +583,20 @@ unlock_return:
 }
 
 /**
+ * cxi_rgroup_is_enabled() - Report Resource group is enabled.
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return:
+ * * true    - Is enabled
+ * * false   - Is disabled
+ */
+bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup)
+{
+	return !rgroup->state.released && rgroup->state.enabled;
+}
+
+/**
  * cxi_rgroup_enable() - Mark a Resource group as enabled.
  *
  * @rgroup: resource group pointer

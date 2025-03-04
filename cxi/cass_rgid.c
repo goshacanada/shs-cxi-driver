@@ -181,18 +181,17 @@ struct cxi_cp_priv *cass_cp_rgid_find(struct cass_dev *hw, int rgid,
  * cass_rgid_get() - Get an RGID from the pool
  *
  * @hw: Cassini device
- * @svc_priv: Private service container
+ * @rgroup: Resource group container
  * @return: 0 on success or negative error
  */
-int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
+int cass_rgid_get(struct cass_dev *hw, struct cxi_rgroup *rgroup)
 {
 	int ret;
 	unsigned long idx;
 	unsigned long id = 1;
 	struct cass_rgid_priv *rgidp;
 	struct cass_rgid_priv *rgid_priv;
-	unsigned int svc_id = svc_priv->svc_desc.svc_id;
-	unsigned int lnis_per_rgid = svc_priv->rgroup->attr.lnis_per_rgid;
+	unsigned int lnis_per_rgid = rgroup->attr.lnis_per_rgid;
 
 	rgid_priv = kzalloc(sizeof(*rgid_priv), GFP_KERNEL);
 	if (!rgid_priv)
@@ -201,7 +200,7 @@ int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 	xa_lock(&hw->rgid_array);
 
 	xa_for_each_start(&hw->rgid_array, idx, rgidp, 1) {
-		if ((rgidp->svc_id == svc_id) &&
+		if ((rgidp->svc_id == rgroup->id) &&
 		    (rgidp->lnis == lnis_per_rgid) &&
 		    (refcount_read(&rgidp->refcount) < rgidp->lnis)) {
 			refcount_inc(&rgidp->refcount);
@@ -216,7 +215,7 @@ int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 		goto unlock_free;
 	}
 
-	rgid_priv->svc_id = svc_id;
+	rgid_priv->svc_id = rgroup->id;
 	rgid_priv->lnis = lnis_per_rgid;
 	refcount_set(&rgid_priv->refcount, 1);
 	ida_init(&rgid_priv->lac_table);

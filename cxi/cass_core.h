@@ -1187,7 +1187,7 @@ static inline bool is_vni_valid(unsigned int vni)
 bool valid_vni(struct cxi_dev *dev, bool restricted,
 	       enum cxi_profile_type type, unsigned int vni);
 bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc);
-bool valid_svc_user(const struct cxi_svc_priv *svc_priv);
+bool valid_svc_user(struct cxi_rgroup *rgroup);
 int register_error_handlers(struct cass_dev *hw);
 void deregister_error_handlers(struct cass_dev *hw);
 int cass_sriov_configure(struct pci_dev *pdev, int num_vfs);
@@ -1329,7 +1329,7 @@ void cass_rgid_init(struct cass_dev *hw);
 void cass_rgid_fini(struct cass_dev *hw);
 int cass_lac_get(struct cass_dev *hw, int id);
 void cass_lac_put(struct cass_dev *hw, int id, int lac);
-int cass_rgid_get(struct cass_dev *hw, struct cxi_svc_priv *svc_priv);
+int cass_rgid_get(struct cass_dev *hw, struct cxi_rgroup *rgroup);
 void cass_rgid_put(struct cass_dev *hw, int id);
 int cass_lcid_get(struct cass_dev *hw, struct cxi_cp_priv *cp_priv, int rgid);
 void cass_lcid_put(struct cass_dev *hw, int rgid, int lcid);
