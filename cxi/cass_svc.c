@@ -58,40 +58,66 @@ static enum cxi_resource_type stype_to_rtype(enum cxi_rsrc_type type, int pe)
 	}
 }
 
+struct valid_ac_data {
+	uid_t uid;
+	gid_t gid;
+};
+
 struct valid_vni_data {
 	unsigned int vni;
-	unsigned int valid;
+	unsigned int restricted;
+};
+
+struct valid_user_data {
+	struct valid_vni_data vni_data;
+	struct valid_ac_data ac_data;
 };
 
 static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
 			      void *user_data)
 {
+	int rc;
+	bool valid = false;
+	unsigned int ac_entry_id;
 	struct cxi_rxtx_vni_attr vni_attr;
 	struct cxi_rxtx_profile_state state;
-	struct valid_vni_data *vni_data = user_data;
+	struct valid_user_data *data = user_data;
+	struct valid_vni_data vni_data = data->vni_data;
+	struct valid_ac_data ac_data = data->ac_data;
 
 	cxi_rxtx_profile_get_info(rxtx_profile, &vni_attr, &state);
 
-	if (((vni_data->vni & ~vni_attr.ignore) == vni_attr.match) &&
-	    !atomic_read(&state.released) && !state.revoked)
-		vni_data->valid = 1;
+	if (!vni_data.restricted ||
+	    (((vni_data.vni & ~vni_attr.ignore) == vni_attr.match) &&
+			!atomic_read(&state.released) && !state.revoked)) {
+		rc = cxi_rxtx_profile_get_ac_entry_id_by_user(rxtx_profile,
+							      ac_data.uid,
+							      ac_data.gid,
+							      CXI_AC_ANY,
+							      &ac_entry_id);
+		if (!rc)
+			valid = true;
+	}
 
-	return vni_data->valid;
+	return valid;
 }
 
 /* Check if a service allows a particular VNI to be used */
-bool valid_vni(struct cxi_dev *dev, const struct cxi_svc_priv *svc_priv,
+bool valid_vni(struct cxi_dev *dev, bool restricted,
 	       enum cxi_profile_type type, unsigned int vni)
 {
 	struct cxi_rxtx_profile_list *list;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-	struct valid_vni_data vni_data = {
-		.vni = vni,
-		.valid = 0,
+	struct valid_user_data user_data = {
+		.vni_data = {
+			.vni = vni,
+			.restricted = restricted,
+		},
+		.ac_data = {
+			.uid = __kuid_val(current_euid()),
+			.gid = __kgid_val(current_egid()),
+		},
 	};
-
-	if (!svc_priv->svc_desc.restricted_vnis)
-		return true;
 
 	if (type == CXI_PROF_RX)
 		list = &hw->rx_profile_list;
@@ -99,7 +125,7 @@ bool valid_vni(struct cxi_dev *dev, const struct cxi_svc_priv *svc_priv,
 		list = &hw->tx_profile_list;
 
 	return cxi_rxtx_profile_list_iterate(list, valid_vni_operator,
-					     &vni_data);
+					     &user_data);
 }
 
 /* Check if a service allows a particular TC to be used */
@@ -116,29 +142,12 @@ bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc)
 
 bool valid_svc_user(const struct cxi_svc_priv *svc_priv)
 {
-	int i;
-	kuid_t svc_euid;
-	kgid_t svc_egid;
-	kuid_t cur_euid = current_euid();
+	unsigned int ac_entry_id;
+	uid_t uid = __kuid_val(current_euid());
+	gid_t gid = __kgid_val(current_egid());
 
-	/* Service might not have any restrictions */
-	if (!svc_priv->svc_desc.restricted_members)
-		return true;
-
-	/* Ensure caller is authorized to allocate this resource */
-	for (i = 0; i < CXI_SVC_MAX_MEMBERS; i++) {
-		if (svc_priv->svc_desc.members[i].type == CXI_SVC_MEMBER_UID) {
-			svc_euid.val = svc_priv->svc_desc.members[i].svc_member.uid;
-			if (uid_eq(svc_euid, cur_euid))
-				return true;
-		} else if (svc_priv->svc_desc.members[i].type == CXI_SVC_MEMBER_GID) {
-			svc_egid.val = svc_priv->svc_desc.members[i].svc_member.gid;
-			if (in_egroup_p(svc_egid))
-				return true;
-		}
-	}
-
-	return false;
+	return !cxi_rgroup_get_ac_entry_by_user(svc_priv->rgroup, uid, gid,
+						CXI_AC_ANY, &ac_entry_id);
 }
 
 static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
@@ -668,6 +677,8 @@ static void remove_ac_entries(struct cxi_dev *dev,
 	int i;
 	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
 
+	cxi_ac_entry_list_destroy(&svc_priv->rgroup->ac_entry_list);
+
 	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
 		cxi_dev_tx_profile_remove_ac_entries(dev,
 					svc_priv->tx_profile_ids[i]);
@@ -683,32 +694,42 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 	int rc;
 	enum cxi_ac_type type;
 	unsigned int ac_entry_id;
+	union cxi_ac_data ac_data = {};
 	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
 
-	if (!svc_desc->restricted_members)
-		return 0;
+	for (i = 0; i < CXI_SVC_MAX_MEMBERS; i++) {
+		/* Type members.type have been validated */
+		type = svc_mbr_to_ac_type(svc_desc->members[i].type);
 
-	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-		for (j = 0; j < CXI_SVC_MAX_MEMBERS; j++) {
-			/* Type members.type have been validated */
-			type = svc_mbr_to_ac_type(svc_desc->members[j].type);
-
+		for (j = 0; j < svc_priv->num_vld_rx_profiles; j++) {
 			rc = cxi_dev_tx_profile_add_ac_entry(dev, type,
-					svc_desc->members[j].svc_member.uid,
-					svc_desc->members[j].svc_member.gid,
-					svc_priv->tx_profile_ids[i],
+					svc_desc->members[i].svc_member.uid,
+					svc_desc->members[i].svc_member.gid,
+					svc_priv->tx_profile_ids[j],
 					&ac_entry_id);
-			if (rc)
+			if (rc && rc != -EEXIST)
 				goto cleanup;
 
 			rc = cxi_dev_rx_profile_add_ac_entry(dev, type,
-					svc_desc->members[j].svc_member.uid,
-					svc_desc->members[j].svc_member.gid,
-					svc_priv->rx_profile_ids[i],
+					svc_desc->members[i].svc_member.uid,
+					svc_desc->members[i].svc_member.gid,
+					svc_priv->rx_profile_ids[j],
 					&ac_entry_id);
-			if (rc)
+			if (rc && rc != -EEXIST)
 				goto cleanup;
 		}
+
+		if (type == CXI_AC_UID)
+			ac_data.uid = svc_desc->members[i].svc_member.uid;
+		else if (type == CXI_AC_GID)
+			ac_data.gid = svc_desc->members[i].svc_member.gid;
+
+		rc = cxi_dev_rgroup_add_ac_entry(dev,
+						 svc_priv->rgroup->id,
+						 type, &ac_data,
+						 &ac_entry_id);
+		if (rc && rc != -EEXIST)
+			goto cleanup;
 	}
 
 	return 0;
@@ -765,17 +786,16 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 					      &svc_priv->rx_profile_ids[i]);
 		if (rc)
 			goto release_profiles;
-
-		rc = alloc_ac_entries(dev, svc_priv);
-		if (rc)
-			goto release_profiles;
 	}
+
+	rc = alloc_ac_entries(dev, svc_priv);
+	if (rc)
+		goto release_profiles;
 
 	return 0;
 
 release_profiles:
 	release_rxtx_profiles(dev, svc_priv);
-
 	return rc;
 }
 
@@ -822,6 +842,8 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	rc = cxi_dev_find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
 	if (rc)
 		goto release_rgroup;
+
+	svc_priv->rgroup = rgroup;
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
 	if (rc)
