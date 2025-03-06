@@ -100,7 +100,7 @@ static int ac_entry_list_delete_entry(struct cxi_ac_entry_list *list,
 	struct cxi_ac_entry   *ac_entry;
 	int    ret;
 
-	ac_entry = xa_erase(&list->id.xarray, ac_entry_id);
+	ac_entry = xa_load(&list->id.xarray, ac_entry_id);
 	ret = xa_err(ac_entry);
 	if (ret)
 		return ret;
@@ -121,6 +121,8 @@ static int ac_entry_list_delete_entry(struct cxi_ac_entry_list *list,
 		ret = -EIO;
 		break;
 	}
+
+	xa_erase(&list->id.xarray, ac_entry_id);
 
 	kfree(ac_entry);
 	return ret;
