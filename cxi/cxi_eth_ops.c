@@ -701,9 +701,9 @@ static int append_rx_buffer(struct rx_queue *rx, struct rx_buffer *buf,
 		cmd.start = buf->md->iova;
 		cmd.lac = buf->md->lac;
 
-		spin_lock(&dev->cq_tgt_req_lock);
+		spin_lock_bh(&dev->cq_tgt_req_lock);
 		rc = cxi_cq_emit_target(dev->cq_tgt_req, &cmd);
-		spin_unlock(&dev->cq_tgt_req_lock);
+		spin_unlock_bh(&dev->cq_tgt_req_lock);
 
 		rx->stats.append_req++;
 	}
@@ -746,9 +746,9 @@ int post_rx_buffers(struct rx_queue *rx, gfp_t gfp)
 				posted = 0;
 			}
 		} else {
-			spin_lock(&dev->cq_tgt_req_lock);
+			spin_lock_bh(&dev->cq_tgt_req_lock);
 			cxi_cq_ring(dev->cq_tgt_req);
-			spin_unlock(&dev->cq_tgt_req_lock);
+			spin_unlock_bh(&dev->cq_tgt_req_lock);
 		}
 
 		count++;
