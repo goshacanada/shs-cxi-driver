@@ -742,7 +742,7 @@ static int is_supported(struct cass_dev *hw)
 			hw->cdev.prop.cassini_version = CASSINI_1_1;
 		else
 			goto unsupported;
-	} else if (hw->rev.vendor_id == PCI_VENDOR_ID_HPE ||
+	} else if (hw->rev.vendor_id == PCI_VENDOR_ID_HPE &&
 		   hw->rev.device_id == PCI_DEVICE_ID_CASSINI_2) {
 		if (hw->rev.rev == 1)
 			hw->cdev.prop.cassini_version = CASSINI_2_0;
