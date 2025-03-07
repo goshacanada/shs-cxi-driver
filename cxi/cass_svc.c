@@ -1425,11 +1425,14 @@ EXPORT_SYMBOL(cxi_svc_get_lpr);
 void cass_svc_fini(struct cass_dev *hw)
 {
 	struct cxi_svc_priv *svc_priv;
-	int svc_id;
+	struct cxi_svc_priv *tmp;
+
+	if (!hw->cdev.is_physfn)
+		return;
 
 	debugfs_remove(hw->svc_debug);
-
-	idr_for_each_entry(&hw->svc_ids, svc_priv, svc_id)
+	list_for_each_entry_safe(svc_priv, tmp, &hw->svc_list, list)
 		svc_destroy(hw, svc_priv);
+
 	idr_destroy(&hw->svc_ids);
 }
