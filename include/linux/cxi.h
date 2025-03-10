@@ -652,9 +652,6 @@ int cxi_dev_get_rgroup_ids(struct cxi_dev *dev,
 			   unsigned int *rgroup_ids,
 			   size_t *num_ids);
 
-int cxi_dev_rgroup_release(struct cxi_dev *dev,
-			   unsigned int rgroup_id);
-
 int cxi_dev_rgroup_enable(struct cxi_dev *dev,
 			  unsigned int rgroup_id);
 

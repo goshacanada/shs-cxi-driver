@@ -994,7 +994,7 @@ unlock:
 remove_idr:
 	idr_remove(&hw->svc_ids, rgroup->id);
 release_rgroup:
-	cxi_dev_rgroup_release(dev, rgroup->id);
+	cxi_rgroup_dec_refcount(rgroup);
 	return rc;
 free_svc:
 	kfree(svc_priv);
@@ -1012,7 +1012,7 @@ static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 
 	release_rxtx_profiles(&hw->cdev, svc_priv);
 
-	rc = cxi_dev_rgroup_release(&hw->cdev, svc_id);
+	rc = cxi_rgroup_dec_refcount(svc_priv->rgroup);
 	if (rc)
 		pr_err("cxi_dev_release_rgroup_by_id failed %d\n", rc);
 

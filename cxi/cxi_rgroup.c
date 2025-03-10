@@ -439,7 +439,6 @@ static void rgroup_init(struct cxi_dev *dev,
 	rgroup->hw             = get_cass_dev(dev);
 	rgroup->attr           = *attr;
 	rgroup->state.enabled  = false;
-	rgroup->state.released = false;
 	refcount_set(&rgroup->state.refcount, 1);
 	resource_entry_list_init(&rgroup->resource_entry_list);
 	cxi_ac_entry_list_init(&rgroup->ac_entry_list);
@@ -541,37 +540,14 @@ static int rgroup_dec_refcount_and_destroy(struct cxi_rgroup *rgroup)
 	bool   outstanding_refs;
 	int    ret = 0;
 
-	/* We need to decrement the refcount.  How we do it depends on
-	 * the state of 'released'.  'Released' represents the initial
-	 * refcount of 1.
-	 *
-	 * If released is true, we can allow the refcount to go to zero.
-	 * refcount_dec_and_test() provides this operation.
-	 *
-	 * If released is false, decrementing to zero is a bug.
-	 * refcount_dec() signals the error on decrement to zero.
-	 */
-
 	cxi_dev_lock_rgroup_list(hw);
 
-	outstanding_refs = true;
-
-	if (rgroup->state.released)
-		outstanding_refs = !refcount_dec_and_test(&rgroup->state.refcount);
-	else
-		refcount_dec(&rgroup->state.refcount);
+	outstanding_refs = !refcount_dec_and_test(&rgroup->state.refcount);
 
 	if (outstanding_refs || rgroup_busy(rgroup)) {
 		ret = -EBUSY;
 		goto unlock_return;
 	}
-
-	/* At this point:
-	 *    no other references
-	 *    released is true
-	 *    not busy
-	 * Destroy it.
-	 */
 
 	ret = rgroup_list_remove_rgroup(&hw->rgroup_list, rgroup);
 	if (!ret)
@@ -593,7 +569,7 @@ unlock_return:
  */
 bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup)
 {
-	return !rgroup->state.released && rgroup->state.enabled;
+	return rgroup->state.enabled;
 }
 
 /**
@@ -607,17 +583,13 @@ bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup)
  */
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup)
 {
-	int   ret = 0;
-
 	cxi_dev_lock_rgroup_list(rgroup->hw);
 
-	if (!rgroup->state.released)
-		rgroup->state.enabled = true;
-	else
-		ret = -EBUSY;
+	rgroup->state.enabled = true;
 
 	cxi_dev_unlock_rgroup_list(rgroup->hw);
-	return ret;
+
+	return 0;
 }
 EXPORT_SYMBOL(cxi_rgroup_enable);
 
@@ -657,7 +629,6 @@ void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 
 	if (state) {
 		state->enabled  = rgroup->state.enabled;
-		state->released = rgroup->state.released;
 		state->refcount = rgroup->state.refcount;
 	}
 }
@@ -682,10 +653,6 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	struct cxi_resource_entry_list   *list = &rgroup->resource_entry_list;
 	struct cxi_resource_entry        *resource_entry;
 	int    ret;
-
-	/* Released rgroups can not be added to. */
-	if (rgroup->state.released)
-		return -EBUSY;
 
 	if (!validate_resource_limits(rgroup->hw, type, limits))
 		return -EINVAL;
@@ -1127,7 +1094,6 @@ EXPORT_SYMBOL(cxi_dev_alloc_rgroup);
  * Return:
  * * 0       - success
  * * -EBADR  - rgroup with given id not found
- * * -EBUSY  - rgroup not active
  */
 int cxi_dev_find_rgroup_inc_refcount(struct cxi_dev *dev,
 				     unsigned int id,
@@ -1139,12 +1105,6 @@ int cxi_dev_find_rgroup_inc_refcount(struct cxi_dev *dev,
 	ret = find_rgroup_inc_refcount(dev, id, &found_rgroup);
 	if (ret)
 		return ret;
-
-	/* TODO: what about disabled? */
-	if (found_rgroup->state.released) {
-		cxi_rgroup_dec_refcount(found_rgroup);
-		return -EBUSY;
-	}
 
 	*rgroup = found_rgroup;
 	return 0;
@@ -1209,44 +1169,6 @@ int cxi_dev_get_rgroup_ids(struct cxi_dev *dev,
 EXPORT_SYMBOL(cxi_dev_get_rgroup_ids);
 
 /**
- * cxi_dev_rgroup_release() - Mark a Resource group for deletion.
- *                            It will be destroyed when unreferenced.
- *
- * @dev: CXI Device
- * @rgroup_id: ID of Resource Group to be released.
- *
- * Return:
- * * 0         - success
- * * -EBUSY    - rgroup marked as released, but still referenced
- */
-int cxi_dev_rgroup_release(struct cxi_dev *dev,
-			   unsigned int rgroup_id)
-{
-	struct cxi_rgroup   *rgroup;
-	int    ret;
-
-	ret = find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
-	if (ret)
-		return ret;
-
-	/* TODO: Don't delete default Resource Group ID */
-	/* TODO: see if we have to report busy or not */
-
-	cxi_dev_lock_rgroup_list(rgroup->hw);
-
-	/* Successful release decrements the refcount by one. */
-	if (!rgroup->state.released) {
-		rgroup->state.released = true;
-		refcount_dec(&rgroup->state.refcount);
-	}
-
-	cxi_dev_unlock_rgroup_list(rgroup->hw);
-
-	return rgroup_dec_refcount_and_destroy(rgroup);
-}
-EXPORT_SYMBOL(cxi_dev_rgroup_release);
-
-/**
  * cxi_dev_rgroup_enable() - Mark a Resource group active.
  *                           External references can be made.
  *
@@ -1267,10 +1189,6 @@ int cxi_dev_rgroup_enable(struct cxi_dev *dev,
 	ret = find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
 	if (ret)
 		return ret;
-
-	/* Released rgroups can not be enabled */
-	if (rgroup->state.released)
-		return -EBUSY;
 
 	ret = cxi_rgroup_enable(rgroup);
 
@@ -1357,7 +1275,6 @@ EXPORT_SYMBOL(cxi_dev_rgroup_get_info);
  * Return:
  * * 0         - success
  * * -EBADR    - no such rgroup_id
- * * -EBUSY    - rgroup is released
  * * -EINVAL   - bad resource type or limits
  * * -ENOMEM   - unable to allocate memory for resource
  */
@@ -1372,10 +1289,6 @@ int cxi_dev_rgroup_add_resource(struct cxi_dev *dev,
 	ret = find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
 	if (ret)
 		return ret;
-
-	/* Deny adding resources to released rgroups */
-	if (rgroup->state.released)
-		return -EBUSY;
 
 	ret = cxi_rgroup_add_resource(rgroup, resource_type, limits);
 
@@ -1500,7 +1413,6 @@ EXPORT_SYMBOL(cxi_dev_rgroup_get_resource_types);
  * * 0         - success
  * * -EBADR    - no such rgroup_id
  * * -EBADR    - unknown ac_type
- * * -EBUSY    - rgroup has been released
  */
 int cxi_dev_rgroup_add_ac_entry(struct cxi_dev *dev,
 				unsigned int rgroup_id,
@@ -1514,9 +1426,6 @@ int cxi_dev_rgroup_add_ac_entry(struct cxi_dev *dev,
 	ret = find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
 	if (ret)
 		return ret;
-
-	if (rgroup->state.released)
-		return -EBUSY;
 
 	ret = cxi_rgroup_add_ac_entry(rgroup, ac_type,
 				      ac_data, ac_entry_id);
