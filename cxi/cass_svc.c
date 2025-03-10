@@ -969,7 +969,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
 	if (rc)
-		goto rgroup_dec_refcount;
+		goto remove_idr;
 
 	mutex_lock(&hw->svc_lock);
 	rc = reserve_rsrcs(hw, svc_priv, fail_info);
@@ -994,6 +994,8 @@ free_resources:
 unlock:
 	mutex_unlock(&hw->svc_lock);
 	release_rxtx_profiles(dev, svc_priv);
+remove_idr:
+	idr_remove(&hw->svc_ids, rgroup_id);
 rgroup_dec_refcount:
 	cxi_rgroup_dec_refcount(rgroup);
 	/* The rgroup pointer is no longer usable. */
