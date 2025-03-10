@@ -154,7 +154,7 @@ void cass_sl_mode_get(struct cass_dev *cass_dev, struct cxi_link_info *link_info
 		link_info->flags |= CXI_ETH_PF_LLR;
 
 	/* loopback */
-	if (cass_dev->sl.link_config.options & SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE)
+	if (cass_dev->sl.lgrp_config.options & SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE)
 		link_info->flags |= CXI_ETH_PF_INTERNAL_LOOPBACK;
 	else if (cass_dev->sl.link_config.options & SL_LINK_CONFIG_OPT_REMOTE_LOOPBACK_ENABLE)
 		link_info->flags |= CXI_ETH_PF_EXTERNAL_LOOPBACK;
@@ -181,6 +181,7 @@ void cass_sl_mode_get(struct cass_dev *cass_dev, struct cxi_link_info *link_info
 void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *link_info)
 {
 	struct sl_link_config *link_config;
+	struct sl_lgrp_config *lgrp_config;
 	u32                    an_mode;
 	u32                    speed_mode;
 	bool                   is_mode_changed;
@@ -188,6 +189,7 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 	cxidev_dbg(&cass_dev->cdev, "sl mode set\n");
 
 	link_config = &cass_dev->sl.link_config;
+	lgrp_config = &cass_dev->sl.lgrp_config;
 	is_mode_changed = false;
 
 	/* auto neg */
@@ -267,11 +269,11 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 		   link_info->flags & LOOPBACK_MODE);
 	switch (link_info->flags & LOOPBACK_MODE) {
 	case 0:
-		if (!(link_config->options & SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE) &&
+		if (!(lgrp_config->options & SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE) &&
 		    !(link_config->options & SL_LINK_CONFIG_OPT_REMOTE_LOOPBACK_ENABLE))
 			break;
 		cxidev_dbg(&cass_dev->cdev, "sl mode set - loopback to off\n");
-		link_config->options &= ~SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
+		lgrp_config->options &= ~SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
 		link_config->options &= ~SL_LINK_CONFIG_OPT_REMOTE_LOOPBACK_ENABLE;
 		if (cass_dev->sl.old_an_mode == AUTONEG_ENABLE)
 			link_config->options |= SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
@@ -284,10 +286,10 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 		is_mode_changed = true;
 		break;
 	case CXI_ETH_PF_INTERNAL_LOOPBACK:
-		if (link_config->options & SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE)
+		if (lgrp_config->options & SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE)
 			break;
 		cxidev_dbg(&cass_dev->cdev, "sl mode set - internal loopback to on\n");
-		link_config->options |= SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
+		lgrp_config->options |= SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
 		link_config->options &= ~SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
 		link_config->options &= ~SL_LINK_CONFIG_OPT_REMOTE_LOOPBACK_ENABLE;
 		cass_dev->sl.old_an_mode = link_info->autoneg;
@@ -301,7 +303,7 @@ void cass_sl_mode_set(struct cass_dev *cass_dev, const struct cxi_link_info *lin
 		cxidev_dbg(&cass_dev->cdev, "sl mode set - external loopback to on\n");
 		link_config->options |= SL_LINK_CONFIG_OPT_REMOTE_LOOPBACK_ENABLE;
 		link_config->options &= ~SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
-		link_config->options &= ~SL_LINK_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
+		link_config->options &= ~SL_LGRP_CONFIG_OPT_SERDES_LOOPBACK_ENABLE;
 		cass_dev->sl.old_an_mode = link_info->autoneg;
 		cass_dev->sl.old_lt_mode = (link_config->hpe_map & SL_LINK_CONFIG_HPE_LINKTRAIN);
 		link_config->hpe_map &= ~SL_LINK_CONFIG_HPE_LINKTRAIN;
