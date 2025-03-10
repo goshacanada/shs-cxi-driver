@@ -640,9 +640,8 @@ int cxi_rgroup_get_ac_entry_by_user(struct cxi_rgroup *rgroup,
 
 int cxi_rgroup_dec_refcount(struct cxi_rgroup *rgroup);
 
-int cxi_dev_alloc_rgroup(struct cxi_dev *dev,
-			 const struct cxi_rgroup_attr *attr,
-			 unsigned int *rgroup_id);
+struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,
+					const struct cxi_rgroup_attr *attr);
 
 int cxi_dev_find_rgroup_inc_refcount(struct cxi_dev *dev,
 				     unsigned int id,

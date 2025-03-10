@@ -929,7 +929,6 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
 	int rc;
-	unsigned int rgroup_id;
 	struct cxi_rgroup *rgroup;
 	struct cxi_rgroup_attr attr = {
 		.cntr_pool_id = svc_desc->cntr_pool_id,
@@ -948,23 +947,21 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 
 	refcount_set(&svc_priv->refcount, 1);
 
-	rc = cxi_dev_alloc_rgroup(dev, &attr, &rgroup_id);
-	if (rc)
+	rgroup = cxi_dev_alloc_rgroup(dev, &attr);
+	if (IS_ERR(rgroup)) {
+		rc = PTR_ERR(rgroup);
 		goto free_svc;
-
-	rc = cxi_dev_find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
-	if (rc)
-		goto release_rgroup;
+	}
 
 	svc_priv->rgroup = rgroup;
-	svc_priv->svc_desc.svc_id = rgroup_id;
+	svc_priv->svc_desc.svc_id = rgroup->id;
 
-	rc = idr_alloc(&hw->svc_ids, svc_priv, rgroup_id, rgroup_id + 1,
+	rc = idr_alloc(&hw->svc_ids, svc_priv, rgroup->id, rgroup->id + 1,
 		       GFP_NOWAIT);
 	if (rc < 0) {
 		cxidev_err(&hw->cdev, "%s Service idr could not be obtained for rgroup ID %d rc:%d\n",
-			   hw->cdev.name, rgroup_id, rc);
-		goto rgroup_dec_refcount;
+			   hw->cdev.name, rgroup->id, rc);
+		goto release_rgroup;
 	}
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
@@ -987,7 +984,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	mutex_unlock(&hw->svc_lock);
 	refcount_inc(&hw->refcount);
 
-	return rgroup_id;
+	return rgroup->id;
 
 free_resources:
 	free_rsrcs(svc_priv);
@@ -995,12 +992,9 @@ unlock:
 	mutex_unlock(&hw->svc_lock);
 	release_rxtx_profiles(dev, svc_priv);
 remove_idr:
-	idr_remove(&hw->svc_ids, rgroup_id);
-rgroup_dec_refcount:
-	cxi_rgroup_dec_refcount(rgroup);
-	/* The rgroup pointer is no longer usable. */
+	idr_remove(&hw->svc_ids, rgroup->id);
 release_rgroup:
-	cxi_dev_rgroup_release(dev, rgroup_id);
+	cxi_dev_rgroup_release(dev, rgroup->id);
 	return rc;
 free_svc:
 	kfree(svc_priv);
@@ -1017,10 +1011,6 @@ static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 	free_rsrcs(svc_priv);
 
 	release_rxtx_profiles(&hw->cdev, svc_priv);
-
-	rc = cxi_rgroup_dec_refcount(svc_priv->rgroup);
-	if (rc)
-		pr_err("cxi_rgroup_dec_refcount failed %d\n", rc);
 
 	rc = cxi_dev_rgroup_release(&hw->cdev, svc_id);
 	if (rc)

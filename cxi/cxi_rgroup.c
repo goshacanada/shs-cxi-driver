@@ -1083,25 +1083,23 @@ void cxi_dev_rgroup_fini(struct cxi_dev *dev)
  *
  * @dev: Cassini Device
  * @attr: Attributes of the Resource Group Requested
- * @rgroup_id: the Resource Group ID on success.
  *
- * Return: 0 on success. Else, negative errno value.
+ * Return: rgroup object on success. Else, negative errno value.
  */
-int cxi_dev_alloc_rgroup(struct cxi_dev *dev,
-			 const struct cxi_rgroup_attr *attr,
-			 unsigned int *rgroup_id)
+struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,
+					const struct cxi_rgroup_attr *attr)
 {
-	struct cass_dev    *hw = get_cass_dev(dev);
-	struct cxi_rgroup  *rgroup;
+	struct cass_dev *hw = get_cass_dev(dev);
+	struct cxi_rgroup *rgroup;
 	int    ret;
 
 	ret = validate_rgroup_attr(dev, attr);
 	if (ret)
-		return ret;
+		return ERR_PTR(ret);
 
-	rgroup = kzalloc(sizeof(*rgroup), GFP_KERNEL);
+	rgroup = kzalloc(sizeof(struct cxi_rgroup), GFP_KERNEL);
 	if (!rgroup)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	rgroup_init(dev, rgroup, attr);
 
@@ -1110,12 +1108,12 @@ int cxi_dev_alloc_rgroup(struct cxi_dev *dev,
 		goto free_rgroup;
 
 	refcount_inc(&hw->refcount);
-	*rgroup_id = rgroup->id;
-	return 0;
+
+	return rgroup;
 
 free_rgroup:
 	kfree(rgroup);
-	return ret;
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL(cxi_dev_alloc_rgroup);
 
