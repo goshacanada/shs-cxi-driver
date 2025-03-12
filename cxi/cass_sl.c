@@ -1062,6 +1062,7 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 	cass_dev->sl.accessors.dmac          = cass_dev;
 
 	cass_dev->sl.enable_llr              = true;
+	cass_dev->sl.ck_speed                = true;
 
 	cass_dev->sl.is_canceled             = false;
 }
@@ -1095,6 +1096,13 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 	switch (msg->type) {
 	case SL_LGRP_NOTIF_MEDIA_PRESENT:
 		cass_dev->sl.media_attr = msg->info.media_attr;
+		if (msg->info.media_attr.type & SL_MEDIA_TYPE_ACTIVE) {
+			cass_dev->sl.link_config.hpe_map &= ~SL_LINK_CONFIG_HPE_LINKTRAIN;
+			cass_dev->sl.link_config.options &= ~SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
+		} else {
+			cass_dev->sl.link_config.hpe_map |= SL_LINK_CONFIG_HPE_LINKTRAIN;
+			cass_dev->sl.link_config.options |= SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
+		}
 		cass_dev->sl.has_cable = true;
 		break;
 	case SL_LGRP_NOTIF_LINK_UP:
@@ -1154,13 +1162,16 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.ldev_config.accessors = &(cass_dev->sl.accessors);
 	cass_dev->sl.ldev_config.ops       = &(cass_dev->sl.ops);
 
-	cass_dev->sl.lgrp_config.magic     = SL_LGRP_CONFIG_MAGIC;
-	cass_dev->sl.lgrp_config.ver       = SL_LGRP_CONFIG_VER;
-	cass_dev->sl.lgrp_config.mfs       = 9216;
-	cass_dev->sl.lgrp_config.furcation = SL_MEDIA_FURCATION_X1;
-	cass_dev->sl.lgrp_config.fec_mode  = SL_LGRP_FEC_MODE_OFF;
-	cass_dev->sl.lgrp_config.tech_map  = SL_LGRP_CONFIG_TECH_BS_200G;
-	cass_dev->sl.lgrp_config.fec_map   = SL_LGRP_CONFIG_FEC_RS;
+	cass_dev->sl.lgrp_config.magic             = SL_LGRP_CONFIG_MAGIC;
+	cass_dev->sl.lgrp_config.ver               = SL_LGRP_CONFIG_VER;
+	cass_dev->sl.lgrp_config.mfs               = 9216;
+	cass_dev->sl.lgrp_config.furcation         = SL_MEDIA_FURCATION_X1;
+	cass_dev->sl.lgrp_config.fec_mode          = SL_LGRP_FEC_MODE_OFF;
+	if (cass_dev->sl.ck_speed)
+		cass_dev->sl.lgrp_config.tech_map  = SL_LGRP_CONFIG_TECH_CK_400G;
+	else
+		cass_dev->sl.lgrp_config.tech_map  = SL_LGRP_CONFIG_TECH_BS_200G;
+	cass_dev->sl.lgrp_config.fec_map           = SL_LGRP_CONFIG_FEC_RS;
 
 	cass_dev->sl.link_config.magic                 = SL_LINK_CONFIG_MAGIC;
 	cass_dev->sl.link_config.ver                   = SL_LINK_CONFIG_VER;
@@ -1170,10 +1181,10 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.link_config.fec_up_check_wait_ms  = -1;
 	cass_dev->sl.link_config.fec_up_ucw_limit      = -1;
 	cass_dev->sl.link_config.fec_up_ccw_limit      = -1;
-	if (!HW_PLATFORM_Z1(cass_dev))
-		cass_dev->sl.link_config.options       = SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
+	cass_dev->sl.link_config.options               = SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
 	cass_dev->sl.link_config.pause_map             = 0;
 	cass_dev->sl.link_config.hpe_map               = SL_LINK_CONFIG_HPE_C2;
+	cass_dev->sl.link_config.hpe_map              |= SL_LINK_CONFIG_HPE_LINKTRAIN;
 	if (cass_dev->sl.enable_llr)
 		cass_dev->sl.link_config.hpe_map      |= SL_LINK_CONFIG_HPE_LLR;
 
