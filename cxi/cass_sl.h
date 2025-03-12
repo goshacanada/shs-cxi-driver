@@ -33,6 +33,7 @@ struct cass_sl_dev {
 	struct sl_link_policy        link_policy;
 	u32                          link_state;
 	bool                         ck_speed;
+	bool                         is_fw_loaded;
 
 	struct sl_mac               *mac;
 

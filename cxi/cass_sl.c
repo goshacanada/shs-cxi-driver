@@ -1265,12 +1265,6 @@ int cass_sl_init(struct cass_dev *cass_dev)
 		goto out_ldev_del;
 	}
 
-	rtn = sl_ldev_serdes_init(cass_dev->sl.ldev);
-	if (rtn) {
-		cxidev_err(&cass_dev->cdev, "sl_ldev_serdes_init failed [%d]\n", rtn);
-		goto out_lgrp_del;
-	}
-
 	cass_dev->sl.link = sl_link_new(cass_dev->sl.lgrp,
 		CASS_SL_LINK_NUM, &cass_dev->port_num_kobj);
 	if (IS_ERR_OR_NULL(cass_dev->sl.link)) {
@@ -1418,6 +1412,16 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 
 	cass_dev->sl.link_state = SL_LINK_STATE_DOWN;
 	cass_dev->sl.llr_state  = SL_LLR_STATE_OFF;
+
+	if (!cass_dev->sl.is_fw_loaded) {
+		rtn = sl_ldev_serdes_init(cass_dev->sl.ldev);
+		if (rtn) {
+			cxidev_err(&cass_dev->cdev,
+				"sl_ldev_serdes_init failed [%d]\n", rtn);
+			return rtn;
+		}
+		cass_dev->sl.is_fw_loaded = true;
+	}
 
 	/* config */
 	rtn = sl_lgrp_config_set(cass_dev->sl.lgrp, &cass_dev->sl.lgrp_config);
