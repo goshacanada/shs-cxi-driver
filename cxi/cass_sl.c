@@ -1138,7 +1138,6 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		break;
 	default:
 		cxidev_err(&cass_dev->cdev, "callback error (type = 0x%X)\n", msg->type);
-		cass_dev->sl.link_state = SL_LINK_STATE_ERROR;
 		break;
 	}
 }
