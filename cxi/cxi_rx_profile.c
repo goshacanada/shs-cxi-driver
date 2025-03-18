@@ -196,20 +196,12 @@ EXPORT_SYMBOL(cxi_rx_profile_find_inc_refcount);
 int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 				struct cxi_rx_profile *rx_profile)
 {
-	struct cass_dev   *hw;
+	struct cass_dev *hw = get_cass_dev(dev);
 	int    ret;
 
-	ret = cxi_rxtx_profile_dec_refcount(&rx_profile->profile_common);
-
-	switch (ret) {
-	case -ENOENT:    /* no references remain, try to destroy */
-		break;
-	case 0:
-	default:
-		return ret;
-	}
-
-	hw = get_cass_dev(dev);
+	ret = refcount_dec_and_test(&rx_profile->profile_common.state.refcount);
+	if (!ret)
+		return -EBUSY;
 
 	refcount_dec(&hw->refcount);
 	cxi_rxtx_profile_list_remove(&hw->rx_profile_list,

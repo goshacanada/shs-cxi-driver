@@ -70,8 +70,7 @@ void cxi_rxtx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile)
  * Note: this function is used internally for cases where we need to
  * examine a profile even if it is released or revoked.
  *
- * Refcount must be decremented when usage is done via
- * cxi_rxtx_profile_dec_refcount().
+ * Refcount must be decremented when usage is done.
  */
 int cxi_rxtx_profile_find_inc_refcount(struct cxi_rxtx_profile_list *list,
 				       unsigned int profile_id,
@@ -97,26 +96,6 @@ out:
 }
 
 /**
- * cxi_rxtx_profile_dec_refcount() - Decrement refcount and indicate
- *                                   if last reference
- *
- * @rxtx_profile: pointer to RX Profile
- *
- * Return:
- * * 0 - success
- * * -ENOENT: No references remain, profile should be deleted
- */
-
-int cxi_rxtx_profile_dec_refcount(struct cxi_rxtx_profile *rxtx_profile)
-{
-	bool    destroy;
-
-	destroy = refcount_dec_and_test(&rxtx_profile->state.refcount);
-
-	return destroy ? -ENOENT : 0;
-}
-
-/**
  * cxi_rxtx_profile_release() - Mark a Profile as released.
  *
  * No new references can be taken.
@@ -137,7 +116,7 @@ void cxi_rxtx_profile_release(struct cxi_rxtx_profile *rxtx_profile)
 	 * count after this function returns will be at least 1.
 	 * (Eating the return from cxi_rxtx_profile_dec_refcount() is ok).
 	 */
-	cxi_rxtx_profile_dec_refcount(rxtx_profile);
+	refcount_dec(&rxtx_profile->state.refcount);
 }
 
 /**

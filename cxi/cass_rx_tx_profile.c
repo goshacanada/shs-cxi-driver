@@ -52,7 +52,7 @@ static void rx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 	struct profile_destroy_data   *data       = user_arg;
 
 	cxi_rx_profile_revoke(data->cxi_dev, rxtx_profile->id);
-	cxi_rxtx_profile_dec_refcount(rxtx_profile);
+	refcount_dec(&rxtx_profile->state.refcount);
 }
 
 static void tx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
@@ -61,7 +61,7 @@ static void tx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 	struct profile_destroy_data   *data       = user_arg;
 
 	cxi_tx_profile_revoke(data->cxi_dev, rxtx_profile->id);
-	cxi_rxtx_profile_dec_refcount(rxtx_profile);
+	refcount_dec(&rxtx_profile->state.refcount);
 }
 
 /**

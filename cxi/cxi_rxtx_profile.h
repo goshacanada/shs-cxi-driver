@@ -20,8 +20,6 @@ int cxi_rxtx_profile_find_inc_refcount(struct cxi_rxtx_profile_list *list,
 				       unsigned int profile_id,
 				       struct cxi_rxtx_profile **rxtx_profile);
 
-int cxi_rxtx_profile_dec_refcount(struct cxi_rxtx_profile *rxtx_profile);
-
 int cxi_rxtx_profile_test_insert(struct cxi_rxtx_profile_list *list,
 				 struct cxi_rxtx_profile *rxtx_profile,
 				 unsigned int *id,
