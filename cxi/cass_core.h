@@ -66,6 +66,12 @@
 /* PCI BARs containing the CSRs and CQ/EQ areas. */
 #define MMIO_BAR 0
 
+/* Expected length of PCI BAR 0 for a Physical Function. Used to differentiate
+ * between Virtual Function (512M BAR 0) and Physical Function (2G BAR 0) under
+ * SR-IOV.
+ */
+#define MMIO_BAR_LEN_PF 2147483648
+
 /* Number of error interrupts */
 #define NUM_ERR_INTS 30
 

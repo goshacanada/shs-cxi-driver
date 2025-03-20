@@ -792,7 +792,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	int i;
 	int rc = 0;
 	struct cass_dev *hw;
-	bool is_physfn = pdev->is_physfn || !pdev->is_virtfn;
+	bool is_physfn;
 	int pos;
 
 	hw = kzalloc(sizeof(*hw), GFP_KERNEL);
@@ -868,8 +868,6 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	spin_lock_init(&hw->mst_match_done_lock);
 	mutex_init(&hw->mst_update_lock);
 
-	hw->cdev.is_physfn = is_physfn;
-
 	spin_lock_init(&hw->sbl_state_lock);
 
 	mutex_init(&hw->qsfp_eeprom_lock);
@@ -892,6 +890,19 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		cxidev_err(&hw->cdev, "pci_enable_device() failed.\n");
 		goto hw_free;
 	}
+
+	/* The is_physfn and is_virtfn fields of struct pci_dev are only set if
+	 * SR-IOV has been successfully enabled. This means that we cannot rely on
+	 * them to identify physical vs. virtual functions in all cases. A PF on
+	 * real hardware without SR-IOV support, a passthrough PF attached to a VM,
+	 * or a VF attached to a VM, will all have is_physfn = is_virtfn = 0.
+	 *
+	 * Many devices have distinct PCI IDs for VF and PF, but since Cassini 1 and
+	 * 2 do not, we identify them using the size of BAR 0: 512M for VF, 2G for
+	 * PF.
+	 */
+	is_physfn = pci_resource_len(pdev, MMIO_BAR) >= MMIO_BAR_LEN_PF;
+	hw->cdev.is_physfn = is_physfn;
 
 	hw->pci_disabled = false;
 
@@ -978,7 +989,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			goto unmap_regions;
 	}
 
-	hw->with_vf_support = is_physfn || pci_msix_vec_count(pdev) != 2;
+	hw->with_vf_support = pdev->is_physfn || pci_msix_vec_count(pdev) != 2;
 
 	hw->cdev.cxi_num = atomic_inc_return(&cxi_num);
 	dev_set_name(&hw->class_dev, "cxi%u", hw->cdev.cxi_num);
