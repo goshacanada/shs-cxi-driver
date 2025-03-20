@@ -59,27 +59,23 @@ int rx_profile_find_inc_refcount(struct cxi_dev *dev,
  *
  * @dev: Cassini Device
  * @rx_attr: Attributes of the RX Profile
- * @rx_profile_id: set to id value on success
  *
- * Return: 0 on success, or a negative errno value.
+ * Return: rx_profile ptr on success, or a negative errno value.
  */
-int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
-			     const struct cxi_rx_attr *rx_attr,
-			     unsigned int *rx_profile_id)
+struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
+					const struct cxi_rx_attr *rx_attr)
 {
 	int                    ret = 0;
-	struct cass_dev        *hw;
+	struct cass_dev        *hw = get_cass_dev(dev);
 	struct cxi_rx_profile  *rx_profile;
 
-	hw = get_cass_dev(dev);
-
 	if (!vni_well_formed(&rx_attr->vni_attr))
-		return -EDOM;
+		return ERR_PTR(-EDOM);
 
 	/* Allocate memory */
 	rx_profile = kzalloc(sizeof(*rx_profile), RX_PROFILE_GFP_OPTS);
 	if (!rx_profile)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	/* initialize common profile and cassini config members */
 	rx_profile_init(rx_profile, hw, rx_attr);
@@ -105,8 +101,8 @@ int cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 		goto free_return;
 
 	refcount_inc(&hw->refcount);
-	*rx_profile_id = rx_profile->profile_common.id;
-	return 0;
+
+	return rx_profile;
 
 unlock_free_return:
 
@@ -114,7 +110,7 @@ unlock_free_return:
 
 free_return:
 	kfree(rx_profile);
-	return ret;
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL(cxi_dev_alloc_rx_profile);
 
@@ -199,6 +195,9 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 	struct cass_dev *hw = get_cass_dev(dev);
 	int    ret;
 
+	if (!rx_profile)
+		return 0;
+
 	ret = refcount_dec_and_test(&rx_profile->profile_common.state.refcount);
 	if (!ret)
 		return -EBUSY;
@@ -276,7 +275,7 @@ EXPORT_SYMBOL(cxi_rx_profile_revoke);
  *                             with this Profile
  *
  * @dev: Cassini Device
- * @rx_profile_id: ID of the Profile
+ * @rx_profile: RX Profile
  * @rx_attr: location to place attributes
  * @state: location to put state
  *
@@ -289,26 +288,18 @@ EXPORT_SYMBOL(cxi_rx_profile_revoke);
  * * -EBADR - rx_profile_id unknown
  */
 int cxi_rx_profile_get_info(struct cxi_dev *dev,
-			    unsigned int rx_profile_id,
+			    struct cxi_rx_profile *rx_profile,
 			    struct cxi_rx_attr *rx_attr,
 			    struct cxi_rxtx_profile_state *state)
 {
-	struct cxi_rx_profile  *rx_profile;
-	int    ret;
-
-	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
-	if (ret)
-		return ret;
-
 	cxi_rxtx_profile_get_info(&rx_profile->profile_common,
 				  (rx_attr) ? &rx_attr->vni_attr : NULL,
 				  state);
 
 	/* TODO: other rx_attr values */
 
-	return cxi_rx_profile_dec_refcount(dev, rx_profile);
+	return 0;
 }
-EXPORT_SYMBOL(cxi_rx_profile_get_info);
 
 /**
  * cxi_rx_profile_add_ac_entry() - add an Access Control entry to
@@ -459,7 +450,7 @@ EXPORT_SYMBOL(cxi_rx_profile_get_ac_entry_id_by_user);
  * @type: type of AC Entry to add
  * @uid: UID for AC Entry
  * @gid: UID for AC Entry
- * @rx_profile_id: id of tx profile to add AC Entry
+ * @rx_profile: RX profile to add AC Entry
  * @ac_entry_id: location to put AC Entry id on success
  *
  * Return:
@@ -468,12 +459,10 @@ EXPORT_SYMBOL(cxi_rx_profile_get_ac_entry_id_by_user);
  */
 int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
-				    unsigned int rx_profile_id,
+				    struct cxi_rx_profile *rx_profile,
 				    unsigned int *ac_entry_id)
 {
-	int ret;
 	union cxi_ac_data data = {};
-	struct cxi_rx_profile *rx_profile;
 
 	switch (type) {
 	case CXI_AC_UID:
@@ -488,43 +477,21 @@ int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 		return -EDOM;
 	}
 
-	ret = cxi_rx_profile_find_inc_refcount(dev,
-					       rx_profile_id,
-					       &rx_profile);
-	if (ret)
-		return ret;
-
-	ret = cxi_rxtx_profile_add_ac_entry(&rx_profile->profile_common,
+	return cxi_rxtx_profile_add_ac_entry(&rx_profile->profile_common,
 					     type, &data, ac_entry_id);
-	cxi_rx_profile_dec_refcount(dev, rx_profile);
-
-	return ret;
 }
 EXPORT_SYMBOL(cxi_dev_rx_profile_add_ac_entry);
 
 /**
  * cxi_dev_rx_profile_remove_ac_entries() - remove Access Control entries
- *                                          from existing profile
+ *                                          from profile
  *
- * @dev: Cassini Device
- * @rx_profile_id: id of tx profile to remove AC entries
- *
- * Return: 0 on success or error code
+ * @rx_profile: RX profile from which to remove AC entries
  */
-int cxi_dev_rx_profile_remove_ac_entries(struct cxi_dev *dev,
-					 unsigned int rx_profile_id)
+void cxi_dev_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile)
 {
-	int rc;
-	struct cxi_rx_profile *rx_profile;
-
-	rc = cxi_rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
-	if (rc)
-		return rc;
+	if (!rx_profile)
+		return;
 
 	cxi_ac_entry_list_destroy(&rx_profile->profile_common.ac_entry_list);
-
-	cxi_rx_profile_dec_refcount(dev, rx_profile);
-
-	return rc;
 }
-EXPORT_SYMBOL(cxi_dev_rx_profile_remove_ac_entries);

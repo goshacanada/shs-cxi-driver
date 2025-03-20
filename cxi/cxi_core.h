@@ -171,8 +171,8 @@ struct cxi_svc_priv {
 	refcount_t refcount;
 	unsigned int lnis_per_rgid;
 	struct cxi_rgroup *rgroup;
-	unsigned int rx_profile_ids[CXI_SVC_MAX_VNIS];
-	unsigned int tx_profile_ids[CXI_SVC_MAX_VNIS];
+	struct cxi_rx_profile *rx_profile[CXI_SVC_MAX_VNIS];
+	struct cxi_tx_profile *tx_profile[CXI_SVC_MAX_VNIS];
 	uint8_t num_vld_rx_profiles;
 	uint8_t num_vld_tx_profiles;
 };
@@ -421,6 +421,10 @@ struct cxi_pte_priv {
 	int le_pool;
 };
 
+int cxi_rx_profile_enable(struct cxi_dev *dev,
+			   struct cxi_rx_profile *rx_profile);
+void cxi_rx_profile_disable(struct cxi_dev *dev,
+			   struct cxi_rx_profile *rx_profile);
 void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		       enum cxi_rsrc_type type);
 int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,

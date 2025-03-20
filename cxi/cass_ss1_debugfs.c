@@ -101,14 +101,13 @@ static const int rsrc_dump_order[] = {
 	ac_type == CXI_AC_GID ? "gid" : \
 	ac_type == CXI_AC_OPEN ? "open" : ""
 
-static int print_profile_ac_entry_info(struct seq_file *s, int id,
+static int print_profile_ac_entry_info(struct seq_file *s, void *ptr,
 				       enum cxi_profile_type type)
 {
 	int i;
 	int rc;
-	struct cass_dev *hw = s->private;
-	struct cxi_rx_profile *rx_profile;
-	struct cxi_tx_profile *tx_profile;
+	struct cxi_rx_profile *rx_profile = ptr;
+	struct cxi_tx_profile *tx_profile = ptr;
 	size_t num_ids;
 	size_t max_ids;
 	unsigned int *ac_entry_ids;
@@ -116,25 +115,11 @@ static int print_profile_ac_entry_info(struct seq_file *s, int id,
 	union cxi_ac_data ac_data;
 
 	if (type == CXI_PROF_RX) {
-		rc = rx_profile_find_inc_refcount(&hw->cdev, id, &rx_profile);
-		if (rc) {
-			seq_printf(s, "  Could not get RX Profile ID:%u rc:%d\n", id,
-				   rc);
-			return rc;
-		}
-
 		rc = cxi_rx_profile_get_ac_entry_ids(rx_profile, 0, ac_entry_ids,
 						     &num_ids);
 		if (rc && rc != -ENOSPC)
 			goto done;
 	} else {
-		rc = tx_profile_find_inc_refcount(&hw->cdev, id, &tx_profile);
-		if (rc) {
-			seq_printf(s, "  Could not get RX Profile ID:%u rc:%d\n", id,
-				   rc);
-			return rc;
-		}
-
 		rc = cxi_tx_profile_get_ac_entry_ids(tx_profile, 0, ac_entry_ids,
 						     &num_ids);
 		if (rc && rc != -ENOSPC)
@@ -186,10 +171,7 @@ static int print_profile_ac_entry_info(struct seq_file *s, int id,
 freemem:
 	kfree(ac_entry_ids);
 done:
-	if (type == CXI_PROF_RX)
-		return cxi_rx_profile_dec_refcount(&hw->cdev, rx_profile);
-
-	return cxi_tx_profile_dec_refcount(&hw->cdev, tx_profile);
+	return 0;
 }
 
 static int dump_services(struct seq_file *s, void *unused)
@@ -280,33 +262,31 @@ static int dump_services(struct seq_file *s, void *unused)
 		svc_desc = &svc_priv->svc_desc;
 		seq_printf(s, "  RX Profile IDs:%u\n", svc_desc->num_vld_vnis);
 		for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-			seq_printf(s, "    ID:%u ", svc_priv->rx_profile_ids[i]);
+			seq_printf(s, "    ID:%u ", svc_priv->rx_profile[i]->profile_common.id);
 			rc = cxi_rx_profile_get_info(&rgroup->hw->cdev,
-						     svc_priv->rx_profile_ids[i],
+						     svc_priv->rx_profile[i],
 						     &rx_attr, &state);
 			seq_printf(s, "name:%s VNI match:%u ignore:%u\n",
 				   rx_attr.vni_attr.name[0] ? rx_attr.vni_attr.name : "none",
 				   rx_attr.vni_attr.match,
 				   rx_attr.vni_attr.ignore);
 
-			print_profile_ac_entry_info(s,
-						    svc_priv->rx_profile_ids[i],
+			print_profile_ac_entry_info(s, svc_priv->rx_profile[i],
 						    CXI_PROF_RX);
 
 		}
 		seq_printf(s, "  TX Profile IDs:%u\n", svc_desc->num_vld_vnis);
 		for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-			seq_printf(s, "    ID:%u ", svc_priv->tx_profile_ids[i]);
+			seq_printf(s, "    ID:%u ", svc_priv->tx_profile[i]->profile_common.id);
 			rc = cxi_tx_profile_get_info(&rgroup->hw->cdev,
-						     svc_priv->tx_profile_ids[i],
+						     svc_priv->tx_profile[i],
 						     &tx_attr, &state);
 			seq_printf(s, "name:%s VNI match:%u ignore:%u\n",
 				   tx_attr.vni_attr.name[0] ? tx_attr.vni_attr.name : "none",
 				   tx_attr.vni_attr.match,
 				   tx_attr.vni_attr.ignore);
 
-			print_profile_ac_entry_info(s,
-						    svc_priv->tx_profile_ids[i],
+			print_profile_ac_entry_info(s, svc_priv->tx_profile[i],
 						    CXI_PROF_TX);
 
 		}

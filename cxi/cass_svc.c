@@ -543,10 +543,8 @@ static void remove_ac_entries(struct cxi_dev *dev,
 	cxi_ac_entry_list_destroy(&svc_priv->rgroup->ac_entry_list);
 
 	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-		cxi_dev_tx_profile_remove_ac_entries(dev,
-					svc_priv->tx_profile_ids[i]);
-		cxi_dev_rx_profile_remove_ac_entries(dev,
-					svc_priv->rx_profile_ids[i]);
+		cxi_dev_tx_profile_remove_ac_entries(svc_priv->tx_profile[i]);
+		cxi_dev_rx_profile_remove_ac_entries(svc_priv->rx_profile[i]);
 	}
 }
 
@@ -568,7 +566,7 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 			rc = cxi_dev_tx_profile_add_ac_entry(dev, type,
 					svc_desc->members[i].svc_member.uid,
 					svc_desc->members[i].svc_member.gid,
-					svc_priv->tx_profile_ids[j],
+					svc_priv->tx_profile[j],
 					&ac_entry_id);
 			if (rc && rc != -EEXIST)
 				goto cleanup;
@@ -576,7 +574,7 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 			rc = cxi_dev_rx_profile_add_ac_entry(dev, type,
 					svc_desc->members[i].svc_member.uid,
 					svc_desc->members[i].svc_member.gid,
-					svc_priv->rx_profile_ids[j],
+					svc_priv->rx_profile[j],
 					&ac_entry_id);
 			if (rc && rc != -EEXIST)
 				goto cleanup;
@@ -611,10 +609,10 @@ static void release_rxtx_profiles(struct cxi_dev *dev,
 	remove_ac_entries(dev, svc_priv);
 
 	for (i = 0; i < svc_priv->num_vld_rx_profiles; i++)
-		cxi_rx_profile_release(dev, svc_priv->rx_profile_ids[i]);
+		cxi_rx_profile_release(dev, svc_priv->rx_profile[i]->profile_common.id);
 
 	for (i = 0; i < svc_priv->num_vld_tx_profiles; i++)
-		cxi_tx_profile_release(dev, svc_priv->tx_profile_ids[i]);
+		cxi_tx_profile_release(dev, svc_priv->tx_profile[i]->profile_common.id);
 }
 
 static int alloc_rxtx_profiles(struct cxi_dev *dev,
@@ -640,15 +638,21 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 			.vni_attr = vni_attr
 		};
 
-		rc = cxi_dev_alloc_tx_profile(dev, &tx_attr,
-					      &svc_priv->tx_profile_ids[i]);
-		if (rc)
+		svc_priv->tx_profile[i] = cxi_dev_alloc_tx_profile(dev,
+								   &tx_attr);
+		if (IS_ERR(svc_priv->tx_profile[i])) {
+			rc = PTR_ERR(svc_priv->tx_profile[i]);
+			svc_priv->tx_profile[i] = NULL;
 			goto release_profiles;
+		}
 
-		rc = cxi_dev_alloc_rx_profile(dev, &rx_attr,
-					      &svc_priv->rx_profile_ids[i]);
-		if (rc)
+		svc_priv->rx_profile[i] = cxi_dev_alloc_rx_profile(dev,
+								   &rx_attr);
+		if (IS_ERR(svc_priv->rx_profile[i])) {
+			rc = PTR_ERR(svc_priv->rx_profile[i]);
+			svc_priv->rx_profile[i] = NULL;
 			goto release_profiles;
+		}
 	}
 
 	rc = alloc_ac_entries(dev, svc_priv);
