@@ -1193,7 +1193,7 @@ static void cass_sl_config_init(struct cass_dev *cass_dev)
 	cass_dev->sl.link_policy.ver                     = SL_LINK_POLICY_VER;
 	cass_dev->sl.link_policy.fec_mon_ucw_down_limit  = -1;
 	cass_dev->sl.link_policy.fec_mon_ucw_warn_limit  = 0;
-	cass_dev->sl.link_policy.fec_mon_ccw_crit_limit  = 0;
+	cass_dev->sl.link_policy.fec_mon_ccw_down_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_ccw_warn_limit  = 0;
 	cass_dev->sl.link_policy.fec_mon_period_ms       = -1;
 
