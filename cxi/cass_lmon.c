@@ -135,7 +135,7 @@ static void cass_lmon_wakeup_limiter(struct cass_dev *hw)
 			return;
 		}
 
-		cxidev_info(&hw->cdev, "lmon wakeup limiter - sleeping\n");
+		cxidev_dbg(&hw->cdev, "lmon wakeup limiter - sleeping\n");
 		spin_lock_irqsave(&hw->port->lock, irq_flags);
 		hw->port->lmon_limiter_on = true;
 		spin_unlock_irqrestore(&hw->port->lock, irq_flags);

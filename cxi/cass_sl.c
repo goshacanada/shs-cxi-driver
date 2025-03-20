@@ -1464,7 +1464,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 	timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 		msecs_to_jiffies(2*CASS_SL_LINK_UP_TIMEOUT_MS));
 	if (timeleft == 0) {
-		cxidev_err(&cass_dev->cdev, "sl_link_up timeout\n");
+		cxidev_dbg(&cass_dev->cdev, "sl_link_up timeout\n");
 		goto out_link_down;
 	}
 	if (cass_dev->sl.link_state != SL_LINK_STATE_UP) {
@@ -1510,7 +1510,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 			msecs_to_jiffies(2*CASS_SL_LLR_SETUP_TIMEOUT_MS));
 		if (timeleft == 0) {
-			cxidev_err(&cass_dev->cdev, "sl_llr_start timeout\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_start timeout\n");
 			goto out_llr_stop;
 		}
 		if (cass_dev->sl.llr_state != SL_LLR_STATE_BUSY) {
@@ -1521,7 +1521,7 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 			msecs_to_jiffies(2*CASS_SL_LLR_START_TIMEOUT_MS));
 		if (timeleft == 0) {
-			cxidev_err(&cass_dev->cdev, "sl_llr_start timeout\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_start timeout\n");
 			goto out_llr_stop;
 		}
 		if (cass_dev->sl.llr_state != SL_LLR_STATE_RUNNING) {
@@ -1557,7 +1557,7 @@ out_link_down:
 		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 			msecs_to_jiffies(2*CASS_SL_LINK_DOWN_TIMEOUT_MS));
 		if (timeleft == 0)
-			cxidev_warn(&cass_dev->cdev, "sl_link_down (link_up) timeout\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_link_down (link_up) timeout\n");
 	}
 
 out_no_link:
