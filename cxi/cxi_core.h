@@ -421,10 +421,6 @@ struct cxi_pte_priv {
 	int le_pool;
 };
 
-int cxi_rx_profile_enable(struct cxi_dev *dev,
-			   struct cxi_rx_profile *rx_profile);
-void cxi_rx_profile_disable(struct cxi_dev *dev,
-			   struct cxi_rx_profile *rx_profile);
 void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		       enum cxi_rsrc_type type);
 int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
@@ -443,5 +439,7 @@ void amd_p2p_fini(void);
 
 int cxi_dma_buf_init(void);
 void cxi_dma_buf_fini(void);
+
+#include "cxi_configuration.h"
 
 #endif	/* _CXI_CORE_H */
