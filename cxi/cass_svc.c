@@ -609,10 +609,10 @@ static void release_rxtx_profiles(struct cxi_dev *dev,
 	remove_ac_entries(dev, svc_priv);
 
 	for (i = 0; i < svc_priv->num_vld_rx_profiles; i++)
-		cxi_rx_profile_release(dev, svc_priv->rx_profile[i]->profile_common.id);
+		cxi_rx_profile_dec_refcount(dev, svc_priv->rx_profile[i]);
 
 	for (i = 0; i < svc_priv->num_vld_tx_profiles; i++)
-		cxi_tx_profile_release(dev, svc_priv->tx_profile[i]->profile_common.id);
+		cxi_tx_profile_dec_refcount(dev, svc_priv->tx_profile[i]);
 }
 
 static int alloc_rxtx_profiles(struct cxi_dev *dev,
