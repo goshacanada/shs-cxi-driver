@@ -21,30 +21,72 @@ static int add_device(struct cxi_dev *dev)
 {
 	struct cxi_domain *domain;
 	int i;
+	int rc;
+	int ndom_alloc;
+	int ndom2_alloc;
 	struct cxi_lni *lni;
 	struct cxi_ct *ct;
 	struct c_ct_writeback *wb;
 	int timeout_count;
 	u64 inc_success_value = 5;
 	u64 inc_failure_value = 1;
+	struct cxi_rx_profile *rx_profile;
+	struct cxi_rx_attr rx_attr = {
+		.vni_attr = {
+			.match = 256,
+			.ignore = 255,
+		}
+	};
+	int vni = rx_attr.vni_attr.match;
+	struct cxi_svc_priv *svc_priv;
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
 	pr_err("TEST-START: DOMAIN\n");
+
+	svc_priv = idr_find(&hw->svc_ids, CXI_DEFAULT_SVC_ID);
+	if (!svc_priv) {
+		pr_err("TEST-ERROR: cannot get default svc_priv\n");
+		return 0;
+	}
+
+	if (svc_priv->svc_desc.num_vld_vnis >= CXI_SVC_MAX_VNIS) {
+		pr_err("TEST-ERROR: no room for RX profile\n");
+		return 0;
+	}
+
+	pr_info("Create RX profile with 256 VNIs to create many domains\n");
+
+	rx_profile = cxi_dev_alloc_rx_profile(dev, &rx_attr);
+	if (IS_ERR(rx_profile)) {
+		pr_err("TEST-ERROR: cannot create RX profile\n");
+		return 0;
+	}
+
+	rc = cxi_rx_profile_enable(dev, rx_profile);
+	if (rc) {
+		pr_err("TEST-ERROR: cannot enable RX profile\n");
+		goto release_profile;
+	}
+
+	svc_priv->rx_profile[svc_priv->svc_desc.num_vld_vnis] = rx_profile;
+	svc_priv->svc_desc.num_vld_vnis++;
 
 	lni = cxi_lni_alloc(dev, CXI_DEFAULT_SVC_ID);
 	if (IS_ERR(lni)) {
 		pr_err("TEST-ERROR: cannot create lni\n");
-		return 0;
+		goto remove_profile;
 	}
 
 	/* Allocate 256 different VNI */
-	pr_info("Create %d different domain\n", C_RMU_CFG_VNI_LIST_ENTRIES);
+	pr_info("Create %d different domains\n", C_RMU_CFG_VNI_LIST_ENTRIES);
 
-	for (i = 0; i < C_RMU_CFG_VNI_LIST_ENTRIES; i++) {
-		domains[i] = cxi_domain_alloc(lni, i + 1, 0);
+	for (i = 0, ndom_alloc = 0; i < C_RMU_CFG_VNI_LIST_ENTRIES;
+	     i++, ndom_alloc++) {
+		domains[i] = cxi_domain_alloc(lni, vni + i, i);
 		if (IS_ERR(domains[i])) {
 			pr_err("TEST-ERROR: domain %u is not allocated: %ld\n",
 			       i, PTR_ERR(domains[i]));
-			break;
+			goto free_dom1;
 		}
 	}
 
@@ -55,12 +97,13 @@ static int add_device(struct cxi_dev *dev)
 		pr_err("TEST-ERROR: domains %u is allocated\n", i);
 
 	pr_info("TEST: allocate different PIDs with same VNI\n");
-	for (i = 1; i < dev->prop.pid_count; i++) {
+	for (i = 1, ndom2_alloc = 1; i < dev->prop.pid_count;
+	     i++, ndom2_alloc++) {
 		dom2[i] = cxi_domain_alloc(lni, 10, i);
 		if (IS_ERR(dom2[i])) {
 			pr_err("TEST-ERROR: domain VNI=10 pid=%u is not allocated: %ld\n",
 			       i, PTR_ERR(dom2[i]));
-			break;
+			goto free_dom2;
 		}
 	}
 
@@ -68,7 +111,7 @@ static int add_device(struct cxi_dev *dev)
 	wb = kzalloc(sizeof(*wb), GFP_KERNEL);
 	if (!wb) {
 		pr_err("TEST-ERROR: Failed to allocate writeback buffer\n");
-		goto skip_counting_events;
+		goto free_dom2;
 	}
 
 	ct = cxi_ct_alloc(lni, wb, false);
@@ -76,7 +119,7 @@ static int add_device(struct cxi_dev *dev)
 		kfree(wb);
 		pr_err("TEST-ERROR: Failed to allocate counting event: %ld\n",
 		       PTR_ERR(ct));
-		goto skip_counting_events;
+		goto free_wb;
 	}
 
 	/* Counting event inc failure should trigger writeback. */
@@ -99,20 +142,27 @@ static int add_device(struct cxi_dev *dev)
 
 wb_match:
 	cxi_ct_free(ct);
+free_wb:
 	kfree(wb);
 
-skip_counting_events:
-
-	pr_info("TEST: free all %u entries\n", C_RMU_CFG_VNI_LIST_ENTRIES);
-	for (i = 0; i < C_RMU_CFG_VNI_LIST_ENTRIES; i++)
-		cxi_domain_free(domains[i]);
-
-	for (i = 1; i < dev->prop.pid_count; i++)
+free_dom2:
+	for (i = 1; i < ndom2_alloc; i++)
 		cxi_domain_free(dom2[i]);
+
+free_dom1:
+	pr_info("TEST: free all %u entries\n", C_RMU_CFG_VNI_LIST_ENTRIES);
+	for (i = 0; i < ndom_alloc; i++)
+		cxi_domain_free(domains[i]);
 
 	pr_err("TEST-END: DOMAIN\n");
 
 	cxi_lni_free(lni);
+
+remove_profile:
+	svc_priv->svc_desc.num_vld_vnis--;
+	svc_priv->rx_profile[svc_priv->svc_desc.num_vld_vnis] = NULL;
+release_profile:
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
 
 	return 0;
 }

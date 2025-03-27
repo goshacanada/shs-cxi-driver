@@ -1007,24 +1007,6 @@ enum cxi_profile_type {
 	CXI_PROF_TX
 };
 
-/* A VNI entry with its RMU index */
-struct cass_vni {
-	struct cass_dev *hw;
-	struct rb_node node;	/* attach to device's vni_tree */
-
-	/* VNI value, which is also the tree key. */
-	unsigned int vni;
-
-	/* RMU index */
-	unsigned int id;
-
-	DECLARE_BITMAP(pid_table, 1 << MAX_PID_BITS);
-	spinlock_t pid_lock;
-
-	/* Count the number of users of that VNI */
-	refcount_t refcount;
-};
-
 /* Communication profile. */
 struct cass_cp {
 	/* Device tree the profile is stored in. */

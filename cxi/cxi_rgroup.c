@@ -1068,12 +1068,11 @@ struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,
 	if (!rgroup)
 		return ERR_PTR(-ENOMEM);
 
-	rgroup_init(dev, rgroup, attr);
-
 	ret = rgroup_list_insert_rgroup(&hw->rgroup_list, rgroup, &rgroup->id);
 	if (ret)
 		goto free_rgroup;
 
+	rgroup_init(dev, rgroup, attr);
 	refcount_inc(&hw->refcount);
 
 	return rgroup;

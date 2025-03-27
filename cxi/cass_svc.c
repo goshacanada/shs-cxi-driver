@@ -653,6 +653,10 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 			svc_priv->rx_profile[i] = NULL;
 			goto release_profiles;
 		}
+
+		rc = cxi_rx_profile_enable(dev, svc_priv->rx_profile[i]);
+		if (rc)
+			goto release_profiles;
 	}
 
 	rc = alloc_ac_entries(dev, svc_priv);

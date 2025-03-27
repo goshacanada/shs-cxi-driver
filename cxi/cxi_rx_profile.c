@@ -54,6 +54,195 @@ int rx_profile_find_inc_refcount(struct cxi_dev *dev,
 	return 0;
 }
 
+static void cxi_rx_profile_update_pid_table_locked(
+					struct cxi_rx_profile *rx_profile,
+					int pid, int nbits, bool set)
+{
+	if (set)
+		bitmap_set(rx_profile->config.pid_table, pid, nbits);
+	else
+		bitmap_clear(rx_profile->config.pid_table, pid, nbits);
+}
+
+/**
+ * cxi_rx_profile_update_pid_table() - Set/clear pids from rx profile pid_table
+ *
+ * @rx_profile: RX profile object
+ * @pid: Pid to allocate
+ * @nbits: Number of entries to clear
+ * @set: Set or clear
+ */
+void cxi_rx_profile_update_pid_table(struct cxi_rx_profile *rx_profile, int pid,
+				     int nbits, bool set)
+{
+	spin_lock(&rx_profile->config.pid_lock);
+	cxi_rx_profile_update_pid_table_locked(rx_profile, pid, nbits, set);
+	spin_unlock(&rx_profile->config.pid_lock);
+}
+
+/**
+ * cxi_rx_profile_andnot_pid_table() - Update rx profile pid_table based on
+ *                                     pids table.
+ *
+ * @pids: pids object
+ * @len: Number of entries to clear.
+ */
+void cxi_rx_profile_andnot_pid_table(struct cxi_reserved_pids *pids,
+				     int len)
+{
+	struct cxi_rx_profile *rx_profile = pids->rx_profile;
+
+	spin_lock(&rx_profile->config.pid_lock);
+	bitmap_andnot(rx_profile->config.pid_table,
+		      rx_profile->config.pid_table,
+		      pids->table, len);
+	spin_unlock(&rx_profile->config.pid_lock);
+}
+
+/* Return true if the PID is reserved to the LNI. If so, mark the PID as
+ * "allocated" and do some house-keeping.
+ */
+static bool pid_reserved(struct cxi_lni_priv *lni_priv, unsigned int vni,
+			 unsigned int pid)
+{
+	bool match;
+	bool rc = false;
+	struct cxi_reserved_pids *pids;
+	struct cxi_rxtx_vni_attr vni_attr = {.match = vni};
+
+	spin_lock(&lni_priv->res_lock);
+
+	list_for_each_entry(pids, &lni_priv->reserved_pids, entry) {
+		match = vni_overlap(&vni_attr,
+				    &pids->rx_profile->profile_common.vni_attr);
+
+		if (match && test_and_clear_bit(pid, pids->table)) {
+			if (bitmap_empty(pids->table,
+					 lni_priv->dev->prop.pid_count)) {
+				list_del(&pids->entry);
+				cxi_rx_profile_dec_refcount(lni_priv->dev,
+							    pids->rx_profile);
+				kfree(pids);
+			}
+
+			rc = true;
+			break;
+		}
+	}
+
+	spin_unlock(&lni_priv->res_lock);
+
+	return rc;
+}
+
+/**
+ * cxi_rx_profile_alloc_pid() - Allocate or reserve a domain pid
+ *
+ * @lni_priv: the Logical Network Interface
+ * @rx_profile: RX profile object
+ * @pid: Pid to allocate
+ * @vni: Match criteria to find rx profile when finding a reserved pid
+ * @count: size of pid range
+ * @reserve: flag indicates reserving a pid range
+ *
+ * Return:
+ * * new_pid on success
+ * * -ENOSPC, -EEXIST
+ */
+int cxi_rx_profile_alloc_pid(struct cxi_lni_priv *lni_priv,
+			     struct cxi_rx_profile *rx_profile,
+			     int pid, int vni, int count, bool reserve)
+{
+	unsigned long *pid_table = rx_profile->config.pid_table;
+	struct cxi_dev *dev = lni_priv->dev;
+	int start = (pid == C_PID_ANY) ? 0 : pid;
+	int new_pid = pid;
+
+	if (!count || count > lni_priv->dev->prop.pid_count)
+		return -EINVAL;
+
+	spin_lock(&rx_profile->config.pid_lock);
+
+	if (reserve || pid == C_PID_ANY) {
+		new_pid = bitmap_find_next_zero_area(pid_table,
+						     dev->prop.pid_count,
+						     start, count, 0);
+		if (pid == C_PID_ANY) {
+			if (new_pid + count >= dev->prop.pid_count) {
+				new_pid = -ENOSPC;
+				goto unlock;
+			}
+		} else {
+			if (new_pid >= (pid + count)) {
+				new_pid = -EEXIST;
+				goto unlock;
+			}
+		}
+	} else {
+		if (test_bit(new_pid, pid_table) &&
+		    !pid_reserved(lni_priv, vni, new_pid)) {
+			new_pid = -EEXIST;
+			goto unlock;
+		}
+	}
+
+	cxi_rx_profile_update_pid_table_locked(rx_profile, new_pid, count,
+					       true);
+
+unlock:
+	spin_unlock(&rx_profile->config.pid_lock);
+
+	return new_pid;
+}
+
+/**
+ * cxi_rx_profile_enable() - Enable a Profile
+ *
+ * @dev: Cassini Device
+ * @rx_profile: Profile to be enabled.
+ *
+ * Return:
+ * * 0       - success
+ * * -ENOSPC
+ */
+int cxi_rx_profile_enable(struct cxi_dev *dev,
+			   struct cxi_rx_profile *rx_profile)
+{
+	int index;
+	struct cass_dev *hw = get_cass_dev(dev);
+	struct cxi_rxtx_vni_attr *attr = &rx_profile->profile_common.vni_attr;
+
+	index = ida_alloc_range(&hw->rmu_index_table, 0,
+				C_RMU_CFG_VNI_LIST_ENTRIES - 1, GFP_KERNEL);
+	if (index < 0)
+		return index;
+
+	cass_config_matching_vni_list(hw, index, attr->match, attr->ignore);
+
+	rx_profile->profile_common.state.enable = true;
+	rx_profile->config.rmu_index = index;
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_rx_profile_enable);
+
+/**
+ * cxi_rx_profile_disable() - Disable a Profile
+ *
+ * @dev: Cassini Device
+ * @rx_profile: Profile to be disabled.
+ */
+void cxi_rx_profile_disable(struct cxi_dev *dev,
+			   struct cxi_rx_profile *rx_profile)
+{
+	struct cass_dev *hw = get_cass_dev(dev);
+
+	ida_free(&hw->rmu_index_table, rx_profile->config.rmu_index);
+
+	cass_invalidate_vni_list(hw, rx_profile->config.rmu_index);
+	rx_profile->profile_common.state.enable = false;
+}
+
 /**
  * cxi_dev_alloc_rx_profile() - Allocate a RX Profile
  *
@@ -113,6 +302,40 @@ free_return:
 	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL(cxi_dev_alloc_rx_profile);
+
+/**
+ * cxi_dev_find_rx_profile() - Get RX profile containing a vni
+ *
+ * @dev: Cassini Device
+ * @vni: Match criteria to find rx profile
+ *
+ * Return: rx_profile ptr on success or NULL
+ */
+struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
+					       uint16_t vni)
+{
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct cxi_rxtx_profile_list *list = &hw->rx_profile_list;
+	struct cxi_rx_profile *rx_profile = NULL;
+	struct cxi_rxtx_profile *profile;
+	unsigned long index = list->limits->min;
+
+	cxi_rxtx_profile_list_lock(list);
+
+	xa_for_each(&list->xarray, index, profile) {
+		if ((vni & ~profile->vni_attr.ignore) == profile->vni_attr.match) {
+			rx_profile = container_of(profile,
+						  struct cxi_rx_profile,
+						  profile_common);
+			refcount_inc(&profile->state.refcount);
+			break;
+		}
+	}
+
+	cxi_rxtx_profile_list_unlock(list);
+
+	return rx_profile;
+}
 
 /**
  * cxi_dev_get_rx_profile_ids() - Retrieve a list of IDs
@@ -202,6 +425,7 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 	if (!ret)
 		return -EBUSY;
 
+	cxi_rx_profile_disable(dev, rx_profile);
 	refcount_dec(&hw->refcount);
 	cxi_rxtx_profile_list_remove(&hw->rx_profile_list,
 				     rx_profile->profile_common.id);

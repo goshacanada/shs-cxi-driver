@@ -12,144 +12,6 @@
 #include "cass_core.h"
 #include "cass_ss1_debugfs.h"
 
-/* Search for a VNI in the VNI tree. */
-static struct cass_vni *find_vni(struct rb_root *root, unsigned int vni)
-{
-	struct rb_node *node = root->rb_node;
-
-	while (node) {
-		struct cass_vni *cvni =
-			container_of(node, struct cass_vni, node);
-
-		if (cvni->vni < vni)
-			node = node->rb_left;
-		else if (cvni->vni > vni)
-			node = node->rb_right;
-		else
-			return cvni;
-	}
-	return NULL;
-}
-
-/* Insert a new VNI into the tree. May return an existing entry if a
- * duplicate was found.
- */
-static struct cass_vni *insert_vni(struct rb_root *root, struct cass_vni *vni)
-{
-	struct rb_node **new = &(root->rb_node);
-	struct rb_node *parent = NULL;
-
-	/* Figure out where to put new node */
-	while (*new) {
-		struct cass_vni *this =
-			container_of(*new, struct cass_vni, node);
-
-		parent = *new;
-		if (this->vni < vni->vni) {
-			new = &((*new)->rb_left);
-		} else if (this->vni > vni->vni) {
-			new = &((*new)->rb_right);
-		} else {
-			/* Duplicated value. Let caller deal with it.
-			 */
-			return this;
-		}
-	}
-
-	/* Add new node and rebalance tree. */
-	rb_link_node(&vni->node, parent, new);
-	rb_insert_color(&vni->node, root);
-
-	return vni;
-}
-
-/* Get or allocate a new VNI entry. Get a reference on it. */
-static struct cass_vni *get_vni(struct cass_dev *hw, unsigned int vni)
-{
-	struct cass_vni *cvni;
-	struct cass_vni *cvni_new;
-	int index;
-
-	spin_lock(&hw->rmu_lock);
-
-	cvni = find_vni(&hw->rmu_tree, vni);
-	if (cvni) {
-		refcount_inc(&cvni->refcount);
-		spin_unlock(&hw->rmu_lock);
-		return cvni;
-	}
-
-	spin_unlock(&hw->rmu_lock);
-
-	/* Not found. Allocate one, and try again */
-	cvni = kzalloc(sizeof(*cvni), GFP_KERNEL);
-	if (cvni == NULL)
-		return ERR_PTR(-ENOMEM);
-
-	index = ida_simple_get(&hw->rmu_index_table, 0,
-			       C_RMU_CFG_VNI_LIST_ENTRIES, GFP_KERNEL);
-	if (index < 0) {
-		kfree(cvni);
-		return ERR_PTR(index);
-	}
-
-	cvni->vni = vni;
-	refcount_set(&cvni->refcount, 1);
-	cvni->id = index;
-	cvni->hw = hw;
-	spin_lock_init(&cvni->pid_lock);
-
-	/* Validate the new entry by writing to the X and Y tables. */
-	cass_config_vni_list(hw, index, vni);
-
-	spin_lock(&hw->rmu_lock);
-
-	cvni_new = insert_vni(&hw->rmu_tree, cvni);
-	if (cvni != cvni_new)
-		refcount_inc(&cvni_new->refcount);
-
-	spin_unlock(&hw->rmu_lock);
-
-	if (cvni != cvni_new) {
-		/* Not inserted as something else raced
-		 * and added the same VNI. Free the new one.
-		 */
-
-		/* Invalidate the entry in the RMU table. */
-		cass_invalidate_vni_list(hw, index);
-		ida_simple_remove(&hw->rmu_index_table, index);
-		kfree(cvni);
-	}
-
-	return cvni_new;
-}
-
-/* Release a reference on a VNI. Free it if it is not used anymore. */
-static void put_vni(struct cass_vni *cvni)
-{
-	struct cass_dev *hw = cvni->hw;
-	union c_rmu_cfg_vni_list_invalidate rmu_cfg_vni_list_invalidate;
-
-	spin_lock(&hw->rmu_lock);
-
-	if (refcount_dec_and_test(&cvni->refcount)) {
-		rb_erase(&cvni->node, &hw->rmu_tree);
-		spin_unlock(&hw->rmu_lock);
-
-		/* Invalidate the entry in the RMU table. */
-		rmu_cfg_vni_list_invalidate.qw = 0;
-		rmu_cfg_vni_list_invalidate.invalidate = 1;
-		cass_write(hw, C_RMU_CFG_VNI_LIST_INVALIDATE(cvni->id),
-			   &rmu_cfg_vni_list_invalidate,
-			   sizeof(rmu_cfg_vni_list_invalidate));
-
-		ida_simple_remove(&hw->rmu_index_table, cvni->id);
-		kfree(cvni);
-	} else {
-		spin_unlock(&hw->rmu_lock);
-	}
-}
-
 /* Add a new domain into a device domain tree. */
 static int insert_domain(struct rb_root *root,
 			 struct cxi_domain_priv *domain_priv)
@@ -191,10 +53,9 @@ int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 	struct cxi_lni_priv *lni_priv =
 		container_of(lni, struct cxi_lni_priv, lni);
 	struct cxi_dev *cdev = lni_priv->dev;
-	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	int rc;
-	struct cass_vni *cvni;
+	struct cxi_rx_profile *rx_profile;
 	int i;
 	struct cxi_reserved_pids *pids;
 	unsigned int in_pid = pid;
@@ -213,33 +74,16 @@ int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 	if (!count || count > cdev->prop.pid_count)
 		return -EINVAL;
 
-	cvni = get_vni(hw, vni);
-	if (IS_ERR(cvni))
-		return -EINVAL;
+	rx_profile = cxi_dev_find_rx_profile(cdev, vni);
+	if (!rx_profile)
+		return -ENOENT;
 
-	spin_lock(&cvni->pid_lock);
-	if (pid == C_PID_ANY) {
-		pid = bitmap_find_next_zero_area(cvni->pid_table,
-						 cdev->prop.pid_count,
-						 0, count, 0);
-		if (pid >= cdev->prop.pid_count) {
-			spin_unlock(&cvni->pid_lock);
-			rc = -ENOSPC;
-			goto put_vni;
-		}
-	} else {
-		pid = bitmap_find_next_zero_area(cvni->pid_table,
-						 cdev->prop.pid_count, pid,
-						 count, 0);
-		if (pid >= (in_pid + count)) {
-			spin_unlock(&cvni->pid_lock);
-			rc = -EEXIST;
-			goto put_vni;
-		}
+	pid = cxi_rx_profile_alloc_pid(lni_priv, rx_profile, in_pid, vni, count,
+				       true);
+	if (pid < 0) {
+		rc = pid;
+		goto put_rx_profile;
 	}
-	for (i = 0; i < count; i++)
-		set_bit(pid + i, cvni->pid_table);
-	spin_unlock(&cvni->pid_lock);
 
 	pids = kzalloc(sizeof(*pids), GFP_KERNEL);
 	if (!pids) {
@@ -247,7 +91,7 @@ int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 		goto clear_pids;
 	}
 
-	pids->cvni = cvni;
+	pids->rx_profile = rx_profile;
 
 	for (i = 0; i < count; i++)
 		set_bit(pid + i, pids->table);
@@ -259,12 +103,9 @@ int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 	return pid;
 
 clear_pids:
-	spin_lock(&cvni->pid_lock);
-	for (i = 0; i < count; i++)
-		clear_bit(pid + i, cvni->pid_table);
-	spin_unlock(&cvni->pid_lock);
-put_vni:
-	put_vni(cvni);
+	cxi_rx_profile_update_pid_table(rx_profile, pid, count, false);
+put_rx_profile:
+	cxi_rx_profile_dec_refcount(cdev, rx_profile);
 
 	return rc;
 }
@@ -279,44 +120,11 @@ void cxi_domain_lni_cleanup(struct cxi_lni_priv *lni_priv)
 						struct cxi_reserved_pids,
 						entry))) {
 		list_del(&pids->entry);
-
-		spin_lock(&pids->cvni->pid_lock);
-		bitmap_andnot(pids->cvni->pid_table, pids->cvni->pid_table,
-			      pids->table, lni_priv->dev->prop.pid_count);
-		spin_unlock(&pids->cvni->pid_lock);
-
-		put_vni(pids->cvni);
-
+		cxi_rx_profile_andnot_pid_table(pids,
+						lni_priv->dev->prop.pid_count);
+		cxi_rx_profile_dec_refcount(lni_priv->dev, pids->rx_profile);
 		kfree(pids);
 	}
-}
-
-/* Return true if the PID is reserved to the LNI. If so, mark the PID as
- * "allocated" and do some house-keeping.
- */
-static bool pid_reserved(struct cxi_lni_priv *lni_priv, unsigned int vni,
-			unsigned int pid)
-{
-	struct cxi_reserved_pids *pids;
-
-	spin_lock(&lni_priv->res_lock);
-	list_for_each_entry(pids, &lni_priv->reserved_pids, entry) {
-		if (pids->cvni->vni == vni &&
-		    test_and_clear_bit(pid, pids->table)) {
-			if (bitmap_empty(pids->table,
-					 lni_priv->dev->prop.pid_count)) {
-				list_del(&pids->entry);
-				put_vni(pids->cvni);
-				kfree(pids);
-			}
-			spin_unlock(&lni_priv->res_lock);
-
-			return true;
-		}
-	}
-	spin_unlock(&lni_priv->res_lock);
-
-	return false;
 }
 
 /* Allocate a new domain, with a unique per-device VNI+PID. The VNI is
@@ -331,8 +139,8 @@ struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_domain_priv *domain_priv;
 	int rc;
-	struct cass_vni *cvni;
 	int domain_pid = pid;
+	struct cxi_rx_profile *rx_profile;
 
 	/* Sanity checks. */
 	if (!is_vni_valid(vni))
@@ -341,29 +149,16 @@ struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
 	if (domain_pid >= cdev->prop.pid_count && domain_pid != C_PID_ANY)
 		return ERR_PTR(-EINVAL);
 
-	cvni = get_vni(hw, vni);
-	if (IS_ERR(cvni))
-		return ERR_PTR(PTR_ERR(cvni));
+	rx_profile = cxi_dev_find_rx_profile(cdev, vni);
+	if (!rx_profile)
+		return ERR_PTR(-ENOENT);
 
-	spin_lock(&cvni->pid_lock);
-	if (domain_pid == C_PID_ANY) {
-		domain_pid = find_first_zero_bit(cvni->pid_table,
-						 cdev->prop.pid_count);
-		if (domain_pid == cdev->prop.pid_count) {
-			spin_unlock(&cvni->pid_lock);
-			rc = -ENOSPC;
-			goto put_vni;
-		}
-	} else {
-		if (test_bit(domain_pid, cvni->pid_table) &&
-		    !pid_reserved(lni_priv, vni, domain_pid)) {
-			spin_unlock(&cvni->pid_lock);
-			rc = -EEXIST;
-			goto put_vni;
-		}
+	domain_pid = cxi_rx_profile_alloc_pid(lni_priv, rx_profile, pid, vni,
+					      1, false);
+	if (domain_pid < 0) {
+		rc = domain_pid;
+		goto put_rx_profile;
 	}
-	set_bit(domain_pid, cvni->pid_table);
-	spin_unlock(&cvni->pid_lock);
 
 	domain_priv = kzalloc(sizeof(*domain_priv), GFP_KERNEL);
 	if (domain_priv == NULL) {
@@ -382,7 +177,7 @@ struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
 	refcount_set(&domain_priv->refcount, 1);
 
 	domain_priv->lni_priv = lni_priv;
-	domain_priv->cvni = cvni;
+	domain_priv->rx_profile = rx_profile;
 	domain_priv->domain.vni = vni;
 	domain_priv->domain.pid = domain_pid;
 
@@ -407,11 +202,9 @@ free_dom_id:
 free_domain:
 	kfree(domain_priv);
 free_pid:
-	spin_lock(&cvni->pid_lock);
-	clear_bit(domain_pid, cvni->pid_table);
-	spin_unlock(&cvni->pid_lock);
-put_vni:
-	put_vni(cvni);
+	cxi_rx_profile_update_pid_table(rx_profile, pid, 1, false);
+put_rx_profile:
+	cxi_rx_profile_dec_refcount(cdev, rx_profile);
 
 	return ERR_PTR(rc);
 }
@@ -441,11 +234,9 @@ void cxi_domain_free(struct cxi_domain *domain)
 	rb_erase(&domain_priv->node, &hw->domain_tree);
 	spin_unlock(&hw->domain_lock);
 
-	spin_lock(&domain_priv->cvni->pid_lock);
-	clear_bit(domain_priv->domain.pid, domain_priv->cvni->pid_table);
-	spin_unlock(&domain_priv->cvni->pid_lock);
-
-	put_vni(domain_priv->cvni);
+	cxi_rx_profile_update_pid_table(domain_priv->rx_profile,
+					domain->pid, 1, false);
+	cxi_rx_profile_dec_refcount(cdev, domain_priv->rx_profile);
 
 	ida_simple_remove(&hw->domain_table, domain_priv->domain.id);
 	kfree(domain_priv);

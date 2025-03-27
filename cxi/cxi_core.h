@@ -227,7 +227,7 @@ struct cass_vni;
 
 struct cxi_reserved_pids {
 	struct list_head entry;
-	struct cass_vni *cvni;
+	struct cxi_rx_profile *rx_profile;
 	DECLARE_BITMAP(table, 1 << MAX_PID_BITS);
 };
 
@@ -257,8 +257,7 @@ struct cxi_domain_priv {
 	struct list_head list;
 	struct dentry *debug_dir;
 	struct rb_node node;	/* attach to domain_tree */
-
-	struct cass_vni *cvni;
+	struct cxi_rx_profile *rx_profile;
 
 	/* Users of this domain */
 	refcount_t refcount;

@@ -199,7 +199,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Get a domain */
-	domain = alloc_domain(dev, lni, 50, 40, 1024);
+	domain = alloc_domain(dev, lni, 10, 40, 1024);
 	if (domain < 0) {
 		fprintf(stderr, "cannot get a domain\n");
 		return 1;

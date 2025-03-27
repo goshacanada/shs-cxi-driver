@@ -716,7 +716,8 @@ int cxi_pte_map(struct cxi_pte *pt, struct cxi_domain *domain,
 	rmu_cfg_portal_list.index_ext = index_ext;
 	rmu_cfg_portal_list.multicast_id = ptl_idx;
 	rmu_cfg_portal_list.is_multicast = is_multicast;
-	rmu_cfg_portal_list.vni_list_idx = domain_priv->cvni->id;
+	rmu_cfg_portal_list.vni_list_idx =
+				domain_priv->rx_profile->config.rmu_index;
 
 	spin_lock(&hw->rmu_portal_list_lock);
 	cass_config_portal_list(hw, pti_n, pt_priv->pte.id,

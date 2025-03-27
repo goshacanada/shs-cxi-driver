@@ -108,6 +108,8 @@ struct cxi_rxtx_profile {
 /* Struct to hold HW configuration */
 struct cxi_rx_config {
 	int rmu_index;
+	DECLARE_BITMAP(pid_table, 1 << MAX_PID_BITS);
+	spinlock_t pid_lock;
 };
 
 /* Struct for creation and listing */
@@ -173,6 +175,16 @@ int cxi_rx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_rx_profile *rx_profile);
 void cxi_rx_profile_disable(struct cxi_dev *dev,
 			   struct cxi_rx_profile *rx_profile);
+
+struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
+					       uint16_t vni);
+void cxi_rx_profile_update_pid_table(struct cxi_rx_profile *rx_profile, int pid,
+				     int count, bool set);
+void cxi_rx_profile_andnot_pid_table(struct cxi_reserved_pids *pids,
+				     int len);
+int cxi_rx_profile_alloc_pid(struct cxi_lni_priv *lni_priv,
+			     struct cxi_rx_profile *rx_profile,
+			     int pid, int vni, int count, bool reserve);
 
 int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_rx_profile *rx_profile,
