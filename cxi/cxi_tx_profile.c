@@ -105,6 +105,36 @@ free_return:
 EXPORT_SYMBOL(cxi_dev_alloc_tx_profile);
 
 /**
+ * cxi_tx_profile_enable() - Enable a Profile
+ *
+ * @dev: Cassini Device
+ * @tx_profile: Profile to be enabled.
+ *
+ * Return:
+ * * 0       - success
+ */
+int cxi_tx_profile_enable(struct cxi_dev *dev,
+			   struct cxi_tx_profile *tx_profile)
+{
+	// TODO: more hw setup here?
+	tx_profile->profile_common.state.enable = true;
+
+	return 0;
+}
+
+/**
+ * cxi_tx_profile_disable() - Disable a Profile
+ *
+ * @dev: Cassini Device
+ * @tx_profile: Profile to be disabled.
+ */
+void cxi_tx_profile_disable(struct cxi_dev *dev,
+			   struct cxi_tx_profile *tx_profile)
+{
+	// TODO: cleanup
+}
+
+/**
  * cxi_dev_get_tx_profile_ids() - Retrieve a list of IDs
  *
  * @dev: Cassini Device
@@ -131,49 +161,6 @@ int cxi_dev_get_tx_profile_ids(struct cxi_dev *dev,
 EXPORT_SYMBOL(cxi_dev_get_tx_profile_ids);
 
 /**
- * cxi_tx_profile_find_inc_refcount() - Look up TX Profile in the
- *                                      device list by ID and increment
- *                                      its refcount.
- *
- * @dev: CXI device
- * @tx_profile_id: the ID to use for the lookup
- * @tx_profile: location to place Profile pointer
- *
- * Return: 0 on success or error code.
- *
- * Refcount must be decremented when usage is done via
- * cxi_tx_profile_dec_refcount().
- */
-
-int cxi_tx_profile_find_inc_refcount(struct cxi_dev *dev,
-				     unsigned int tx_profile_id,
-				     struct cxi_tx_profile **tx_profile)
-{
-	struct cxi_tx_profile  *my_profile;
-	int    ret = 0;
-
-	ret = tx_profile_find_inc_refcount(dev,
-					   tx_profile_id,
-					   &my_profile);
-	if (ret)
-		return ret;
-
-	if (atomic_read(&my_profile->profile_common.state.released) ||
-	    my_profile->profile_common.state.revoked) {
-		ret = -EBUSY;
-		goto decrement_return;
-	}
-
-	*tx_profile = my_profile;
-	return 0;
-
-decrement_return:
-	cxi_tx_profile_dec_refcount(dev, my_profile);
-	return ret;
-}
-EXPORT_SYMBOL(cxi_tx_profile_find_inc_refcount);
-
-/**
  * cxi_tx_profile_dec_refcount() - Decrement refcount and cleanup
  *                                 if last reference
  *
@@ -194,6 +181,7 @@ int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 	if (!ret)
 		return -EBUSY;
 
+	cxi_tx_profile_disable(dev, tx_profile);
 	refcount_dec(&hw->refcount);
 	cxi_rxtx_profile_list_remove(&hw->tx_profile_list,
 				     tx_profile->profile_common.id);

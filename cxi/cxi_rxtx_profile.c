@@ -36,8 +36,7 @@ void cxi_rxtx_profile_init(struct cxi_rxtx_profile *rxtx_profile,
 	 */
 
 	refcount_set(&rxtx_profile->state.refcount, 1);
-	atomic_set(&rxtx_profile->state.released, false);
-	rxtx_profile->state.revoked  = false;
+	rxtx_profile->state.enable = false;
 
 	cxi_ac_entry_list_init(&rxtx_profile->ac_entry_list);
 }
@@ -104,12 +103,6 @@ out:
  */
 void cxi_rxtx_profile_release(struct cxi_rxtx_profile *rxtx_profile)
 {
-	int    old = false;
-
-	/* Try to transition 'released' from false to true */
-	if (!atomic_try_cmpxchg(&rxtx_profile->state.released, &old, true))
-		return;
-
 	/* Reduce the reference count.  Note that this function is
 	 * called via pointer to profile, indicating that the caller
 	 * also has a reference to this profile.  Thus the reference
@@ -138,8 +131,6 @@ void cxi_rxtx_profile_revoke(struct cxi_rxtx_profile *rxtx_profile)
 	/* TODO: this has to be done at the RX or TX layer */
 	/* cass_rx_profile_revoke(rx_profile); */
 
-	rxtx_profile->state.revoked  = true;
-
 	cxi_rxtx_profile_release(rxtx_profile);
 }
 
@@ -165,8 +156,7 @@ void cxi_rxtx_profile_get_info(struct cxi_rxtx_profile *rxtx_profile,
 	}
 
 	if (state) {
-		state->released = rxtx_profile->state.released;
-		state->revoked  = rxtx_profile->state.revoked;
+		state->enable = rxtx_profile->state.enable;
 		state->refcount = rxtx_profile->state.refcount;
 	}
 }

@@ -90,10 +90,8 @@ struct cxi_rxtx_vni_attr {
 };
 
 struct cxi_rxtx_profile_state {
-	atomic_t         released;
-	bool             revoked;
-	bool             enable;
-	refcount_t       refcount;
+	bool       enable;
+	refcount_t refcount;
 };
 
 struct cxi_rxtx_profile {
@@ -160,9 +158,6 @@ int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    unsigned int *ac_entry_id);
 void cxi_dev_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile);
 
-int cxi_rx_profile_find_inc_refcount(struct cxi_dev *dev,
-				     unsigned int vni_entry_id,
-				     struct cxi_rx_profile **rx_profile);
 int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 				struct cxi_rx_profile *rx_profile);
 
@@ -218,6 +213,10 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 
 struct cxi_tx_profile *cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
 					const struct cxi_tx_attr *tx_attr);
+int cxi_tx_profile_enable(struct cxi_dev *dev,
+			   struct cxi_tx_profile *tx_profile);
+void cxi_tx_profile_disable(struct cxi_dev *dev,
+			   struct cxi_tx_profile *tx_profile);
 int cxi_dev_get_tx_profile_ids(struct cxi_dev *dev,
 			       size_t max_entries,
 			       unsigned int *tx_profile_ids,
@@ -238,9 +237,6 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
-int cxi_tx_profile_find_inc_refcount(struct cxi_dev *dev,
-				     unsigned int vni_entry_id,
-				     struct cxi_tx_profile **tx_profile);
 int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 				struct cxi_tx_profile *tx_profile);
 

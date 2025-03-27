@@ -364,47 +364,6 @@ int cxi_dev_get_rx_profile_ids(struct cxi_dev *dev,
 EXPORT_SYMBOL(cxi_dev_get_rx_profile_ids);
 
 /**
- * cxi_rx_profile_find_inc_refcount() - Look up RX Profile in the
- *                                      device list by ID and increment
- *                                      its refcount.
- *
- * @dev: CXI device
- * @rx_profile_id: the ID to use for the lookup
- * @rx_profile: location to place Profile pointer
- *
- * Return: 0 on success or error code.
- *
- * Refcount must be decremented when usage is done via
- * cxi_rx_profile_dec_refcount().
- */
-
-int cxi_rx_profile_find_inc_refcount(struct cxi_dev *dev,
-				     unsigned int rx_profile_id,
-				     struct cxi_rx_profile **rx_profile)
-{
-	struct cxi_rx_profile  *my_profile;
-	int    ret = 0;
-
-	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &my_profile);
-	if (ret)
-		return ret;
-
-	if (atomic_read(&my_profile->profile_common.state.released) ||
-	    my_profile->profile_common.state.revoked) {
-		ret = -EBUSY;
-		goto decrement_return;
-	}
-
-	*rx_profile = my_profile;
-	return 0;
-
-decrement_return:
-	cxi_rx_profile_dec_refcount(dev, my_profile);
-	return ret;
-}
-EXPORT_SYMBOL(cxi_rx_profile_find_inc_refcount);
-
-/**
  * cxi_rx_profile_dec_refcount() - Decrement refcount and cleanup
  *                                 if last reference
  *

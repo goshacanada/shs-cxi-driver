@@ -85,8 +85,7 @@ static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
 	cxi_rxtx_profile_get_info(rxtx_profile, &vni_attr, &state);
 
 	if (!vni_data.restricted ||
-	    (((vni_data.vni & ~vni_attr.ignore) == vni_attr.match) &&
-			!atomic_read(&state.released) && !state.revoked)) {
+	    (state.enable && ((vni_data.vni & ~vni_attr.ignore) == vni_attr.match))) {
 		rc = cxi_rxtx_profile_get_ac_entry_id_by_user(rxtx_profile,
 							      ac_data.uid,
 							      ac_data.gid,
@@ -645,6 +644,10 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 			svc_priv->tx_profile[i] = NULL;
 			goto release_profiles;
 		}
+
+		rc = cxi_tx_profile_enable(dev, svc_priv->tx_profile[i]);
+		if (rc)
+			goto release_profiles;
 
 		svc_priv->rx_profile[i] = cxi_dev_alloc_rx_profile(dev,
 								   &rx_attr);
