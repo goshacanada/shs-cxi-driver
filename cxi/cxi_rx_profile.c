@@ -50,7 +50,7 @@ int rx_profile_find_inc_refcount(struct cxi_dev *dev,
 	if (ret)
 		return ret;
 
-	*rx_profile = get_rx_profile(rxtx_profile);
+	*rx_profile = co_rx_profile(rxtx_profile);
 	return 0;
 }
 

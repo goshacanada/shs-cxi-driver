@@ -63,13 +63,13 @@ int cxi_rxtx_profile_get_ac_entry_id_by_user(struct cxi_rxtx_profile *rxtx_profi
 					     unsigned int *ac_entry_id);
 
 __maybe_unused
-static struct cxi_rx_profile *get_rx_profile(struct cxi_rxtx_profile *profile)
+static struct cxi_rx_profile *co_rx_profile(struct cxi_rxtx_profile *profile)
 {
 	return container_of(profile, struct cxi_rx_profile, profile_common);
 }
 
 __maybe_unused
-static struct cxi_tx_profile *get_tx_profile(struct cxi_rxtx_profile *profile)
+static struct cxi_tx_profile *co_tx_profile(struct cxi_rxtx_profile *profile)
 {
 	return container_of(profile, struct cxi_tx_profile, profile_common);
 }

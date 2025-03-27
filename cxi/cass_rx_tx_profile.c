@@ -49,19 +49,19 @@ struct profile_destroy_data {
 static void rx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 			       void *user_arg)
 {
-	struct profile_destroy_data   *data       = user_arg;
+	struct profile_destroy_data *data = user_arg;
 
-	cxi_rx_profile_revoke(data->cxi_dev, rxtx_profile->id);
 	refcount_dec(&rxtx_profile->state.refcount);
+	cxi_rx_profile_dec_refcount(data->cxi_dev, co_rx_profile(rxtx_profile));
 }
 
 static void tx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 			       void *user_arg)
 {
-	struct profile_destroy_data   *data       = user_arg;
+	struct profile_destroy_data *data = user_arg;
 
-	cxi_tx_profile_revoke(data->cxi_dev, rxtx_profile->id);
 	refcount_dec(&rxtx_profile->state.refcount);
+	cxi_tx_profile_dec_refcount(data->cxi_dev, co_tx_profile(rxtx_profile));
 }
 
 /**
