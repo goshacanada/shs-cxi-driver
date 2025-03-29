@@ -35,25 +35,6 @@ static void rx_profile_init(struct cxi_rx_profile *rx_profile,
 	/* TODO: extract additional parameters */
 }
 
-int rx_profile_find_inc_refcount(struct cxi_dev *dev,
-					unsigned int rx_profile_id,
-					struct cxi_rx_profile **rx_profile)
-{
-	int ret;
-	struct cxi_rxtx_profile *rxtx_profile;
-	struct cass_dev *hw = get_cass_dev(dev);
-
-	ret = cxi_rxtx_profile_find_inc_refcount(&hw->rx_profile_list,
-						 rx_profile_id,
-						 &rxtx_profile);
-
-	if (ret)
-		return ret;
-
-	*rx_profile = co_rx_profile(rxtx_profile);
-	return 0;
-}
-
 static void cxi_rx_profile_update_pid_table_locked(
 					struct cxi_rx_profile *rx_profile,
 					int pid, int nbits, bool set)
@@ -338,32 +319,6 @@ struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
 }
 
 /**
- * cxi_dev_get_rx_profile_ids() - Retrieve a list of IDs
- *
- * @dev: Cassini Device
- * @max_ids: the maximum number the array ids can accommodate
- * @ids: address of array to place IDs.
- * @num_ids: the number of entries returned
- *
- * Return:
- * * 0      - success
- * * -ENOSPC - max_ids is not large enough, num_ids hold the required value
- */
-int cxi_dev_get_rx_profile_ids(struct cxi_dev *dev,
-			       size_t max_ids,
-			       unsigned int *ids,
-			       size_t *num_ids)
-{
-	struct cass_dev       *hw;
-
-	hw = get_cass_dev(dev);
-
-	return cxi_rxtx_profile_list_get_ids(&hw->rx_profile_list,
-					     max_ids, ids, num_ids);
-}
-EXPORT_SYMBOL(cxi_dev_get_rx_profile_ids);
-
-/**
  * cxi_rx_profile_dec_refcount() - Decrement refcount and cleanup
  *                                 if last reference
  *
@@ -393,65 +348,6 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 	return 0;
 }
 EXPORT_SYMBOL(cxi_rx_profile_dec_refcount);
-
-/**
- * cxi_rx_profile_release() - Mark a Profile as released.
- *
- * No new references can be taken.
- *
- * @dev: Cassini Device
- * @rx_profile_id: ID of Profile to be released.
- *
- * Return:
- * * 0       - success
- * * -EBADR  - profile not found
- */
-int cxi_rx_profile_release(struct cxi_dev *dev,
-			   unsigned int rx_profile_id)
-{
-	int    ret;
-	struct cxi_rx_profile     *rx_profile;
-
-	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
-	if (ret)
-		return ret;
-
-	cxi_rxtx_profile_release(&rx_profile->profile_common);
-
-	/* TODO: hardware RX release processing ... */
-
-	return cxi_rx_profile_dec_refcount(dev, rx_profile);
-}
-EXPORT_SYMBOL(cxi_rx_profile_release);
-
-/**
- * cxi_rx_profile_revoke() - Revoke resources associated with this profile.
- *
- * RDMA operations for these VNIs will fail.  Since the VNI entry is
- * essentially dead at this point, 'revoke' implies 'release' as well.
- *
- * @dev: Cassini Device
- * @rx_profile_id: ID of Profile to be revoked.
- *
- * Return: 0 on success. Else a negative errno value.
- */
-int cxi_rx_profile_revoke(struct cxi_dev *dev,
-			  unsigned int rx_profile_id)
-{
-	struct cxi_rx_profile  *rx_profile;
-	int    ret;
-
-	ret = rx_profile_find_inc_refcount(dev, rx_profile_id, &rx_profile);
-	if (ret)
-		return ret;
-
-	/* TODO: hardware operations for revoke .... */
-
-	cxi_rxtx_profile_revoke(&rx_profile->profile_common);
-
-	return cxi_rx_profile_dec_refcount(dev, rx_profile);
-}
-EXPORT_SYMBOL(cxi_rx_profile_revoke);
 
 /**
  * cxi_rx_profile_get_info() - Retrieve the attributes and state associated

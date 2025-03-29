@@ -142,16 +142,9 @@ struct cxi_tx_profile {
 int tx_profile_find_inc_refcount(struct cxi_dev *dev,
 				 unsigned int tx_profile_id,
 				 struct cxi_tx_profile **tx_profile);
-int rx_profile_find_inc_refcount(struct cxi_dev *dev,
-				 unsigned int rx_profile_id,
-				 struct cxi_rx_profile **rx_profile);
 
 struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 					const struct cxi_rx_attr *rx_attr);
-int cxi_dev_get_rx_profile_ids(struct cxi_dev *dev,
-			       size_t max_entries,
-			       unsigned int *rx_profile_ids,
-			       size_t *num_entries);
 int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_rx_profile *rx_profile,
@@ -217,10 +210,6 @@ int cxi_tx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
 void cxi_tx_profile_disable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
-int cxi_dev_get_tx_profile_ids(struct cxi_dev *dev,
-			       size_t max_entries,
-			       unsigned int *tx_profile_ids,
-			       size_t *num_entries);
 int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_tx_profile *tx_profile,
