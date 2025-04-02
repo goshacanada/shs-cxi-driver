@@ -3,29 +3,11 @@
 
 #include <linux/iopoll.h>
 #include <linux/bitmap.h>
-#include <linux/debugfs.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 #define DMAC_DESC_INDEX_UNSPECIFIED		((u16)(~0))
-
-/*
- * there currently are not that many entities that need to reserve
- * sets of dma descriptors.
- *
- * Currently, cassini telemetry/counters (with test/experimental code)
- * uses five dmac descriptor sets and rosetta link monitoring (lmon)
- * may use two dma descriptor sets.
- *
- */
-#define DMAC_DESC_SET_COUNT			16
-
-struct dmac_desc_set {
-	u16 count;      /* total number of descs */
-	u16 index;      /* index of first desc */
-	u16 numused;    /* number of descs written */
-	const char *name;	/* descriptive name to identify use */
-};
 
 /*
  * _must_ only be called when holding mutex hw->dmac.lock
@@ -568,69 +550,4 @@ void cass_dmac_fini(struct cass_dev *hw)
 	bitmap_free(hw->dmac.desc_map);
 	kfree(hw->dmac.desc_sets);
 	mutex_destroy(&hw->dmac.lock);
-}
-
-/*
- * DebugFS support below.
- */
-
-static int cass_dmac_desc_sets_show(struct seq_file *s, void *unused)
-{
-	struct cass_dev *hw = s->private;
-	int i;
-	int j;
-	u16 count;
-	u16 index;
-	u16 numused;
-	const char *name;
-	union c_pi_cfg_dmac_desc desc;
-	s64 dst;
-	s32 src;
-	s32 len;
-	s16 rem;
-
-	mutex_lock(&hw->dmac.lock);
-	for (i = 0 ; i < DMAC_DESC_SET_COUNT ; ++i) {
-		count	= hw->dmac.desc_sets[i].count;
-		index	= hw->dmac.desc_sets[i].index;
-		numused = hw->dmac.desc_sets[i].numused;
-		name    = hw->dmac.desc_sets[i].name;
-		seq_printf(s, "desc_set[%02d]: count=%u index=%u numused=%u name='%s'\n",
-			   i, count, index, numused,
-			   name == NULL ? "" : name);
-		if (count != 0)
-			for (j = 0; j < count; ++j) {
-				cass_read(hw, C_PI_CFG_DMAC_DESC(index + j), &desc,
-					  sizeof(desc));
-				dst =  desc.qw[0];
-				src =  desc.qw[1] & 0xffffffff;
-				len = (desc.qw[1] >> 32) & 0x000fffff;
-				rem = (desc.qw[1] >> (32 + 20)) & 0x0fff;
-				seq_printf(s, "\tdesc[%04u]=0x%03x,0x%05x,0x%08x,0x%016llx %s\n",
-					   index + j, rem, len, src, dst,
-					   (((dst & 0x7f) == 0) ? "(dst 128-byte aligned)" : ""));
-			}
-	}
-	mutex_unlock(&hw->dmac.lock);
-	return 0;
-}
-
-static int cass_dmac_desc_sets_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, cass_dmac_desc_sets_show,
-			   inode->i_private);
-}
-
-static const struct file_operations cass_dmac_desc_sets_fops = {
-	.owner = THIS_MODULE,
-	.open = cass_dmac_desc_sets_open,
-	.read = seq_read,
-	.llseek	 = seq_lseek,
-	.release = single_release,
-};
-
-void cass_dmac_debugfs_init(struct cass_dev *hw)
-{
-	debugfs_create_file("dmac-desc-sets", 0444, hw->debug_dir,
-			    hw, &cass_dmac_desc_sets_fops);
 }

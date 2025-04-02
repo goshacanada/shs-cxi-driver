@@ -5,11 +5,11 @@
  */
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/debugfs.h>
 #include <linux/cxi.h>
 #include <linux/iopoll.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 /* Initializes (if init is true) or cancel (if init is false) pending
  * triggered operations on a CT.
@@ -158,8 +158,6 @@ struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 	u16 wb_ac;
 	int rc;
 	int ctn;
-	char name[30];
-	char path[30];
 	struct cxi_md_priv *md_priv = NULL;
 
 	/* WB address must be 8-byte aligned. */
@@ -224,12 +222,7 @@ struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 	atomic_inc(&hw->stats.ct);
 	spin_unlock(&lni_priv->res_lock);
 
-	sprintf(name, "%u", ct_priv->ct.ctn);
-	ct_priv->debug_dir = debugfs_create_dir(name, hw->ct_dir);
-
-	sprintf(path, "../../../ct/%u", ct_priv->ct.ctn);
-	ct_priv->lni_dir = debugfs_create_symlink(name, lni_priv->ct_dir,
-						  path);
+	ct_debugfs_setup(ct_priv->ct.ctn, ct_priv, hw, lni_priv);
 
 	return &ct_priv->ct;
 

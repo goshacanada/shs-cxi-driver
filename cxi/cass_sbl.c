@@ -4,7 +4,6 @@
  * Copyright 2020-2024 Hewlett Packard Enterprise Development LP
  */
 
-#include <linux/debugfs.h>
 #include <linux/iopoll.h>
 #include <linux/cxi.h>
 #include <sbl/sbl_mb.h>
@@ -16,6 +15,9 @@
 #include "cass_core.h"
 #include "cass_cable.h"
 #include "cxi_ethtool.h"
+#include "cass_ss1_debugfs.h"
+
+#define SYSFS_BUFSIZE        1000
 
 static unsigned int pml_rec_timeout = SBL_DFLT_PML_REC_TIMEOUT;
 module_param(pml_rec_timeout, uint, 0644);
@@ -1350,140 +1352,6 @@ int cass_sbl_reset(struct cass_dev *hw)
 }
 /* end phy_ops */
 
-/*
- * debugfs support
- */
-/* TODO: If we're using sysfs, then we should conform to name/value pairs.
- *       If we're using debugfs, then anything goes, but we should not be
- *       using 1k of the stack for this.
- *       Some refactoring is needed.
- */
-#define DEBUGFS_BUFSIZE 1000 /* Plenty enough */
-static int cass_port_show(struct seq_file *s, void *unused)
-{
-	struct cass_dev *hw = s->private;
-	char buf[DEBUGFS_BUFSIZE];
-	int nic_num = hw->uc_nic;
-	unsigned long irq_flags;
-
-	if (!cass_version(hw, CASSINI_1)) {
-		seq_puts(s, "NOT IMPLEMENTED!!\n");
-		return 0;
-	}
-
-	seq_printf(s, "** %d **\n", nic_num);
-
-	/* config */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
-	seq_printf(s, "configured: %c%c%c%c\n",
-		 (hw->port->config_state & CASS_TYPE_CONFIGURED)   ? 't' : '-',
-		 (hw->port->config_state & CASS_PORT_CONFIGURED)   ? 'p' : '-',
-		 (hw->port->config_state & CASS_MEDIA_CONFIGURED)  ? 'm' : '-',
-		 (hw->port->config_state & CASS_LINK_CONFIGURED)   ? 'l' : '-');
-
-	/* port */
-	seq_printf(s, "type: ether (%s)\n",
-		   cass_port_subtype_str(hw->port->subtype));
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
-
-	/* uptime */
-	cass_uptime_debugfs_print(hw, s);
-
-	/* media */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_media_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* pause */
-	cass_pause_debugfs_print(hw, s);
-
-	/* serdes */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_serdes_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* pcs */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_pml_pcs_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* lane degrade status */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_pml_pcs_lane_degrade_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* base link */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_base_link_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* base link */
-	memset(buf, 0, DEBUGFS_BUFSIZE);
-	sbl_fec_sysfs_sprint(hw->sbl, 0, buf, DEBUGFS_BUFSIZE);
-	seq_puts(s, buf);
-
-	/* link */
-	cass_link_debugfs_print(hw, s);
-	cass_lmon_debugfs_print(hw, s);
-
-	return 0;
-}
-
-static int cass_port_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, cass_port_show, inode->i_private);
-}
-
-static const struct file_operations cass_port_fops = {
-	.owner = THIS_MODULE,
-	.open = cass_port_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
-void cass_port_debugfs_init(struct cass_dev *hw)
-{
-	debugfs_create_file("port", 0444, hw->debug_dir, hw, &cass_port_fops);
-}
-
-static int cass_sbl_counters_show(struct seq_file *s, void *unused)
-{
-	struct cass_dev *hw = s->private;
-	static char *sbl_counter_names[CASS_SBL_NUM_COUNTERS] = { CASS_SBL_COUNTER_NAMES };
-	static char *lmon_counter_names[CASS_LMON_NUM_COUNTERS] = { CASS_LMON_COUNTER_NAMES };
-	int i;
-
-	cass_sbl_counters_update(hw);
-
-	for (i = 0; i < CASS_SBL_NUM_COUNTERS; ++i)
-		seq_printf(s, "%s %d\n", sbl_counter_names[i], atomic_read(&hw->sbl_counters[i]));
-
-	for (i = 0; i < CASS_LMON_NUM_COUNTERS; ++i)
-		seq_printf(s, "%s %d\n", lmon_counter_names[i],
-				atomic_read(&hw->port->lmon_counters[i]));
-
-	return 0;
-}
-
-static int cass_sbl_counters_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, cass_sbl_counters_show, inode->i_private);
-}
-
-static const struct file_operations cass_sbl_counters_fops = {
-	.owner = THIS_MODULE,
-	.open = cass_sbl_counters_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
-void cass_sbl_counters_debugfs_init(struct cass_dev *hw)
-{
-	debugfs_create_file("counters", 0444, hw->debug_dir, hw, &cass_sbl_counters_fops);
-}
-
 /* sysfs */
 static ssize_t link_show(struct kobject *kobj,
 				struct kobj_attribute *kattr, char *buf)
@@ -1493,7 +1361,7 @@ static ssize_t link_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = cass_link_sysfs_sprint(hw, buf, PAGE_SIZE);
 
@@ -1508,7 +1376,7 @@ static ssize_t link_layer_retry_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = sbl_base_link_llr_sysfs_sprint(hw->sbl, 0, buf, PAGE_SIZE);
 
@@ -1523,7 +1391,7 @@ static ssize_t loopback_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = sbl_base_link_loopback_sysfs_sprint(hw->sbl, 0, buf, PAGE_SIZE);
 
@@ -1538,7 +1406,7 @@ static ssize_t media_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = sbl_media_type_sysfs_sprint(hw->sbl, 0, buf, PAGE_SIZE);
 
@@ -1553,7 +1421,7 @@ static ssize_t pause_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = cass_pause_sysfs_sprint(hw, buf, PAGE_SIZE);
 
@@ -1568,7 +1436,7 @@ static ssize_t speed_show(struct kobject *kobj,
 		container_of(kobj, struct cass_dev, port_kobj);
 
 	if (!cass_version(hw, CASSINI_1))
-		return snprintf(buf, DEBUGFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
+		return snprintf(buf, SYSFS_BUFSIZE, "NOT IMPLEMENTED!!\n");
 
 	rc = sbl_pml_pcs_speed_sysfs_sprint(hw->sbl, 0, buf, PAGE_SIZE);
 

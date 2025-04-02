@@ -5,13 +5,13 @@
 
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/debugfs.h>
 #include <linux/cxi.h>
 #include <linux/iopoll.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 /* Use the last logical endpoint for rendezvous offload. */
 #define RDZV_GET_IDX(pid_granule) ((pid_granule) - 1)
@@ -346,8 +346,6 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_pte_priv *pt;
 	struct cxi_eq_priv *eq = NULL;
-	char name[30];
-	char path[30];
 	int pt_n;
 	int rc;
 	union c_lpe_cfg_ptl_table ptl_table = {
@@ -468,13 +466,7 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	if (!pt_reuse) {
 		atomic_inc(&hw->stats.pt);
 
-		sprintf(name, "%u", pt->pte.id);
-		pt->debug_dir = debugfs_create_dir(name, hw->pt_dir);
-
-		sprintf(path, "../../../pt/%u", pt->pte.id);
-		pt->lni_dir = debugfs_create_symlink(name, lni_priv->pt_dir,
-						     path);
-
+		pt_debugfs_create(pt->pte.id, pt, hw, lni_priv);
 		refcount_inc(&lni_priv->refcount);
 	}
 

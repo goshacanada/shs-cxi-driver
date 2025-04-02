@@ -4,6 +4,7 @@
 /* Traffic Class (TC) Management */
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 static unsigned int pfc_buf_skid_space = 65280;
 module_param(pfc_buf_skid_space, uint, 0444);
@@ -2254,34 +2255,9 @@ void cass_tc_fini(struct cass_dev *hw)
 }
 
 /*
- * print out pause state for debugfs/sysfs diags
+ * print out pause state for sysfs diags
  *
  */
-void cass_pause_debugfs_print(struct cass_dev *hw, struct seq_file *s)
-{
-	u32 pause_type;
-	bool tx_pause;
-	bool rx_pause;
-
-	spin_lock(&hw->port->pause_lock);
-	pause_type = hw->port->pause_type;
-	tx_pause = hw->port->tx_pause;
-	rx_pause = hw->port->rx_pause;
-	spin_unlock(&hw->port->pause_lock);
-
-	seq_printf(s, "pause: %s", cass_pause_type_str(pause_type));
-	switch (pause_type) {
-	case CASS_PAUSE_TYPE_GLOBAL:
-	case CASS_PAUSE_TYPE_PFC:
-		seq_printf(s, ", tx %s, rx %s",
-			tx_pause ? "on" : "off", rx_pause ? "on" : "off");
-		break;
-	default:
-		break;
-	}
-	seq_puts(s, "\n");
-}
-
 int cass_pause_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size)
 {
 	int rc;

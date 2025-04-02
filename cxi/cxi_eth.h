@@ -4,6 +4,8 @@
  * Copyright 2018-2020,2022 Hewlett Packard Enterprise Development LP
  */
 
+#ifndef __CXI_ETH_H__
+#define __CXI_ETH_H__
 #include <linux/cxi.h>
 #include <linux/version.h>
 
@@ -353,3 +355,4 @@ int cxi_set_tx_channels(struct cxi_eth *dev, unsigned int num_tx_channels);
 int cxi_do_ioctl(struct net_device *ndev, struct ifreq *ifr, int cmd);
 
 extern const struct ethtool_ops cxi_eth_ethtool_ops;
+#endif

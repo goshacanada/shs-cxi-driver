@@ -4,13 +4,13 @@
 /* Create and destroy Cassini command queues */
 
 #include <linux/cxi.h>
-#include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 #ifdef CONFIG_ARM64
 /* Provide a workaround for avoiding writecombine on platforms where it is broken
@@ -322,8 +322,6 @@ struct cxi_cq *cxi_cq_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_eq_priv *eq;
 	struct cxi_cq_priv *cq;
-	char name[30];
-	char path[30];
 	int cq_idx;
 	int cq_n;
 	int rc;
@@ -432,15 +430,12 @@ struct cxi_cq *cxi_cq_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	if (rc)
 		goto cq_unmap;
 
-	sprintf(name, "%u", cq_idx);
-	cq->debug_dir = debugfs_create_dir(name, hw->cq_dir);
-	sprintf(path, "../../../cq/%u", cq_idx);
-	cq->lni_dir = debugfs_create_symlink(name, lni_priv->cq_dir, path);
 	if (cq->flags & CXI_CQ_IS_TX)
 		atomic_inc(&hw->stats.txq);
 	else
 		atomic_inc(&hw->stats.tgq);
-	debugfs_create_u32("id", 0444, cq->debug_dir, &cq->cass_cq.idx);
+
+	cq_debugfs_create(cq_idx, cq, hw, lni_priv);
 
 	spin_lock(&lni_priv->res_lock);
 	list_add_tail(&cq->list, &lni_priv->cq_list);

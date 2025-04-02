@@ -5,11 +5,11 @@
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/debugfs.h>
 #include <linux/cxi.h>
 #include <linux/iopoll.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 static unsigned int ee_timestamp_period_ms = 1000;
 module_param(ee_timestamp_period_ms, uint, 0644);
@@ -63,49 +63,6 @@ static const union c_ee_cfg_latency_monitor lat_monitor_def = {
  * can address which is 20-bits worth of addressing or 4GB (2^32) of space.
  */
 #define MAX_EQ_LEN (1ull << 32)
-
-static int eq_debugfs_info(struct seq_file *s, void *unused)
-{
-	struct cxi_eq_priv *eq = s->private;
-
-	seq_printf(s, "EQ id: %u\n", eq->eq.eqn);
-
-	seq_puts(s, "event MSI vector: ");
-	if (eq->event_msi_irq) {
-		const struct cass_irq *irq = eq->event_msi_irq;
-
-		seq_printf(s, "%s\n", irq->irq_name);
-	} else {
-		seq_puts(s, "none\n");
-	}
-
-	seq_puts(s, "status MSI vector: ");
-	if (eq->status_msi_irq) {
-		const struct cass_irq *irq = eq->status_msi_irq;
-
-		seq_printf(s, "%s\n", irq->irq_name);
-	} else {
-		seq_puts(s, "none\n");
-	}
-
-	seq_printf(s, "slots: %lu\n", eq->queue_size);
-	seq_printf(s, "flags: %llx\n", eq->attr.flags);
-
-	return 0;
-}
-
-static int debug_eq_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, eq_debugfs_info, inode->i_private);
-}
-
-static const struct file_operations eq_fops = {
-	.owner = THIS_MODULE,
-	.open = debug_eq_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
 
 /* Convert EQ queue length, in bytes, into queue size in ECB units. */
 static size_t get_eq_queue_size(size_t queue_len)
@@ -780,8 +737,6 @@ struct cxi_eq *cxi_eq_alloc(struct cxi_lni *lni, const struct cxi_md *md,
 	struct cass_dev *hw;
 	struct cxi_eq_priv *eq;
 	struct cxi_md_priv *md_priv = NULL;
-	char name[30];
-	char path[30];
 	int eq_n;
 	int rc;
 	int passthrough = !!(attr->flags & CXI_EQ_PASSTHROUGH);
@@ -927,14 +882,7 @@ struct cxi_eq *cxi_eq_alloc(struct cxi_lni *lni, const struct cxi_md *md,
 	if (!eq->reused) {
 		atomic_inc(&hw->stats.eq);
 
-		sprintf(name, "%u", eq_n);
-
-		eq->debug_file = debugfs_create_file(name, 0444, hw->eq_dir,
-						     eq, &eq_fops);
-
-		sprintf(path, "../../../eq/%u", eq->eq.eqn);
-		eq->lni_dir = debugfs_create_symlink(name, lni_priv->eq_dir,
-						     path);
+		eq_debugfs_create(eq_n, eq, hw, lni_priv);
 
 		refcount_inc(&lni_priv->refcount);
 	}

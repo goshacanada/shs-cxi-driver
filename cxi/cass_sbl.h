@@ -474,9 +474,6 @@ struct cass_port {
 	time64_t start_time;
 };
 
-void cass_port_debugfs_init(struct cass_dev *hw);
-void cass_sbl_counters_debugfs_init(struct cass_dev *hw);
-
 int cass_sbl_init(struct cass_dev *hw);
 int cass_sbl_link_start(struct cass_dev *hw);
 void cass_sbl_link_fini(struct cass_dev *hw);
@@ -530,12 +527,8 @@ void cass_link_set_state(struct cass_dev *hw, int state, int err);
 void cass_link_set_led(struct cass_dev *hw);
 
 /*
- * debugfs/sysfs
+ * sysfs
  */
-void cass_lmon_debugfs_print(struct cass_dev *hw, struct seq_file *s);
-void cass_link_debugfs_print(struct cass_dev *hw, struct seq_file *s);
-void cass_pause_debugfs_print(struct cass_dev *hw, struct seq_file *s);
-void cass_uptime_debugfs_print(struct cass_dev *hw, struct seq_file *s);
 int cass_link_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size);
 int cass_pause_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size);
 

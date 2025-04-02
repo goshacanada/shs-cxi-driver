@@ -4,7 +4,6 @@
  * Copyright 2020-2024 Hewlett Packard Enterprise Development LP
  */
 
-#include <linux/debugfs.h>
 #include <linux/iopoll.h>
 #include <linux/cxi.h>
 #include <linux/kthread.h>
@@ -560,38 +559,6 @@ void cass_lmon_kill_all(struct cass_dev *hw)
 	hw->port->lmon = NULL;
 
 	cxidev_dbg(&hw->cdev, "lmon thread destroyed\n");
-}
-
-void cass_lmon_debugfs_print(struct cass_dev *hw, struct seq_file *s)
-{
-	struct task_struct *lmon;
-	int limiter;
-	int dirn;
-	bool active;
-	u32 restart_count;
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
-	lmon  = hw->port->lmon;
-	limiter  = hw->port->lmon_limiter_on;
-	dirn  = hw->port->lmon_dirn;
-	active = hw->port->lmon_active;
-	restart_count = hw->port->link_restart_count;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
-
-	if (!lmon)
-		return;
-
-	seq_printf(s, "lmon: dirn %s%s%s", cass_lmon_dirn_str(dirn),
-		   active ? ", active" : "", limiter ? ", (limited)" : "");
-	if (cass_lmon_get_up_pause(hw))
-		seq_puts(s, ", up-paused");
-	if (hw->port->lattr.options & CASS_LINK_OPT_UP_AUTO_RESTART) {
-		seq_puts(s, ", up-auto-restart");
-		if (restart_count && (dirn == CASS_LMON_DIRECTION_UP))
-			seq_printf(s, " (%d)", restart_count);
-	}
-	seq_puts(s, "\n");
 }
 
 /*

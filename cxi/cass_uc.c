@@ -20,10 +20,10 @@
 #include <linux/firmware.h>
 #include <linux/delay.h>
 #include <linux/etherdevice.h>
-#include <linux/debugfs.h>
 
 #include "cass_core.h"
 #include "cass_cable.h"
+#include "cass_ss1_debugfs.h"
 
 /* Reserved DMAC registers for communication.
  * Range is [FIRST, FIRST+16)
@@ -32,7 +32,7 @@
 #define UC_TO_HOST_FIRST 1008
 
 /* Common command initialization */
-static void prepare_comm(struct cass_dev *hw)
+void uc_prepare_comm(struct cass_dev *hw)
 {
 	/* Clear the uC to host buffer (C_PI_CFG_DMAC_DESC[1008:1023]) */
 	memset(&hw->uc_req, 0, sizeof(hw->uc_req));
@@ -47,7 +47,7 @@ static void prepare_comm(struct cass_dev *hw)
  *
  * Return 0 if the response is valid, or a negative errno on error.
  */
-static int wait_for_response(struct cass_dev *hw)
+int uc_wait_for_response(struct cass_dev *hw)
 {
 	static const union c_hni_uc_sbr_intr srb_intr = {
 		.send_sbr_dis = 1,
@@ -115,7 +115,7 @@ static void uc_cmd_get_fw_version(struct cass_dev *hw, unsigned int fw_target)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_FIRMWARE_VERSION;
 	hw->uc_req.count = 1 + sizeof(*req_data);
@@ -124,7 +124,7 @@ static void uc_cmd_get_fw_version(struct cass_dev *hw, unsigned int fw_target)
 	req_data->from_flash = 0;
 	req_data->slot = FW_SLOT_ACTIVE;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc) {
 		cxidev_err(&hw->cdev,
 			   "uC failed to return FW info for target %d: %d\n",
@@ -175,12 +175,12 @@ int uc_cmd_get_nic_id(struct cass_dev *hw)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_GET_NIC_ID;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (!rc)
 		hw->uc_nic = rsp_data->nic;
 	else
@@ -205,13 +205,13 @@ int uc_cmd_get_mac(struct cass_dev *hw)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_GET_MAC;
 	hw->uc_req.count = sizeof(struct cuc_mac_req_data) + 1;
 	req_data->nic = CUC_MAC_THIS_NIC;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (!rc) {
 		ether_addr_copy(hw->default_mac_addr, rsp_data->nic_mac);
 	} else {
@@ -326,12 +326,12 @@ int uc_cmd_get_fru(struct cass_dev *hw)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_GET_FRU;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (!rc) {
 		hw->fru_info_valid = true;
 		decode_fru_info(hw);
@@ -370,7 +370,7 @@ int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset, u32 len, u32 page, u8 *d
 	while (len) {
 		u32 to_read = min_t(u32, len, 128);
 
-		prepare_comm(hw);
+		uc_prepare_comm(hw);
 
 		hw->uc_req.cmd = CUC_CMD_QSFP_READ;
 		hw->uc_req.count = sizeof(struct cuc_qsfp_read_req_data) + 1;
@@ -379,7 +379,7 @@ int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset, u32 len, u32 page, u8 *d
 		req_data->addr = offset;
 		req_data->count = to_read;
 
-		rc = wait_for_response(hw);
+		rc = uc_wait_for_response(hw);
 		if (!rc) {
 			memcpy(data, rsp_data, to_read);
 		} else {
@@ -471,7 +471,7 @@ int uc_cmd_qsfp_write(struct cass_dev *hw, u8 page, u8 addr,
 		if (to_write > max_data_size)
 			to_write = ETH_MODULE_SFF_8436_LEN / 2;
 
-		prepare_comm(hw);
+		uc_prepare_comm(hw);
 
 		hw->uc_req.cmd = CUC_CMD_QSFP_WRITE;
 		hw->uc_req.count = sizeof(struct cuc_qsfp_write_req_data) +
@@ -482,7 +482,7 @@ int uc_cmd_qsfp_write(struct cass_dev *hw, u8 page, u8 addr,
 		req_data->count = to_write;
 		memcpy(req_data->data, data, to_write);
 
-		rc = wait_for_response(hw);
+		rc = uc_wait_for_response(hw);
 		if (rc) {
 			mutex_unlock(&hw->uc_mbox_mutex);
 
@@ -510,13 +510,13 @@ static u32 uc_cmd_get_intr_locked(struct cass_dev *hw)
 	int rc;
 	u32 isr;
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_GET_INTR;
 	hw->uc_req.count = sizeof(*req_data) + 1;
 	req_data->nic = CUC_MAC_THIS_NIC;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (!rc)
 		isr = rsp_data->isr;
 	else
@@ -543,7 +543,7 @@ static void uc_cmd_clear_intr_locked(struct cass_dev *hw, u32 isr)
 		(struct cuc_clear_isr_req_data *)hw->uc_req.data;
 	int rc;
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_CLEAR_ISR;
 	hw->uc_req.count = sizeof(*req_data) + 1;
@@ -551,7 +551,7 @@ static void uc_cmd_clear_intr_locked(struct cass_dev *hw, u32 isr)
 	req_data->nic = CUC_MAC_THIS_NIC;
 	req_data->isr_clear_bits = isr;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc)
 		cxidev_err(&hw->cdev, "Failed to clear the uC interrupt: %d\n", rc);
 }
@@ -575,7 +575,7 @@ void uc_cmd_update_ier(struct cass_dev *hw, u32 set_bits, u32 clear_bits)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_UPDATE_IER;
 	hw->uc_req.count = sizeof(*req_data) + 1;
@@ -584,7 +584,7 @@ void uc_cmd_update_ier(struct cass_dev *hw, u32 set_bits, u32 clear_bits)
 	req_data->ier_set_bits = set_bits;
 	req_data->ier_clear_bits = clear_bits;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc)
 		cxidev_err(&hw->cdev, "Failed to update the uC IER: %d\n", rc);
 
@@ -602,7 +602,7 @@ void uc_cmd_set_link_leds(struct cass_dev *hw, enum casuc_led_states led_state)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_SET_LED;
 	hw->uc_req.count = sizeof(*req_data) + 1;
@@ -611,7 +611,7 @@ void uc_cmd_set_link_leds(struct cass_dev *hw, enum casuc_led_states led_state)
 	req_data->led = LED_LINK_STATUS;
 	req_data->state = led_state;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 
 	mutex_unlock(&hw->uc_mbox_mutex);
 
@@ -663,7 +663,7 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_FIRMWARE_UPDATE_START;
 	hw->uc_req.count = 1 + sizeof(*req_start);
@@ -672,7 +672,7 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 	req_start->size = fw->size;
 	req_start->slot = FW_SLOT_ACTIVE;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc) {
 		cxidev_err(cdev, "Cannot start firmware flashing: %d\n", rc);
 		goto done;
@@ -685,7 +685,7 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 		to_send = min_t(size_t, CUC_DATA_BYTES - sizeof(*req_download),
 				len_left);
 
-		prepare_comm(hw);
+		uc_prepare_comm(hw);
 
 		hw->uc_req.cmd = CUC_CMD_FIRMWARE_UPDATE_DOWNLOAD;
 		hw->uc_req.count = 1 + sizeof(*req_download) + to_send;
@@ -694,7 +694,7 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 		len_left -= to_send;
 		data += to_send;
 
-		rc = wait_for_response(hw);
+		rc = uc_wait_for_response(hw);
 		if (rc) {
 			cxidev_err(cdev, "Cannot upload firmware to uC: %d\n",
 				   rc);
@@ -707,12 +707,12 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 	 */
 	timeout = ktime_add_ms(ktime_get(), 130 * MSEC_PER_SEC);
 	while (1) {
-		prepare_comm(hw);
+		uc_prepare_comm(hw);
 
 		hw->uc_req.cmd = CUC_CMD_FIRMWARE_UPDATE_STATUS;
 		hw->uc_req.count = 1;
 
-		rc = wait_for_response(hw);
+		rc = uc_wait_for_response(hw);
 		if (rc) {
 			cxidev_err(cdev,
 				   "Cannot get firmware status from uC: %d\n",
@@ -748,12 +748,12 @@ int cxi_program_firmware(struct cxi_dev *cdev, const struct firmware *fw)
 	uc_cmd_clear_intr_locked(hw, ATT1_UC_RESET);
 
 	/* Reset the uC */
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_RESET;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc) {
 		cxidev_err(cdev, "uC didn't want to reset after flashing: %d\n",
 			   rc);
@@ -864,12 +864,12 @@ static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_RESET;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc)
 		cxidev_err(&hw->cdev, "uC didn't want to reset: %d\n", rc);
 	else
@@ -897,12 +897,12 @@ static ssize_t timings_show(struct kobject *kobj,
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_GET_TIMINGS;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc) {
 		cxidev_err(&hw->cdev, "uC didn't return its timings: %d\n", rc);
 	} else {
@@ -954,7 +954,7 @@ static int pldm_get_pdr(struct cass_dev *hw, unsigned int record_handle)
 	if (!hw->uc_present)
 		return -ENOTSUPP;
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_PLDM;
 	hw->uc_req.count = sizeof(*req_data) + 1;
@@ -970,7 +970,7 @@ static int pldm_get_pdr(struct cass_dev *hw, unsigned int record_handle)
 	req_data->request_count = CUC_DATA_BYTES - sizeof(struct get_pdr_rsp);
 	req_data->record_change_number = 0;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 
 	return rc;
 }
@@ -1098,7 +1098,7 @@ static int pldm_read_sensor(struct cass_dev *hw, unsigned int id,
 		(struct get_sensor_reading_rsp *)hw->uc_resp.data;
 	int rc;
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_PLDM;
 	hw->uc_req.count = sizeof(*req_data) + 1;
@@ -1111,7 +1111,7 @@ static int pldm_read_sensor(struct cass_dev *hw, unsigned int id,
 	req_data->sensor_id = id;
 	req_data->rearm_event_status = 0;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	if (rc)
 		goto out;
 
@@ -1167,49 +1167,6 @@ int update_sensor(struct pldm_sensor *sensor,
 	return rc;
 }
 
-/* Dump UC logging to debugfs */
-static int uc_log(struct seq_file *s, void *unused)
-{
-	struct cass_dev *hw = s->private;
-	int rc;
-
-	if (!hw->uc_present)
-		return 0;
-
-	mutex_lock(&hw->uc_mbox_mutex);
-
-	while (!seq_has_overflowed(s)) {
-		prepare_comm(hw);
-
-		hw->uc_req.cmd = CUC_CMD_GET_LOG;
-		hw->uc_req.count = 1;
-
-		rc = wait_for_response(hw);
-		if (rc || hw->uc_resp.count <= 1)
-			break;
-
-		hw->uc_resp.data[CUC_DATA_BYTES - 1] = 0;
-		seq_printf(s, "%s\n", hw->uc_resp.data);
-	}
-
-	mutex_unlock(&hw->uc_mbox_mutex);
-
-	return 0;
-}
-
-static int debug_dev_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, uc_log, inode->i_private);
-}
-
-const struct file_operations uc_fops = {
-	.owner = THIS_MODULE,
-	.open = debug_dev_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
 static void set_uc_platform(struct cass_dev *hw)
 {
 	const struct cuc_board_info_rsp *rsp_data =
@@ -1228,12 +1185,12 @@ static void set_uc_platform(struct cass_dev *hw)
 
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_BOARD_INFO;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 	board_type = rsp_data->board_type;
 	resp_len = hw->uc_resp.count;
 
@@ -1771,12 +1728,12 @@ int cass_register_uc(struct cass_dev *hw)
 	/* Some test platforms do not have a uC */
 	mutex_lock(&hw->uc_mbox_mutex);
 
-	prepare_comm(hw);
+	uc_prepare_comm(hw);
 
 	hw->uc_req.cmd = CUC_CMD_PING;
 	hw->uc_req.count = 1;
 
-	rc = wait_for_response(hw);
+	rc = uc_wait_for_response(hw);
 
 	hw->uc_present = rc == 0;
 

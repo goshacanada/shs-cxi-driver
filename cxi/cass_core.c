@@ -3,7 +3,6 @@
 
 /* Cassini device handler */
 
-#include <linux/debugfs.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/types.h>
@@ -16,6 +15,7 @@
 #include "cass_core.h"
 #include "cass_sbl.h"
 #include <linux/sbl.h>
+#include "cass_ss1_debugfs.h"
 
 /* Range of available number of IRQs, depending on the number of VFs
  * configured in Cassini.
@@ -774,19 +774,6 @@ unsupported:
 	return -ENOTSUPP;
 }
 
-static int tc_cfg_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, tc_cfg_show, inode->i_private);
-}
-
-static const struct file_operations tc_cfg_fops = {
-	.owner = THIS_MODULE,
-	.open = tc_cfg_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
 static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	int i;
@@ -1132,54 +1119,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	hw->max_eth_rxsize = VLAN_ETH_FRAME_LEN;
 
-	/* Various debugfs entries */
-	hw->debug_dir = debugfs_create_dir(hw->cdev.name, cxi_debug_dir);
-	hw->lni_dir = debugfs_create_dir("lni", hw->debug_dir);
-	hw->stats_dir = debugfs_create_dir("stats", hw->debug_dir);
-	hw->atu_dir = debugfs_create_dir("atu", hw->debug_dir);
-	debugfs_create_atomic_t("lni", 0444, hw->stats_dir, &hw->stats.lni);
-	debugfs_create_atomic_t("domain", 0444, hw->stats_dir,
-				&hw->stats.domain);
-	debugfs_create_atomic_t("eq", 0444, hw->stats_dir, &hw->stats.eq);
-	debugfs_create_atomic_t("txq", 0444, hw->stats_dir, &hw->stats.txq);
-	debugfs_create_atomic_t("tgq", 0444, hw->stats_dir, &hw->stats.tgq);
-	debugfs_create_atomic_t("pt", 0444, hw->stats_dir, &hw->stats.pt);
-	debugfs_create_atomic_t("ct", 0444, hw->stats_dir, &hw->stats.ct);
-	debugfs_create_atomic_t("ac", 0444, hw->stats_dir, &hw->stats.ac);
-	debugfs_create_atomic_t("md", 0444, hw->stats_dir, &hw->stats.md);
-
-	hw->domain_dir = debugfs_create_dir("domain", hw->debug_dir);
-	hw->eq_dir = debugfs_create_dir("eq", hw->debug_dir);
-	hw->cq_dir = debugfs_create_dir("cq", hw->debug_dir);
-	hw->pt_dir = debugfs_create_dir("pt", hw->debug_dir);
-	hw->ct_dir = debugfs_create_dir("ct", hw->debug_dir);
-	hw->ac_dir = debugfs_create_dir("ac", hw->debug_dir);
-
-	debugfs_create_file("tc_cfg", 0444, hw->debug_dir, hw, &tc_cfg_fops);
-	debugfs_create_atomic_t("error_inject", 0644, hw->atu_dir,
-				&hw->atu_error_inject);
-	debugfs_create_atomic_t("odp_requests", 0644, hw->atu_dir,
-				&hw->atu_odp_requests);
-	debugfs_create_atomic_t("atu_odp_fails", 0644, hw->atu_dir,
-				&hw->atu_odp_fails);
-	debugfs_create_atomic_t("atu_prb_expired", 0644, hw->atu_dir,
-				&hw->atu_prb_expired);
-
-	/* ODP Decouple stats */
-	debugfs_create_file("decouple_stats", 0644, hw->atu_dir, hw,
-			    &decouple_stats_fops);
-	debugfs_create_file("odp_sw_decouple", 0644, hw->atu_dir, hw,
-			    &sw_decouple_fops);
-
-	debugfs_create_file("uc_log", 0444, hw->debug_dir, hw, &uc_fops);
-
-	/* setup SBL debugfs interface */
-	cass_port_debugfs_init(hw);
-
-	if (cass_version(hw, CASSINI_1))
-		cass_sbl_counters_debugfs_init(hw); /* Port counters */
-
-	cass_dmac_debugfs_init(hw);
+	cass_probe_debugfs_init(hw);
 
 	/* RX and TX profile setup */
 	cass_dev_rx_tx_profiles_init(hw);

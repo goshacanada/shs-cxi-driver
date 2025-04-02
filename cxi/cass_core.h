@@ -475,6 +475,24 @@ struct csr_info {
 extern const struct file_operations decouple_stats_fops;
 extern const struct file_operations sw_decouple_fops;
 
+/*
+ * there currently are not that many entities that need to reserve
+ * sets of dma descriptors.
+ *
+ * Currently, cassini telemetry/counters (with test/experimental code)
+ * uses five dmac descriptor sets and rosetta link monitoring (lmon)
+ * may use two dma descriptor sets.
+ *
+ */
+#define DMAC_DESC_SET_COUNT			16
+
+struct dmac_desc_set {
+	u16 count;      /* total number of descs */
+	u16 index;      /* index of first desc */
+	u16 numused;    /* number of descs written */
+	const char *name;	/* descriptive name to identify use */
+};
+
 /* Private hardware data for Cassini. This is not seen by clients. */
 struct cass_dev {
 	/* Embed a cxi device. */
@@ -1319,6 +1337,8 @@ int uc_cmd_get_fru(struct cass_dev *hw);
 void uc_cmd_update_ier(struct cass_dev *hw, u32 set_bits, u32 clear_bits);
 int uc_cmd_qsfp_write(struct cass_dev *hw, u8 page, u8 addr,
 		      const u8 *data, size_t data_len);
+void uc_prepare_comm(struct cass_dev *hw);
+int uc_wait_for_response(struct cass_dev *hw);
 int cxi_get_qsfp_data(struct cxi_dev *cdev, u32 offset,
 		      u32 len, u32 page, u8 *data);
 void uc_cmd_set_link_leds(struct cass_dev *hw, enum casuc_led_states led_state);
@@ -1366,7 +1386,6 @@ void cass_tle_init(struct cass_dev *hw);
 
 int cass_dmac_init(struct cass_dev *hw);
 void cass_dmac_fini(struct cass_dev *hw);
-void cass_dmac_debugfs_init(struct cass_dev *hw);
 
 int cass_irq_init(struct cass_dev *hw);
 void cass_irq_fini(struct cass_dev *hw);

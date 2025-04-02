@@ -3,12 +3,12 @@
 
 /* Service Management */
 
-#include <linux/debugfs.h>
 #include <linux/cred.h>
 
 #include "cass_core.h"
 #include "cxi_rxtx_profile.h"
 #include "cxi_rxtx_profile_list.h"
+#include "cass_ss1_debugfs.h"
 
 static bool disable_default_svc = true;
 module_param(disable_default_svc, bool, 0444);
@@ -181,255 +181,6 @@ static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 	}
 }
 
-static const int rsrc_dump_order[] = {
-	CXI_RESOURCE_AC,
-	CXI_RESOURCE_CT,
-	CXI_RESOURCE_EQ,
-	CXI_RESOURCE_PTLTE,
-	CXI_RESOURCE_TGQ,
-	CXI_RESOURCE_TXQ,
-	CXI_RESOURCE_PE0_LE,
-	CXI_RESOURCE_PE1_LE,
-	CXI_RESOURCE_PE2_LE,
-	CXI_RESOURCE_PE3_LE,
-	CXI_RESOURCE_TLE
-};
-
-#define AC_TYPE(type) \
-	ac_type == CXI_AC_UID ? "uid" : \
-	ac_type == CXI_AC_GID ? "gid" : \
-	ac_type == CXI_AC_OPEN ? "open" : ""
-
-static int print_profile_ac_entry_info(struct seq_file *s, int id,
-				       enum cxi_profile_type type)
-{
-	int i;
-	int rc;
-	struct cass_dev *hw = s->private;
-	struct cxi_rx_profile *rx_profile;
-	struct cxi_tx_profile *tx_profile;
-	size_t num_ids;
-	size_t max_ids;
-	unsigned int *ac_entry_ids;
-	enum cxi_ac_type ac_type;
-	union cxi_ac_data ac_data;
-
-	if (type == CXI_PROF_RX) {
-		rc = rx_profile_find_inc_refcount(&hw->cdev, id, &rx_profile);
-		if (rc) {
-			seq_printf(s, "  Could not get RX Profile ID:%u rc:%d\n", id,
-				   rc);
-			return rc;
-		}
-
-		rc = cxi_rx_profile_get_ac_entry_ids(rx_profile, 0, ac_entry_ids,
-						     &num_ids);
-		if (rc && rc != -ENOSPC)
-			goto done;
-	} else {
-		rc = tx_profile_find_inc_refcount(&hw->cdev, id, &tx_profile);
-		if (rc) {
-			seq_printf(s, "  Could not get RX Profile ID:%u rc:%d\n", id,
-				   rc);
-			return rc;
-		}
-
-		rc = cxi_tx_profile_get_ac_entry_ids(tx_profile, 0, ac_entry_ids,
-						     &num_ids);
-		if (rc && rc != -ENOSPC)
-			goto done;
-	}
-
-	ac_entry_ids = kmalloc(num_ids * sizeof(*ac_entry_ids), GFP_KERNEL);
-	if (!ac_entry_ids) {
-		rc = -ENOMEM;
-		goto done;
-	}
-
-	if (type == CXI_PROF_RX) {
-		rc = cxi_rx_profile_get_ac_entry_ids(rx_profile, num_ids, ac_entry_ids,
-						     &max_ids);
-		if (rc)
-			goto freemem;
-
-		for (i = 0; i < num_ids; i++) {
-			rc = cxi_rx_profile_get_ac_entry_data(rx_profile,
-							      ac_entry_ids[i],
-							      &ac_type, &ac_data);
-			if (rc)
-				break;
-
-			seq_printf(s, "         ac_entry:%d %s, %d\n",
-				   ac_entry_ids[i], AC_TYPE(ac_type),
-				   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid);
-		}
-	} else {
-		rc = cxi_tx_profile_get_ac_entry_ids(tx_profile, num_ids, ac_entry_ids,
-						     &max_ids);
-		if (rc)
-			goto freemem;
-
-		for (i = 0; i < num_ids; i++) {
-			rc = cxi_tx_profile_get_ac_entry_data(tx_profile,
-							      ac_entry_ids[i],
-							      &ac_type, &ac_data);
-			if (rc)
-				break;
-
-			seq_printf(s, "         ac_entry:%d %s, %d\n",
-				   ac_entry_ids[i], AC_TYPE(ac_type),
-				   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid);
-		}
-	}
-
-freemem:
-	kfree(ac_entry_ids);
-done:
-	if (type == CXI_PROF_RX)
-		return cxi_rx_profile_dec_refcount(&hw->cdev, rx_profile);
-
-	return cxi_tx_profile_dec_refcount(&hw->cdev, tx_profile);
-}
-
-static int dump_services(struct seq_file *s, void *unused)
-{
-	int i;
-	int rc;
-	int svc_id;
-	ulong value;
-	struct cxi_rgroup *rgroup;
-	struct cxi_svc_priv *svc_priv;
-	struct cxi_resource_entry *entry;
-	struct cass_dev *hw = s->private;
-	struct cxi_resource_use *rsrc_use = hw->resource_use;
-	struct cxi_svc_desc *svc_desc;
-	struct cxi_rx_attr rx_attr;
-	struct cxi_tx_attr tx_attr;
-	struct cxi_rxtx_profile_state state;
-
-	mutex_lock(&hw->svc_lock);
-
-	seq_puts(s, "Resources\n");
-	seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
-
-	seq_puts(s, "  Max ");
-	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
-		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].max);
-	seq_puts(s, "\n");
-
-	seq_puts(s, "  Res ");
-	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
-		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].reserved);
-	seq_puts(s, "\n");
-
-	seq_puts(s, "Avail ");
-	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
-		value = rsrc_use[rsrc_dump_order[i]].shared -
-			rsrc_use[rsrc_dump_order[i]].shared_use;
-		seq_printf(s, "  %6lu", value);
-	}
-	seq_puts(s, "\n\n");
-
-	idr_for_each_entry(&hw->svc_ids, svc_priv, svc_id) {
-		rgroup = svc_priv->rgroup;
-
-		seq_printf(s, "ID: %u%s\n", rgroup->id,
-			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
-
-		seq_printf(s, "  LNIs/RGID:%d\n", rgroup->attr.lnis_per_rgid);
-		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
-			rgroup->pools.le_pool_id[0],
-			rgroup->pools.le_pool_id[1],
-			rgroup->pools.le_pool_id[2],
-			rgroup->pools.le_pool_id[3],
-			rgroup->pools.tle_pool_id);
-
-		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
-		seq_puts(s, "  Max   ");
-		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
-			rc = cxi_rgroup_get_resource_entry(rgroup,
-							   rsrc_dump_order[i],
-							   &entry);
-			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.max);
-		}
-		seq_puts(s, "\n");
-
-		seq_puts(s, "  Res   ");
-		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
-			rc = cxi_rgroup_get_resource_entry(rgroup,
-							   rsrc_dump_order[i],
-							   &entry);
-			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.reserved);
-		}
-		seq_puts(s, "\n");
-
-		seq_puts(s, "Alloc   ");
-		for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
-			rc = cxi_rgroup_get_resource_entry(rgroup,
-							   rsrc_dump_order[i],
-							   &entry);
-			seq_printf(s, "%6lu  ", rc ? 0 : entry->limits.in_use);
-		}
-		seq_puts(s, "\n");
-
-		svc_priv = idr_find(&hw->svc_ids, rgroup->id);
-		if (!svc_priv)
-			continue;
-
-		svc_desc = &svc_priv->svc_desc;
-		seq_printf(s, "  RX Profile IDs:%u\n", svc_desc->num_vld_vnis);
-		for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-			seq_printf(s, "    ID:%u ", svc_priv->rx_profile_ids[i]);
-			rc = cxi_rx_profile_get_info(&rgroup->hw->cdev,
-						     svc_priv->rx_profile_ids[i],
-						     &rx_attr, &state);
-			seq_printf(s, "name:%s VNI match:%u ignore:%u\n",
-				   rx_attr.vni_attr.name[0] ? rx_attr.vni_attr.name : "none",
-				   rx_attr.vni_attr.match,
-				   rx_attr.vni_attr.ignore);
-
-			print_profile_ac_entry_info(s,
-						    svc_priv->rx_profile_ids[i],
-						    CXI_PROF_RX);
-
-		}
-		seq_printf(s, "  TX Profile IDs:%u\n", svc_desc->num_vld_vnis);
-		for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-			seq_printf(s, "    ID:%u ", svc_priv->tx_profile_ids[i]);
-			rc = cxi_tx_profile_get_info(&rgroup->hw->cdev,
-						     svc_priv->tx_profile_ids[i],
-						     &tx_attr, &state);
-			seq_printf(s, "name:%s VNI match:%u ignore:%u\n",
-				   tx_attr.vni_attr.name[0] ? tx_attr.vni_attr.name : "none",
-				   tx_attr.vni_attr.match,
-				   tx_attr.vni_attr.ignore);
-
-			print_profile_ac_entry_info(s,
-						    svc_priv->tx_profile_ids[i],
-						    CXI_PROF_TX);
-
-		}
-		seq_puts(s, "\n");
-	}
-
-	mutex_unlock(&hw->svc_lock);
-
-	return 0;
-}
-
-static int debug_dev_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, dump_services, inode->i_private);
-}
-
-static const struct file_operations svc_debug_fops = {
-	.owner = THIS_MODULE,
-	.open = debug_dev_open,
-	.read = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
 void cass_cfg_tle_pool(struct cass_dev *hw, int pool_id,
 		       const struct cxi_limits *tles, bool release)
 {
@@ -544,8 +295,7 @@ int cass_svc_init(struct cass_dev *hw)
 		cxi_rgroup_disable(svc_priv->rgroup);
 	}
 
-	hw->svc_debug = debugfs_create_file("services", 0444, hw->debug_dir,
-					    hw, &svc_debug_fops);
+	svc_service_debugfs_create(hw);
 
 	return 0;
 }

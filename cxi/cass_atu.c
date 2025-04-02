@@ -5,7 +5,6 @@
 
 #include <linux/interrupt.h>
 #include <linux/types.h>
-#include <linux/debugfs.h>
 #include <linux/hugetlb.h>
 #include <linux/iova.h>
 #include <linux/bvec.h>
@@ -14,6 +13,7 @@
 #include <linux/random.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 int more_debug;
 module_param(more_debug, int, 0644);
@@ -378,8 +378,6 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
-	char name[30];
-	char path[30];
 
 	/* ac->pg_table_size is limited to 4 bits and a minimum of 8 entries */
 	if ((m_opts->huge_shift - m_opts->page_shift > MAX_PG_TABLE_SIZE) ||
@@ -449,11 +447,7 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 
 	atomic_inc(&hw->stats.ac);
 
-	sprintf(name, "%u", cac->ac.acid);
-	cac->debug_dir = debugfs_create_dir(name, hw->ac_dir);
-
-	sprintf(path, "../../../ac/%u", cac->ac.acid);
-	cac->lni_dir = debugfs_create_symlink(name, lni_priv->ac_dir, path);
+	ac_debugfs_create(cac->ac.acid, cac, hw, lni_priv);
 
 	return cac;
 
@@ -480,6 +474,7 @@ static void cass_ac_free(struct cass_dev *hw, struct cass_ac *cac)
 
 	debugfs_remove(cac->lni_dir);
 	debugfs_remove_recursive(cac->debug_dir);
+
 	atomic_dec(&hw->stats.ac);
 	cxi_free_resource(lni_priv->dev, svc_priv, CXI_RSRC_TYPE_AC);
 

@@ -178,33 +178,9 @@ int cass_link_async_reset_wait(struct cass_dev *hw, u32 origin)
 }
 
 /*
- * print out link state, info etc for debugfs/sysfs diags
+ * print out link state, info etc for sysfs diags
  *
  */
-void cass_link_debugfs_print(struct cass_dev *hw, struct seq_file *s)
-{
-	int state;
-	int down_origin;
-	int lerr;
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
-	state = hw->port->lstate;
-	lerr = hw->port->lerr;
-	down_origin = hw->port->link_down_origin;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
-
-	seq_printf(s, "link state: %s", cass_link_state_str(state));
-
-	if (state == CASS_LINK_STATUS_ERROR)
-		seq_printf(s, " [%d]\n", lerr);
-	else if (state == CASS_LINK_STATUS_DOWN)
-		seq_printf(s, " (%s)\n",
-			   cass_link_down_origin_str(down_origin));
-	else
-		seq_puts(s, "\n");
-}
-
 int cass_link_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size)
 {
 	int rc;

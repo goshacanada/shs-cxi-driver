@@ -3,10 +3,10 @@
 
 /* Cassini NI management */
 
-#include <linux/debugfs.h>
 #include <linux/types.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 unsigned int cxi_lni_get_pe_num(struct cxi_lni_priv *lni)
 {
@@ -35,7 +35,6 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_lni_priv *lni_priv;
 	struct cxi_svc_priv *svc_priv;
-	char name[30];
 	int id;
 	int rgid;
 	void *err;
@@ -111,17 +110,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	cxi_rgroup_inc_refcount(svc_priv->rgroup);
 	refcount_inc(&hw->refcount);
 
-	sprintf(name, "%d", lni_priv->lni.id);
-	lni_priv->debug_dir = debugfs_create_dir(name, hw->lni_dir);
-	debugfs_create_u32("id", 0444, lni_priv->debug_dir, &lni_priv->lni.id);
-	debugfs_create_u32("rgid", 0444, lni_priv->debug_dir, &lni_priv->lni.rgid);
-	debugfs_create_u32("pid", 0444, lni_priv->debug_dir, &lni_priv->pid);
-
-	lni_priv->cq_dir = debugfs_create_dir("cq", lni_priv->debug_dir);
-	lni_priv->pt_dir = debugfs_create_dir("pt", lni_priv->debug_dir);
-	lni_priv->eq_dir = debugfs_create_dir("eq", lni_priv->debug_dir);
-	lni_priv->ct_dir = debugfs_create_dir("ct", lni_priv->debug_dir);
-	lni_priv->ac_dir = debugfs_create_dir("ac", lni_priv->debug_dir);
+	lni_debugfs_create(lni_priv->lni.id, hw, lni_priv);
 
 	return &lni_priv->lni;
 

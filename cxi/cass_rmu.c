@@ -4,13 +4,13 @@
 /* Create and destroy Cassini command queues */
 
 #include <linux/cxi.h>
-#include <linux/debugfs.h>
 #include <linux/idr.h>
 #include <linux/kernel.h>
 #include <linux/rbtree.h>
 #include <linux/types.h>
 
 #include "cass_core.h"
+#include "cass_ss1_debugfs.h"
 
 /* Search for a VNI in the VNI tree. */
 static struct cass_vni *find_vni(struct rb_root *root, unsigned int vni)
@@ -330,7 +330,6 @@ struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
 	struct cxi_dev *cdev = lni_priv->dev;
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_domain_priv *domain_priv;
-	char name[30];
 	int rc;
 	struct cass_vni *cvni;
 	int domain_pid = pid;
@@ -393,10 +392,7 @@ struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
 	if (rc)
 		goto free_dom_id;
 
-	sprintf(name, "%u_%u", vni, domain_pid);
-	domain_priv->debug_dir = debugfs_create_dir(name, hw->domain_dir);
-	debugfs_create_u32("vni", 0444, domain_priv->debug_dir,
-			   &domain_priv->domain.vni);
+	domain_debugfs_create(vni, domain_pid, hw, domain_priv);
 
 	spin_lock(&lni_priv->res_lock);
 	atomic_inc(&hw->stats.domain);
