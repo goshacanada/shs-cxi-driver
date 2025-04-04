@@ -95,6 +95,7 @@ int main(void)
 		.members[0].svc_member.uid = TEST_UID,
 		.members[1].type = CXI_SVC_MEMBER_GID,
 		.members[1].svc_member.gid = TEST_GID,
+		.tcs[CXI_TC_BEST_EFFORT] = true,
 	};
 
 	struct ucxi_wait *wait;

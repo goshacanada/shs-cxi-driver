@@ -127,18 +127,6 @@ bool valid_vni(struct cxi_dev *dev, bool restricted,
 					     &user_data);
 }
 
-/* Check if a service allows a particular TC to be used */
-bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc)
-{
-	if (!svc_priv->svc_desc.restricted_tcs)
-		return true;
-
-	if (svc_priv->svc_desc.tcs[tc])
-		return true;
-
-	return false;
-}
-
 bool valid_svc_user(struct cxi_rgroup *rgroup)
 {
 	unsigned int ac_entry_id;
@@ -260,6 +248,9 @@ int cass_svc_init(struct cass_dev *hw)
 		}
 	}
 	svc_desc.limits = limits;
+
+	for (i = CXI_TC_DEDICATED_ACCESS; i <= CXI_TC_BEST_EFFORT; ++i)
+		svc_desc.tcs[i] = true;
 
 	if (!default_svc_test_mode) {
 		svc_desc.restricted_vnis = true;
@@ -550,6 +541,21 @@ static void remove_ac_entries(struct cxi_dev *dev,
 	}
 }
 
+static void set_tcs(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
+{
+	int i, j;
+	struct cxi_tx_profile *tx_profile;
+	struct cxi_svc_desc *svc_desc = &svc_priv->svc_desc;
+
+	for (i = 0; i < svc_priv->num_vld_tx_profiles; i++) {
+		tx_profile = svc_priv->tx_profile[i];
+
+		for (j = 0; j < CXI_TC_MAX; j++)
+			if (!svc_desc->restricted_tcs || svc_desc->tcs[j])
+				cxi_tx_profile_set_tc(tx_profile, j, true);
+	}
+}
+
 static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 {
 	int i;
@@ -614,7 +620,8 @@ static void release_rxtx_profiles(struct cxi_dev *dev,
 		cxi_rx_profile_dec_refcount(dev, svc_priv->rx_profile[i]);
 
 	for (i = 0; i < svc_priv->num_vld_tx_profiles; i++)
-		cxi_tx_profile_dec_refcount(dev, svc_priv->tx_profile[i]);
+		cxi_tx_profile_dec_refcount(dev, svc_priv->tx_profile[i],
+					    true);
 }
 
 static int alloc_rxtx_profiles(struct cxi_dev *dev,
@@ -668,6 +675,8 @@ static int alloc_rxtx_profiles(struct cxi_dev *dev,
 	rc = alloc_ac_entries(dev, svc_priv);
 	if (rc)
 		goto release_profiles;
+
+	set_tcs(dev, svc_priv);
 
 	return 0;
 
@@ -1104,7 +1113,7 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc)
 	memcpy(svc_priv->svc_desc.tcs, svc_desc->tcs, sizeof(svc_desc->tcs));
 	memcpy(svc_priv->svc_desc.vnis, svc_desc->vnis, sizeof(svc_desc->vnis));
 	memcpy(svc_priv->svc_desc.members, svc_desc->members, sizeof(svc_desc->members));
-
+	// TODO: update TX profile?
 error:
 	mutex_unlock(&hw->svc_lock);
 	return rc;

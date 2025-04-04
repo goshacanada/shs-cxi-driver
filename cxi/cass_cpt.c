@@ -3,6 +3,7 @@
 
 /* Communication Profile Table (CPT) management */
 
+#include <linux/iopoll.h>
 #include "cass_core.h"
 
 #define ENABLED_PFQ 0
@@ -240,6 +241,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cass_cp *cass_cp;
 	struct cxi_cp_priv *cp_priv;
+	struct cxi_tx_profile *tx_profile = NULL;
 	int rc;
 	int lcid;
 
@@ -254,13 +256,28 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 			return ERR_PTR(-EINVAL);
 		else if (!capable(CAP_NET_RAW))
 			return ERR_PTR(-EPERM);
+
+		tx_profile = cxi_dev_get_eth_tx_profile(&hw->cdev);
 	} else {
+		tx_profile = cxi_dev_get_tx_profile(&hw->cdev, vni_pcp);
+		if (IS_ERR(tx_profile)) {
+			rc = PTR_ERR(tx_profile);
+			pr_debug("tx_profile not found for vni:%d rc:%d\n",
+				 vni_pcp, rc);
+
+			return ERR_PTR(rc);
+		}
+
 		/* Perform VNI checks. */
 		if (!is_vni_valid(vni_pcp) ||
 		    !valid_vni(dev, svc_priv->svc_desc.restricted_vnis,
 			       CXI_PROF_TX, vni_pcp) ||
-		    !valid_svc_tc(svc_priv, tc))
-			return ERR_PTR(-EINVAL);
+		    !cxi_tx_profile_valid_tc(tx_profile, tc)) {
+			pr_debug("Invalid tc:%d tx_profile ID:%d\n", tc,
+				 tx_profile->profile_common.id);
+			rc = -EINVAL;
+			goto free_tx_profile;
+		}
 	}
 
 	mutex_lock(&hw->cp_lock);
@@ -295,6 +312,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 		goto free_cp_priv;
 	}
 	cp_priv->cass_cp = cass_cp;
+	cass_cp->tx_profile = tx_profile;
 
 	/* Map the communication profile to LCID. */
 	lcid = cass_lcid_get(hw, cp_priv, lni_priv->lni.rgid);
@@ -322,6 +340,8 @@ free_cp:
 free_cp_priv:
 	mutex_unlock(&hw->cp_lock);
 	kfree(cp_priv);
+free_tx_profile:
+	cxi_tx_profile_dec_refcount(dev, tx_profile, true);
 
 	return ERR_PTR(rc);
 }
@@ -358,6 +378,8 @@ void cxi_cp_free(struct cxi_cp *cp)
 
 	mutex_unlock(&hw->cp_lock);
 
+	cxi_tx_profile_dec_refcount(&hw->cdev, cp_priv->cass_cp->tx_profile,
+				    true);
 	kfree(cp_priv);
 
 	cass_flush_pci(hw);

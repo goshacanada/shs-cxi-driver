@@ -25,6 +25,25 @@ static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
 	return overlap ? -EEXIST : 0;
 }
 
+/* initialize common profile and cassini config members */
+static void cass_dev_init_tx_profile(struct cass_dev *hw,
+				     struct cxi_tx_profile *tx_profile,
+				     const struct cxi_tx_attr *tx_attr)
+{
+	cxi_rxtx_profile_init(&tx_profile->profile_common,
+			      hw, &tx_attr->vni_attr);
+	cass_tx_profile_init(hw, tx_profile);
+}
+
+void cxi_dev_init_eth_tx_profile(struct cass_dev *hw)
+{
+	struct cxi_tx_attr tx_attr = {};
+
+	cass_dev_init_tx_profile(hw, &hw->eth_tx_profile, &tx_attr);
+	refcount_inc(&hw->refcount);
+}
+EXPORT_SYMBOL(cxi_dev_init_eth_tx_profile);
+
 /**
  * cxi_dev_alloc_tx_profile() - Allocate a TX Profile
  *
@@ -48,14 +67,11 @@ struct cxi_tx_profile *cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
 	if (!tx_profile)
 		return ERR_PTR(-ENOMEM);
 
-	/* initialize common profile and cassini config members */
-	cxi_rxtx_profile_init(&tx_profile->profile_common,
-			      hw, &tx_attr->vni_attr);
-	cass_tx_profile_init(hw, tx_profile);
+	cass_dev_init_tx_profile(hw, tx_profile, tx_attr);
 
-	/* make sure the VNI space is unique */
 	cxi_rxtx_profile_list_lock(&hw->tx_profile_list);
 
+	/* make sure the VNI space is unique */
 	ret = cxi_rxtx_profile_list_iterate(&hw->tx_profile_list,
 					    vni_overlap_test,
 					    &tx_profile->profile_common);
@@ -86,6 +102,141 @@ free_return:
 EXPORT_SYMBOL(cxi_dev_alloc_tx_profile);
 
 /**
+ * cxi_dev_find_tx_profile() - Find the TX profile containing a vni
+ *
+ * @dev: Cassini Device
+ * @vni: Match criteria to find TX profile
+ *
+ * Return: tx_profile ptr on success or NULL
+ */
+struct cxi_tx_profile *cxi_dev_find_tx_profile(struct cxi_dev *dev,
+					       uint16_t vni)
+{
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct cxi_rxtx_profile_list *list = &hw->tx_profile_list;
+	struct cxi_tx_profile *tx_profile = NULL;
+	struct cxi_rxtx_profile *profile;
+	unsigned long index = list->limits->min;
+	uid_t uid = __kuid_val(current_euid());
+	gid_t gid = __kgid_val(current_egid());
+	unsigned int ac_entry_id;
+	int rc;
+
+	cxi_rxtx_profile_list_lock(list);
+
+	xa_for_each(&list->xarray, index, profile) {
+		if (!profile->state.enable)
+			continue;
+
+		if ((vni & ~profile->vni_attr.ignore) == profile->vni_attr.match) {
+			tx_profile = container_of(profile,
+						  struct cxi_tx_profile,
+						  profile_common);
+
+			rc = cxi_rxtx_profile_get_ac_entry_id_by_user(
+						&tx_profile->profile_common,
+						uid, gid, CXI_AC_ANY,
+						&ac_entry_id);
+			if (!rc) {
+				refcount_inc(&profile->state.refcount);
+				break;
+			}
+
+			tx_profile = NULL;
+		}
+	}
+
+	cxi_rxtx_profile_list_unlock(list);
+
+	return tx_profile;
+}
+
+/**
+ * cxi_dev_get_tx_profile - Get a TX profile
+ *
+ * Check if one is already allocated and return it.
+ * For kernel users (i.e. kcxi), allocate one if not found, add
+ * an AC entry, set the TCs and enable the profile.
+ *
+ * @dev: Cassini Device
+ * @vni: VNI to find
+ *
+ * Return: tx_profile ptr on success, or a negative errno value.
+ */
+struct cxi_tx_profile *cxi_dev_get_tx_profile(struct cxi_dev *dev,
+					      unsigned int vni)
+{
+	int i;
+	int rc;
+	struct cass_dev *hw = get_cass_dev(dev);
+	unsigned int ac_entry_id;
+	struct cxi_tx_profile *tx_profile;
+	struct cxi_tx_attr tx_attr = {
+		.vni_attr = {
+			.match = vni,
+			.ignore = 0
+		}
+	};
+
+	mutex_lock(&hw->tx_profile_get_lock);
+
+	tx_profile = cxi_dev_find_tx_profile(dev, vni);
+	if (tx_profile)
+		goto done;
+
+	/* For a non-root user, just report no entry found.*/
+	if (__kuid_val(current_euid())) {
+		tx_profile = ERR_PTR(-ENOENT);
+		goto done;
+	}
+
+	tx_profile = cxi_dev_alloc_tx_profile(dev, &tx_attr);
+	if (IS_ERR(tx_profile))
+		goto done;
+
+	rc = cxi_dev_tx_profile_add_ac_entry(dev, CXI_AC_UID,
+					     __kuid_val(current_euid()),
+					     0, tx_profile, &ac_entry_id);
+	if (rc) {
+		tx_profile = ERR_PTR(rc);
+		goto done;
+	}
+
+	/* For backward compatibility to the old service api,
+	 * enable all the TCs.
+	 */
+	for (i = CXI_TC_DEDICATED_ACCESS; i <= CXI_TC_BEST_EFFORT; i++)
+		cxi_tx_profile_set_tc(tx_profile, i, true);
+
+	rc = cxi_tx_profile_enable(dev, tx_profile);
+	if (rc)
+		tx_profile = ERR_PTR(rc);
+
+done:
+	mutex_unlock(&hw->tx_profile_get_lock);
+
+	return tx_profile;
+}
+EXPORT_SYMBOL(cxi_dev_get_tx_profile);
+
+/**
+ * cxi_tx_profile_valid_tc() - Check if a TC is valid for this TX profile
+ *
+ * @tx_profile: Profile to check against
+ * @tc: Traffic Class
+ *
+ * Return:
+ * * true if valid
+ */
+bool cxi_tx_profile_valid_tc(struct cxi_tx_profile *tx_profile, unsigned int tc)
+{
+	if (tc >= CXI_TC_MAX)
+		return false;
+
+	return test_bit(tc, tx_profile->config.tc_table);
+}
+
+/**
  * cxi_tx_profile_enable() - Enable a Profile
  *
  * @dev: Cassini Device
@@ -102,6 +253,7 @@ int cxi_tx_profile_enable(struct cxi_dev *dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_tx_profile_enable);
 
 /**
  * cxi_tx_profile_disable() - Disable a Profile
@@ -114,6 +266,7 @@ void cxi_tx_profile_disable(struct cxi_dev *dev,
 {
 	// TODO: cleanup
 }
+EXPORT_SYMBOL(cxi_tx_profile_disable);
 
 /**
  * cxi_tx_profile_is_enabled() - Report TX profile is enabled
@@ -132,10 +285,12 @@ EXPORT_SYMBOL(cxi_tx_profile_is_enabled);
  *
  * @dev: Cassini device pointer
  * @tx_profile: pointer to Profile
+ * @list_remove: don't remove from tx_profile_list
  *
  */
 int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
-				struct cxi_tx_profile *tx_profile)
+				struct cxi_tx_profile *tx_profile,
+				bool list_remove)
 {
 	struct cass_dev *hw = get_cass_dev(dev);
 	int    ret;
@@ -148,14 +303,45 @@ int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 		return -EBUSY;
 
 	cxi_tx_profile_disable(dev, tx_profile);
+	cxi_dev_tx_profile_remove_ac_entries(tx_profile);
+
 	refcount_dec(&hw->refcount);
-	cxi_rxtx_profile_list_remove(&hw->tx_profile_list,
-				     tx_profile->profile_common.id);
+
+	if (list_remove)
+		cxi_rxtx_profile_list_remove(&hw->tx_profile_list,
+					     tx_profile->profile_common.id);
 
 	kfree(tx_profile);
 	return 0;
 }
 EXPORT_SYMBOL(cxi_tx_profile_dec_refcount);
+
+/**
+ * cxi_dev_get_eth_tx_profile() - Get ethernet TX profile
+ *
+ * @dev: Cassini Device
+ *
+ * Return: tx_profile ethernet ptr
+ */
+struct cxi_tx_profile *cxi_dev_get_eth_tx_profile(struct cxi_dev *dev)
+{
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+
+	refcount_inc(&hw->eth_tx_profile.profile_common.state.refcount);
+	return &hw->eth_tx_profile;
+}
+
+/**
+ * cxi_eth_tx_profile_cleanup() - Clean up the TX profile for ethernet
+ *
+ * @hw: the device
+ */
+void cxi_eth_tx_profile_cleanup(struct cass_dev *hw)
+{
+	cxi_tx_profile_disable(&hw->cdev, &hw->eth_tx_profile);
+	refcount_dec(&hw->refcount);
+}
+EXPORT_SYMBOL(cxi_eth_tx_profile_cleanup);
 
 /**
  * cxi_tx_profile_get_info() - Retrieve the attributes and state associated

@@ -40,6 +40,8 @@ void cass_dev_rx_tx_profiles_init(struct cass_dev *hw)
 				   &tx_profile_limits,
 				   TX_PROFILE_XARRAY_FLAGS,
 				   TX_PROFILE_GFP_OPTS);
+
+	mutex_init(&hw->tx_profile_get_lock);
 }
 
 struct profile_destroy_data {
@@ -61,7 +63,8 @@ static void tx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 	struct profile_destroy_data *data = user_arg;
 
 	refcount_dec(&rxtx_profile->state.refcount);
-	cxi_tx_profile_dec_refcount(data->cxi_dev, co_tx_profile(rxtx_profile));
+	cxi_tx_profile_dec_refcount(data->cxi_dev, co_tx_profile(rxtx_profile),
+				    false);
 }
 
 /**

@@ -176,8 +176,9 @@ done:
 
 static int dump_services(struct seq_file *s, void *unused)
 {
-	int i;
+	int i, j;
 	int rc;
+	int tcs;
 	int svc_id;
 	ulong value;
 	struct cxi_rgroup *rgroup;
@@ -288,6 +289,16 @@ static int dump_services(struct seq_file *s, void *unused)
 
 			print_profile_ac_entry_info(s, svc_priv->tx_profile[i],
 						    CXI_PROF_TX);
+
+			seq_puts(s, "         TCs:");
+			for (j = 0, tcs = 0; j < CXI_TC_MAX; j++) {
+				if (test_bit(j, svc_priv->tx_profile[i]->config.tc_table)) {
+					seq_printf(s, "%s%s", tcs ? ", " : "",
+						   cxi_tc_strs[j]);
+					tcs++;
+				}
+			}
+			seq_puts(s, "\n");
 
 		}
 		seq_puts(s, "\n");

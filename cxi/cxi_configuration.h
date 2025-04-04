@@ -116,18 +116,14 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 					   cxi_ac_typeset_t desired_types,
 					   unsigned int *ac_entry_id);
 
-void cxi_dev_init_eth_tx_profile(struct cxi_dev *dev);
-void cxi_eth_tx_profile_cleanup(struct cxi_dev *dev);
+void cxi_dev_init_eth_tx_profile(struct cass_dev *hw);
+void cxi_eth_tx_profile_cleanup(struct cass_dev *hw);
 struct cxi_tx_profile *cxi_dev_get_eth_tx_profile(struct cxi_dev *dev);
 
 struct cxi_tx_profile *cxi_dev_find_tx_profile(struct cxi_dev *dev,
 					       uint16_t vni);
 bool cxi_tx_profile_valid_tc(struct cxi_tx_profile *tx_profile,
 			     unsigned int tc);
-int cxi_tx_profile_enable(struct cxi_dev *dev,
-			   struct cxi_tx_profile *tx_profile);
-void cxi_tx_profile_disable(struct cxi_dev *dev,
-			   struct cxi_tx_profile *tx_profile);
 
 int cxi_tx_profile_release(struct cxi_dev *dev,
 			   unsigned int tx_profile_id);

@@ -748,6 +748,7 @@ struct cass_dev {
 
 	/* Ethernet Set List */
 	struct ida set_list_table;
+	struct cxi_tx_profile eth_tx_profile;
 
 	/* Protects C_RMU_CFG_PORTAL_LIST_X/Y. */
 	spinlock_t rmu_portal_list_lock;
@@ -905,6 +906,7 @@ struct cass_dev {
 	/* RX and TX Profiles */
 	struct cxi_rxtx_profile_list rx_profile_list;
 	struct cxi_rxtx_profile_list tx_profile_list;
+	struct mutex tx_profile_get_lock;
 
 	/* Services */
 	struct mutex svc_lock;
@@ -1009,6 +1011,7 @@ enum cxi_profile_type {
 
 /* Communication profile. */
 struct cass_cp {
+	struct cxi_tx_profile *tx_profile;
 	/* Device tree the profile is stored in. */
 	struct rb_node node;
 	struct cass_dev *hw;

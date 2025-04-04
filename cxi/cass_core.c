@@ -696,6 +696,8 @@ static int init_hw(struct cass_dev *hw)
 	if (ret)
 		goto __init_hw_err_3;
 
+	cxi_dev_init_eth_tx_profile(hw);
+
 	return 0;
 
 __init_hw_err_3:
@@ -714,6 +716,7 @@ __init_hw_err_0:
 
 static void fini_hw(struct cass_dev *hw)
 {
+	cxi_eth_tx_profile_cleanup(hw);
 	cass_tc_fini(hw);
 	cass_atu_fini(hw);
 	cass_hni_fini(hw);
