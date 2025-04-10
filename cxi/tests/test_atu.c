@@ -992,7 +992,8 @@ static int fill_sgtable(struct tdev *tdev, struct sg_table *sgt, int npages,
 		return rc;
 
 	for_each_sgtable_sg(sgt, sg, i) {
-		page = alloc_pages(GFP_KERNEL, get_order(sdata[i].length));
+		page = alloc_pages(GFP_KERNEL,
+				   get_order(sdata[i].length + sdata[i].offset));
 		if (!page) {
 			pr_info("failed alloc_page\n");
 			goto free_pages;
@@ -1125,6 +1126,7 @@ static int test_sgtable3(struct tdev *tdev)
 		pr_err("cxi_map_sgtable should fail with -EINVAL %d\n", rc);
 		goto free_bad_sgtable;
 	}
+	unmap_free_sgtable(tdev, &sgt_bad);
 
 	rc = fill_sgtable(tdev, &sgt_bad, ARRAY_SIZE(bad_sdata2), bad_sdata2,
 			  &len, false);
