@@ -1075,11 +1075,11 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 			   SL_LGRP_NOTIF_LINK_ASYNC_DOWN   | \
 			   SL_LGRP_NOTIF_LINK_DOWN         | \
 			   SL_LGRP_NOTIF_LINK_ERROR        | \
-			   SL_LGRP_NOTIF_LLR_DATA          | \
-			   SL_LGRP_NOTIF_LLR_START_TIMEOUT |\
-			   SL_LGRP_NOTIF_LLR_SETUP_TIMEOUT |\
-			   SL_LGRP_NOTIF_LLR_ERROR         |\
-			   SL_LGRP_NOTIF_LLR_RUNNING)
+			   SL_LGRP_NOTIF_LLR_SETUP         | \
+			   SL_LGRP_NOTIF_LLR_SETUP_TIMEOUT | \
+			   SL_LGRP_NOTIF_LLR_RUNNING       | \
+			   SL_LGRP_NOTIF_LLR_START_TIMEOUT | \
+			   SL_LGRP_NOTIF_LLR_ERROR)
 
 static void cass_sl_uc_ops_init(struct cass_dev *cass_dev)
 {
@@ -1125,8 +1125,8 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		complete(&(cass_dev->sl.step_complete));
 		cass_link_async_down(cass_dev, CASS_DOWN_ORIGIN_BL_DOWN);
 		break;
-	case SL_LGRP_NOTIF_LLR_DATA:
-		cass_dev->sl.llr_state = SL_LLR_STATE_BUSY;
+	case SL_LGRP_NOTIF_LLR_SETUP:
+		cass_dev->sl.llr_state = SL_LLR_STATE_SETUP;
 		cass_dev->sl.llr_data = msg->info.llr_data;
 		complete(&(cass_dev->sl.step_complete));
 		break;
@@ -1502,24 +1502,31 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 			goto out_mac_rx_stop;
 		}
 
-		/* start */
+		/* setup */
 		reinit_completion(&(cass_dev->sl.step_complete));
-		rtn = sl_llr_start(cass_dev->sl.llr);
-		if (rtn != 0) {
-			cxidev_err(&cass_dev->cdev, "sl_llr_start failed [%d]\n", rtn);
-			goto out_mac_rx_stop;
+		rtn = sl_llr_setup(cass_dev->sl.llr);
+		if (rtn) {
+			cxidev_err(&cass_dev->cdev, "sl_llr_setup failed [%d]\n", rtn);
+			goto out_llr_stop;
 		}
 		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 			msecs_to_jiffies(2*CASS_SL_LLR_SETUP_TIMEOUT_MS));
 		if (timeleft == 0) {
-			cxidev_dbg(&cass_dev->cdev, "sl_llr_start timeout\n");
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_setup timeout\n");
 			goto out_llr_stop;
 		}
-		if (cass_dev->sl.llr_state != SL_LLR_STATE_BUSY) {
-			cxidev_dbg(&cass_dev->cdev, "sl_llr_start no data\n");
+		if (cass_dev->sl.llr_state != SL_LLR_STATE_SETUP) {
+			cxidev_dbg(&cass_dev->cdev, "sl_llr_setup not setup\n");
 			goto out_llr_stop;
 		}
+
+		/* start */
 		reinit_completion(&(cass_dev->sl.step_complete));
+		rtn = sl_llr_start(cass_dev->sl.llr);
+		if (rtn) {
+			cxidev_err(&cass_dev->cdev, "sl_llr_start failed [%d]\n", rtn);
+			goto out_llr_stop;
+		}
 		timeleft = wait_for_completion_timeout(&(cass_dev->sl.step_complete),
 			msecs_to_jiffies(2*CASS_SL_LLR_START_TIMEOUT_MS));
 		if (timeleft == 0) {
@@ -1540,6 +1547,8 @@ int cass_sl_link_up(struct cass_dev *cass_dev)
 	return 0;
 
 out_llr_stop:
+	sl_llr_stop(cass_dev->sl.llr);
+	/* need to stop twice to make sure both setup and start are stopped */
 	sl_llr_stop(cass_dev->sl.llr);
 
 out_mac_rx_stop:
@@ -1578,6 +1587,8 @@ int cass_sl_link_down(struct cass_dev *cass_dev)
 	rtn = sl_llr_stop(cass_dev->sl.llr);
 	if (rtn)
 		cxidev_warn(&cass_dev->cdev, "sl_llr_stop failed [%d]\n", rtn);
+	/* need to stop twice to make sure both setup and start are stopped */
+	sl_llr_stop(cass_dev->sl.llr);
 
 	/* stop MAC */
 	rtn = sl_mac_tx_stop(cass_dev->sl.mac);
