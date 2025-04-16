@@ -115,6 +115,9 @@ bool valid_vni(struct cxi_dev *dev, bool restricted,
 		},
 	};
 
+	if (!restricted)
+		return true;
+
 	if (type == CXI_PROF_RX)
 		list = &hw->rx_profile_list;
 	else
