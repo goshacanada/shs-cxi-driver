@@ -1633,9 +1633,19 @@ static bool eth_receive(struct rx_queue *rx,
 			pskb_trim(skb, skb->len - sizeof(ts));
 		}
 
-		if (event->is_roce &&
-		    (dev->priv_flags & CXI_ETH_PF_ROCE_OPT))
-			check_segmented_roce(skb);
+		if (event->is_roce) {
+			if (skb->len <= 64 && !dev->is_c2 &&
+			    (skb_shinfo(skb)->nr_frags == 0))
+				/* Due to a rarely occurring hardware
+				 * bug, iCRC on packets smaller than
+				 * 65 bytes may be passed although
+				 * they are corrupted.  Tell the rxe
+				 * driver to check it again.
+				 */
+				cxi_force_icrc_check(skb);
+			else if (dev->priv_flags & CXI_ETH_PF_ROCE_OPT)
+				check_segmented_roce(skb);
+		}
 
 		skb_record_rx_queue(skb, rx->id);
 

@@ -71,6 +71,15 @@ struct cb_data {
 	dma_addr_t dma_addr[C_MAX_ETH_FRAGS];
 };
 
+static inline void cxi_force_icrc_check(struct sk_buff *skb)
+{
+#ifdef SKBTX_ZEROCOPY_FRAG
+	skb_shinfo(skb)->__unused |= BIT(1);
+#else
+	skb_shinfo(skb)->flags |= BIT(6);
+#endif
+}
+
 static inline void cxi_skb_icrc_gone(struct sk_buff *skb)
 {
 #ifdef SKBTX_ZEROCOPY_FRAG
