@@ -300,14 +300,29 @@ struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
 	struct cxi_rx_profile *rx_profile = NULL;
 	struct cxi_rxtx_profile *profile;
 	unsigned long index = list->limits->min;
+	uid_t uid = __kuid_val(current_euid());
+	gid_t gid = __kgid_val(current_egid());
+	unsigned int ac_entry_id;
+	int rc;
 
 	cxi_rxtx_profile_list_lock(list);
 
 	xa_for_each(&list->xarray, index, profile) {
+		if (!profile->state.enable)
+			continue;
+
 		if ((vni & ~profile->vni_attr.ignore) == profile->vni_attr.match) {
 			rx_profile = container_of(profile,
 						  struct cxi_rx_profile,
 						  profile_common);
+
+			rc = cxi_rxtx_profile_get_ac_entry_id_by_user(
+						&rx_profile->profile_common,
+						uid, gid, CXI_AC_ANY,
+						&ac_entry_id);
+			if (rc)
+				continue;
+
 			refcount_inc(&profile->state.refcount);
 			break;
 		}
@@ -340,6 +355,7 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 		return -EBUSY;
 
 	cxi_rx_profile_disable(dev, rx_profile);
+	cxi_dev_rx_profile_remove_ac_entries(rx_profile);
 	refcount_dec(&hw->refcount);
 	cxi_rxtx_profile_list_remove(&hw->rx_profile_list,
 				     rx_profile->profile_common.id);

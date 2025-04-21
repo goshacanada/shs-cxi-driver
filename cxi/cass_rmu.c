@@ -131,6 +131,7 @@ static struct cxi_rx_profile *alloc_rx_profile(struct cxi_dev *dev,
 					       unsigned int vni)
 {
 	int rc;
+	unsigned int ac_entry_id;
 	struct cxi_rx_profile *rx_profile;
 	struct cxi_rx_attr rx_attr = {
 		.vni_attr = {
@@ -143,13 +144,22 @@ static struct cxi_rx_profile *alloc_rx_profile(struct cxi_dev *dev,
 	if (IS_ERR(rx_profile))
 		return rx_profile;
 
+	rc = cxi_dev_rx_profile_add_ac_entry(dev, CXI_AC_UID,
+					     __kuid_val(current_euid()),
+					     0, rx_profile, &ac_entry_id);
+	if (rc)
+		goto err;
+
 	rc = cxi_rx_profile_enable(dev, rx_profile);
-	if (rc) {
-		cxi_rx_profile_dec_refcount(dev, rx_profile);
-		return ERR_PTR(rc);
-	}
+	if (rc)
+		goto err;
 
 	return rx_profile;
+
+err:
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
+
+	return ERR_PTR(rc);
 }
 
 /* Allocate a new domain, with a unique per-device VNI+PID. The VNI is
