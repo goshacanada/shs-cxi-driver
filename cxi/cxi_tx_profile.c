@@ -385,6 +385,7 @@ int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 	return cxi_rxtx_profile_add_ac_entry(&tx_profile->profile_common,
 					     type, &data, ac_entry_id);
 }
+EXPORT_SYMBOL(cxi_dev_tx_profile_add_ac_entry);
 
 /**
  * cxi_dev_tx_profile_remove_ac_entries() - remove Access Control entries
@@ -399,3 +400,4 @@ void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile)
 
 	cxi_ac_entry_list_destroy(&tx_profile->profile_common.ac_entry_list);
 }
+EXPORT_SYMBOL(cxi_dev_tx_profile_remove_ac_entries);
