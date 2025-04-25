@@ -116,6 +116,17 @@ void cxi_tx_profile_disable(struct cxi_dev *dev,
 }
 
 /**
+ * cxi_tx_profile_is_enabled() - Report TX profile is enabled
+ *
+ * @tx_profile: Profile object
+ */
+bool cxi_tx_profile_is_enabled(const struct cxi_tx_profile *tx_profile)
+{
+	return tx_profile->profile_common.state.enable;
+}
+EXPORT_SYMBOL(cxi_tx_profile_is_enabled);
+
+/**
  * cxi_tx_profile_dec_refcount() - Decrement refcount and cleanup
  *                                 if last reference
  *
