@@ -699,7 +699,6 @@ struct cass_dev {
 	 * The lock, cp_lock, protects the tree.
 	 */
 	struct ida cp_table;
-	struct rb_root cp_tree;
 	struct mutex cp_lock;
 
 	/* Write once, read only list of configured traffic classes. */
@@ -1011,10 +1010,8 @@ enum cxi_profile_type {
 
 /* Communication profile. */
 struct cass_cp {
-	struct cxi_tx_profile *tx_profile;
-	/* Device tree the profile is stored in. */
-	struct rb_node node;
 	struct cass_dev *hw;
+	struct cxi_tx_profile *tx_profile;
 
 	/* VNI/PCP and TC identify a unique communication profile. */
 	unsigned int vni_pcp;
@@ -1023,6 +1020,9 @@ struct cass_cp {
 
 	/* Communication profile table ID. */
 	unsigned int id;
+
+	/* CP list ID. */
+	unsigned int list_id;
 
 	/* Number of users of this profile. */
 	refcount_t ref;
@@ -1186,6 +1186,7 @@ void cass_tc_fini(struct cass_dev *hw);
 void traffic_shaping_cfg(struct cass_dev *hw);
 void cass_tc_set_tx_pause_all(struct cass_dev *hw, bool enable);
 void cass_tc_set_rx_pause_all(struct cass_dev *hw, bool enable);
+void cass_clear_cps(struct cxi_tx_profile *tx_profile);
 
 static inline bool is_vni_valid(unsigned int vni)
 {

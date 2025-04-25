@@ -262,9 +262,10 @@ EXPORT_SYMBOL(cxi_tx_profile_enable);
  * @tx_profile: Profile to be disabled.
  */
 void cxi_tx_profile_disable(struct cxi_dev *dev,
-			   struct cxi_tx_profile *tx_profile)
+			    struct cxi_tx_profile *tx_profile)
 {
-	// TODO: cleanup
+	tx_profile->profile_common.state.enable = false;
+	cass_clear_cps(tx_profile);
 }
 EXPORT_SYMBOL(cxi_tx_profile_disable);
 

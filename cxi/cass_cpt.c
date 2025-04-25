@@ -8,61 +8,38 @@
 
 #define ENABLED_PFQ 0
 
-static void cp_insert(struct rb_root *root, struct cass_cp *cp)
+static int cass_cp_clear_table(int id, void *ptr, void *data)
 {
-	struct rb_node **new = &(root->rb_node);
-	struct rb_node *parent = NULL;
+	struct cass_cp *cp = ptr;
+	struct cass_dev *hw = data;
+	const union c_cq_cfg_cp_table cp_cfg = {};
 
-	/* Figure out where to put new node */
-	while (*new) {
-		struct cass_cp *this = container_of(*new, struct cass_cp, node);
+	cass_set_cp_table(hw, cp->id, &cp_cfg);
 
-		parent = *new;
-		if (this->vni_pcp < cp->vni_pcp)
-			new = &((*new)->rb_left);
-		else if (this->vni_pcp > cp->vni_pcp)
-			new = &((*new)->rb_right);
-		else if (this->tc < cp->tc)
-			new = &((*new)->rb_left);
-		else if (this->tc > cp->tc)
-			new = &((*new)->rb_right);
-		else if (this->tc_type < cp->tc_type)
-			new = &((*new)->rb_left);
-		else
-			new = &((*new)->rb_right);
-	}
-
-	/* Add new node and rebalance tree. */
-	rb_link_node(&cp->node, parent, new);
-	rb_insert_color(&cp->node, root);
+	return 0;
 }
 
-static struct cass_cp *cp_find(struct rb_root *root, unsigned int vni_pcp,
-			       unsigned int tc,
-			       enum cxi_traffic_class_type tc_type)
+/**
+ * cass_clear_cps() - Walk list of Communication profiles and clear
+ *                    the entries.
+ *
+ * @tx_profile: TX profile to clean
+ */
+void cass_clear_cps(struct cxi_tx_profile *tx_profile)
 {
-	struct rb_node *node = root->rb_node;
+	struct cass_dev *hw = tx_profile->config.hw;
 
-	while (node) {
-		struct cass_cp *cp = container_of(node, struct cass_cp, node);
-
-		if (cp->vni_pcp < vni_pcp)
-			node = node->rb_left;
-		else if (cp->vni_pcp > vni_pcp)
-			node = node->rb_right;
-		else if (cp->tc < tc)
-			node = node->rb_left;
-		else if (cp->tc > tc)
-			node = node->rb_right;
-		else if (cp->tc_type < tc_type)
-			node = node->rb_left;
-		else if (cp->tc_type > tc_type)
-			node = node->rb_right;
-		else
-			return cp;
-	}
-	return NULL;
+	mutex_lock(&hw->cp_lock);
+	idr_for_each(&tx_profile->config.cass_cp_table, &cass_cp_clear_table,
+		     hw);
+	mutex_unlock(&hw->cp_lock);
 }
+
+struct vni_tc_data {
+	unsigned int vni_pcp;
+	unsigned int tc;
+	enum cxi_traffic_class_type tc_type;
+};
 
 /**
  * cass_cp_free() - Free a communication profile.
@@ -79,8 +56,7 @@ static void cass_cp_free(struct cass_cp *cp)
 
 	cass_set_cp_table(hw, cp->id, &cp_cfg);
 
-	rb_erase(&cp->node, &hw->cp_tree);
-
+	idr_remove(&cp->tx_profile->config.cass_cp_table, cp->list_id);
 	ida_simple_remove(&hw->cp_table, cp->id);
 
 	kfree(cp);
@@ -89,7 +65,7 @@ static void cass_cp_free(struct cass_cp *cp)
 /**
  * cass_cp_alloc() - Allocate a new communication profile.
  *
- * @hw: Cassini device.
+ * @tx_profile: TX profile object
  * @vni_pcp: VNI for communication profile. If using an ethernet tc,
  * this argument is treated as PCP.
  * @tc: Traffic class for communication profile.
@@ -97,13 +73,16 @@ static void cass_cp_free(struct cass_cp *cp)
  *
  * @return: Valid pointer on success. Else, negative errno value.
  */
-static struct cass_cp *cass_cp_alloc(struct cass_dev *hw, unsigned int vni_pcp,
+static struct cass_cp *cass_cp_alloc(struct cxi_tx_profile *tx_profile,
+				     unsigned int vni_pcp,
 				     unsigned int tc,
 				     enum cxi_traffic_class_type tc_type)
+	__must_hold(&hw->cp_lock)
 {
 	struct cass_cp *cp;
 	unsigned int cp_id;
 	int rc;
+	struct cass_dev *hw = tx_profile->config.hw;
 	union c_cq_cfg_cp_table cp_cfg = {
 		.valid = 1,
 		.hrp_vld = tc_type == CXI_TC_TYPE_HRP,
@@ -131,13 +110,22 @@ static struct cass_cp *cass_cp_alloc(struct cass_dev *hw, unsigned int vni_pcp,
 			   hw->cdev.name);
 		goto error_free_cp;
 	}
+
 	cp_id = rc;
 
+	rc = idr_alloc(&tx_profile->config.cass_cp_table, cp, 1, 0, GFP_KERNEL);
+	if (rc < 0)
+		goto error_remove_ida;
+
+	refcount_set(&cp->ref, 1);
+
+	cp->list_id = rc;
 	cp->id = cp_id;
 	cp->vni_pcp = vni_pcp;
 	cp->tc = tc;
 	cp->tc_type = tc_type;
 	cp->hw = hw;
+	cp->tx_profile = tx_profile;
 
 	cp_cfg.vni = vni_pcp;
 	cp_cfg.dscp_unrsto = tc_cfg.unres_req_dscp;
@@ -156,10 +144,6 @@ static struct cass_cp *cass_cp_alloc(struct cass_dev *hw, unsigned int vni_pcp,
 
 	cass_set_cp_fl_table(hw, cp_id, &flow_cfg);
 
-	cp_insert(&hw->cp_tree, cp);
-
-	refcount_set(&cp->ref, 1);
-
 	cxidev_dbg(&hw->cdev,
 		   "%s cp allocated: tc=%s tc_type=%s cp=%u vni_pcp=%u label=%u tc=%u pfq=%u\n",
 		   hw->cdev.name, cxi_tc_to_str(tc),
@@ -168,6 +152,8 @@ static struct cass_cp *cass_cp_alloc(struct cass_dev *hw, unsigned int vni_pcp,
 
 	return cp;
 
+error_remove_ida:
+	ida_simple_remove(&hw->cp_table, cp_id);
 error_free_cp:
 	kfree(cp);
 
@@ -186,12 +172,25 @@ static void cass_cp_put(struct cass_cp *cp)
 		cass_cp_free(cp);
 }
 
+static int cp_match(int id, void *ptr, void *data)
+{
+	struct cass_cp *cp = ptr;
+	struct vni_tc_data *vni_tc = data;
+
+	if (vni_tc->vni_pcp == cp->vni_pcp &&
+	    vni_tc->tc == cp->tc &&
+	    vni_tc->tc_type == cp->tc_type)
+		return cp->list_id;
+
+	return 0;
+}
+
 /**
  * cass_cp_get() - Get a communication profile.
  *
- * @hw: Cassini device.
+ * @tx_profile: TX profile
  * @vni_pcp: VNI for communication profile. If using an ethernet tc,
- * this argument is treated as PCP.
+ *           this argument is treated as PCP.
  * @tc: Traffic class for communication profile.
  * @tc_type: Traffic class type for communication profile.
  *
@@ -199,20 +198,37 @@ static void cass_cp_put(struct cass_cp *cp)
  *
  * @return: Valid pointer on success. Else, negative errno value.
  */
-static struct cass_cp *cass_cp_get(struct cass_dev *hw, unsigned int vni_pcp,
+static struct cass_cp *cass_cp_get(struct cxi_tx_profile *tx_profile,
+				   unsigned int vni_pcp,
 				   unsigned int tc,
 				   enum cxi_traffic_class_type tc_type)
 	__must_hold(&hw->cp_lock)
 {
+	int id;
 	struct cass_cp *cp;
+	struct vni_tc_data data = {
+		.vni_pcp = vni_pcp,
+		.tc = tc,
+		.tc_type = tc_type
+	};
 
-	cp = cp_find(&hw->cp_tree, vni_pcp, tc, tc_type);
-	if (cp)
+	if (tx_profile->config.exclusive_cp)
+		return cass_cp_alloc(tx_profile, vni_pcp, tc, tc_type);
+
+	id = idr_for_each(&tx_profile->config.cass_cp_table, &cp_match, &data);
+	if (id) {
+		cp = idr_find(&tx_profile->config.cass_cp_table, id);
+		if (!cp) {
+			pr_err("Could not find id %d\n", id);
+			return ERR_PTR(-ENOENT);
+		}
+
 		refcount_inc(&cp->ref);
-	else
-		cp = cass_cp_alloc(hw, vni_pcp, tc, tc_type);
 
-	return cp;
+		return cp;
+	}
+
+	return cass_cp_alloc(tx_profile, vni_pcp, tc, tc_type);
 }
 
 /**
@@ -234,8 +250,8 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 			    unsigned int tc,
 			    enum cxi_traffic_class_type tc_type)
 {
-	struct cxi_lni_priv *lni_priv =
-		container_of(lni, struct cxi_lni_priv, lni);
+	struct cxi_lni_priv *lni_priv = container_of(lni, struct cxi_lni_priv,
+						     lni);
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
@@ -306,13 +322,13 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 	refcount_set(&cp_priv->refcount, 1);
 
 	/* Allocate the communication profile. */
-	cass_cp = cass_cp_get(hw, vni_pcp, tc, tc_type);
+	cass_cp = cass_cp_get(tx_profile, vni_pcp, tc, tc_type);
 	if (IS_ERR(cass_cp)) {
 		rc = PTR_ERR(cass_cp);
 		goto free_cp_priv;
 	}
+
 	cp_priv->cass_cp = cass_cp;
-	cass_cp->tx_profile = tx_profile;
 
 	/* Map the communication profile to LCID. */
 	lcid = cass_lcid_get(hw, cp_priv, lni_priv->lni.rgid);
