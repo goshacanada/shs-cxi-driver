@@ -177,6 +177,35 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 }
 
 /**
+ * cxi_tx_profile_set_tc() - Set/clear a traffic class in the TX profile
+ *
+ * @tx_profile: pointer to Profile
+ * @tc: traffic class to add/clear
+ * @set: operation - set true / clear false
+ *
+ * Return:
+ * * 0       - success
+ * * -EINVAL - tc outside of allowed range
+ */
+int cxi_tx_profile_set_tc(struct cxi_tx_profile *tx_profile, int tc, bool set)
+{
+	if (tc < CXI_TC_DEDICATED_ACCESS || tc > CXI_TC_MAX)
+		return -EINVAL;
+
+	spin_lock(&tx_profile->config.lock);
+
+	if (set)
+		set_bit(tc, tx_profile->config.tc_table);
+	else
+		clear_bit(tc, tx_profile->config.tc_table);
+
+	spin_unlock(&tx_profile->config.lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_tx_profile_set_tc);
+
+/**
  * cxi_tx_profile_add_ac_entry() - add an Access Control entry to
  *                                 an existing Profile
  *

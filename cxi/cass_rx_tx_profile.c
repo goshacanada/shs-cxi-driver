@@ -104,4 +104,7 @@ void cass_rx_profile_init(struct cass_dev *hw,
 void cass_tx_profile_init(struct cass_dev *hw,
 			  struct cxi_tx_profile *tx_profile)
 {
+	tx_profile->config.hw = hw;
+	idr_init(&tx_profile->config.cass_cp_table);
+	spin_lock_init(&tx_profile->config.lock);
 }
