@@ -138,6 +138,104 @@ struct cxi_eth_res {
 #define PTP_L2_MAC 0x011B19000000ULL
 #define PTP_L2_ETHERTYPE 0x88f7
 
+/* Access Control Entries */
+typedef unsigned int __bitwise cxi_ac_typeset_t;
+enum cxi_ac_type {
+	CXI_AC_UID  = (__force cxi_ac_typeset_t)BIT(0),
+	CXI_AC_GID  = (__force cxi_ac_typeset_t)BIT(1),
+	CXI_AC_OPEN = (__force cxi_ac_typeset_t)BIT(2),
+};
+
+/* Common parts of RX and TX Profiles */
+#define CXI_VNI_NAME_LEN    64
+#define MAX_PID_BITS 9
+#define DEFAULT_PID_BITS MAX_PID_BITS
+
+struct cxi_ac_entry_list {
+	struct cxi_ac_entry *open_entry;
+	struct {
+		struct xarray       xarray;
+	} uid;
+	struct {
+		struct xarray       xarray;
+	} gid;
+	struct {
+		struct xarray       xarray;
+	} id;
+};
+
+struct cxi_rxtx_vni_attr {
+	uint16_t         match;
+	uint16_t         ignore;
+	char             name[CXI_VNI_NAME_LEN];
+};
+
+struct cxi_rxtx_profile_state {
+	bool       enable;
+	refcount_t refcount;
+};
+
+struct cxi_rxtx_profile {
+	unsigned int                   id;
+	struct cxi_rxtx_vni_attr       vni_attr;
+	struct cxi_rxtx_profile_state  state;
+	struct cxi_ac_entry_list       ac_entry_list;
+};
+
+/* RX Profile */
+
+/* Struct to hold HW configuration */
+struct cxi_rx_config {
+	int rmu_index;
+	DECLARE_BITMAP(pid_table, 1 << MAX_PID_BITS);
+	spinlock_t pid_lock;
+};
+
+/* Struct for creation and listing */
+struct cxi_rx_attr {
+	struct cxi_rxtx_vni_attr        vni_attr;
+	/* TODO: other RX specific attributes */
+};
+
+struct cxi_rx_profile {
+	struct cxi_rxtx_profile         profile_common;
+	struct cxi_rx_config            config;
+	/* TODO: other RX parameters */
+};
+
+/* TX Profile */
+
+struct cxi_tx_config {
+	bool exclusive_cp;
+	struct cass_dev *hw;
+	struct idr cass_cp_table;
+	DECLARE_BITMAP(tc_table, CXI_TC_MAX);
+};
+
+/* Struct for creation and listing */
+struct cxi_tx_attr {
+	struct cxi_rxtx_vni_attr vni_attr;
+};
+
+struct cxi_tx_profile {
+	struct cxi_rxtx_profile         profile_common;
+	struct cxi_tx_config            config;
+};
+
+struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
+					const struct cxi_rx_attr *rx_attr);
+struct cxi_tx_profile *cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
+					const struct cxi_tx_attr *tx_attr);
+int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
+				struct cxi_rx_profile *rx_profile);
+int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
+				struct cxi_tx_profile *tx_profile);
+int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
+				    uid_t uid, gid_t gid,
+				    struct cxi_tx_profile *tx_profile,
+				    unsigned int *ac_entry_id);
+void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
+
 struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 			    bool is_user);
 int cxi_ct_wb_update(struct cxi_ct *ct, struct c_ct_writeback *wb);

@@ -4,35 +4,12 @@
 #ifndef _CXI_CONFIGURATION_H_
 #define _CXI_CONFIGURATION_H_
 
-/* Access Control Entries */
-typedef unsigned int __bitwise cxi_ac_typeset_t;
-enum cxi_ac_type {
-	CXI_AC_UID  = (__force cxi_ac_typeset_t)BIT(0),
-	CXI_AC_GID  = (__force cxi_ac_typeset_t)BIT(1),
-	CXI_AC_OPEN = (__force cxi_ac_typeset_t)BIT(2),
-};
-
 /* Parameter for use with the 'by_user' retrieve functions */
 #define CXI_AC_ANY (CXI_AC_UID | CXI_AC_GID | CXI_AC_OPEN)
 
 union cxi_ac_data {
 	uid_t     uid;
 	gid_t     gid;
-};
-
-struct cxi_ac_entry;
-
-struct cxi_ac_entry_list {
-	struct cxi_ac_entry *open_entry;
-	struct {
-		struct xarray       xarray;
-	} uid;
-	struct {
-		struct xarray       xarray;
-	} gid;
-	struct {
-		struct xarray       xarray;
-	} id;
 };
 
 void cxi_ac_entry_list_init(struct cxi_ac_entry_list *list);
@@ -80,79 +57,14 @@ struct cxi_rxtx_profile_list {
 	gfp_t            gfp_opts;
 };
 
-/* Common parts of RX and TX Profiles */
-#define CXI_VNI_NAME_LEN    64
-
-struct cxi_rxtx_vni_attr {
-	uint16_t         match;
-	uint16_t         ignore;
-	char             name[CXI_VNI_NAME_LEN];
-};
-
-struct cxi_rxtx_profile_state {
-	bool       enable;
-	refcount_t refcount;
-};
-
-struct cxi_rxtx_profile {
-	unsigned int                   id;
-	struct cxi_rxtx_vni_attr       vni_attr;
-	struct cxi_rxtx_profile_state  state;
-	struct cxi_ac_entry_list       ac_entry_list;
-};
-
-/* RX Profile */
-
-/* Struct to hold HW configuration */
-struct cxi_rx_config {
-	int rmu_index;
-	DECLARE_BITMAP(pid_table, 1 << MAX_PID_BITS);
-	spinlock_t pid_lock;
-};
-
-/* Struct for creation and listing */
-struct cxi_rx_attr {
-	struct cxi_rxtx_vni_attr        vni_attr;
-	/* TODO: other RX specific attributes */
-};
-
-struct cxi_rx_profile {
-	struct cxi_rxtx_profile         profile_common;
-	struct cxi_rx_config            config;
-	/* TODO: other RX parameters */
-};
-
-/* TX Profile */
-
-struct cxi_tx_config {
-	int              cp_id;  /* this is a guess */
-};
-
-/* Struct for creation and listing */
-struct cxi_tx_attr {
-	struct cxi_rxtx_vni_attr        vni_attr;
-	/* TODO: other TX specific attributes */
-};
-
-struct cxi_tx_profile {
-	struct cxi_rxtx_profile         profile_common;
-	struct cxi_tx_config            config;
-};
-
 int tx_profile_find_inc_refcount(struct cxi_dev *dev,
 				 unsigned int tx_profile_id,
 				 struct cxi_tx_profile **tx_profile);
-
-struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
-					const struct cxi_rx_attr *rx_attr);
 int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_rx_profile *rx_profile,
 				    unsigned int *ac_entry_id);
 void cxi_dev_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile);
-
-int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
-				struct cxi_rx_profile *rx_profile);
 
 int cxi_rx_profile_release(struct cxi_dev *dev,
 			   unsigned int rx_profile_id);
@@ -204,17 +116,18 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 					   cxi_ac_typeset_t desired_types,
 					   unsigned int *ac_entry_id);
 
-struct cxi_tx_profile *cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
-					const struct cxi_tx_attr *tx_attr);
+void cxi_dev_init_eth_tx_profile(struct cxi_dev *dev);
+void cxi_eth_tx_profile_cleanup(struct cxi_dev *dev);
+struct cxi_tx_profile *cxi_dev_get_eth_tx_profile(struct cxi_dev *dev);
+
+struct cxi_tx_profile *cxi_dev_find_tx_profile(struct cxi_dev *dev,
+					       uint16_t vni);
+bool cxi_tx_profile_valid_tc(struct cxi_tx_profile *tx_profile,
+			     unsigned int tc);
 int cxi_tx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
 void cxi_tx_profile_disable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
-int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
-				    uid_t uid, gid_t gid,
-				    struct cxi_tx_profile *tx_profile,
-				    unsigned int *ac_entry_id);
-void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
 
 int cxi_tx_profile_release(struct cxi_dev *dev,
 			   unsigned int tx_profile_id);
@@ -225,9 +138,6 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_tx_profile *tx_profile,
 			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state);
-
-int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
-				struct cxi_tx_profile *tx_profile);
 
 int cxi_tx_profile_add_ac_entry(struct cxi_tx_profile *tx_profile,
 				enum cxi_ac_type ac_type,
