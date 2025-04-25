@@ -36,6 +36,15 @@
 #include <linux/mmu_notifier.h>
 #endif
 
+#if (defined(RHEL_MAJOR) && RHEL_MAJOR == 9 && RHEL_MINOR >= 6)
+#define HAVE_KERNEL_ETHTOOL_TS_INFO
+#endif
+
+#if defined(CONFIG_SUSE_PRODUCT_SLE) && CONFIG_SUSE_VERSION == 15 && \
+	CONFIG_SUSE_PATCHLEVEL >= 7
+#define HAVE_KERNEL_ETHTOOL_TS_INFO
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 #define HAVE_GET_SINGLETON
 #endif

@@ -668,7 +668,7 @@ static void cxi_get_ethtool_stats(struct net_device *ndev,
 }
 
 static int cxi_get_ts_info(struct net_device *ndev,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0) || defined(HAVE_KERNEL_ETHTOOL_TS_INFO)
 			   struct kernel_ethtool_ts_info *info
 #else
 			   struct ethtool_ts_info *info
