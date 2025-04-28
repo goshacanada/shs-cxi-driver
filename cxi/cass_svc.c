@@ -150,14 +150,14 @@ static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 	for (type = 0; type < CXI_RSRC_TYPE_MAX; type++) {
 		rtype = stype_to_rtype(type, 0);
 		if (type == CXI_RSRC_TYPE_TLE) {
-			if (rgroup->pools.tle_pool_id == -1)
+			if (cxi_rgroup_tle_pool_id(rgroup) == -1)
 				continue;
 
 			cass_read(hw,
-				  C_CQ_STS_TLE_IN_USE(rgroup->pools.tle_pool_id),
+				  C_CQ_STS_TLE_IN_USE(cxi_rgroup_tle_pool_id(rgroup)),
 				  &tle_in_use, sizeof(tle_in_use));
 			rsrcs->in_use[type] = tle_in_use.count;
-			rsrcs->tle_pool_id = rgroup->pools.tle_pool_id;
+			rsrcs->tle_pool_id = cxi_rgroup_tle_pool_id(rgroup);
 		} else {
 			rc = cxi_rgroup_get_resource_entry(rgroup,
 							   rtype, &entry);
@@ -594,7 +594,7 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 			ac_data.gid = svc_desc->members[i].svc_member.gid;
 
 		rc = cxi_dev_rgroup_add_ac_entry(dev,
-						 svc_priv->rgroup->id,
+						 cxi_rgroup_id(svc_priv->rgroup),
 						 type, &ac_data,
 						 &ac_entry_id);
 		if (rc && rc != -EEXIST)
@@ -727,13 +727,14 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	}
 
 	svc_priv->rgroup = rgroup;
-	svc_priv->svc_desc.svc_id = rgroup->id;
+	svc_priv->svc_desc.svc_id = cxi_rgroup_id(rgroup);
 
-	rc = idr_alloc(&hw->svc_ids, svc_priv, rgroup->id, rgroup->id + 1,
+	rc = idr_alloc(&hw->svc_ids, svc_priv, cxi_rgroup_id(rgroup),
+		       cxi_rgroup_id(rgroup) + 1,
 		       GFP_NOWAIT);
 	if (rc < 0) {
 		cxidev_err(&hw->cdev, "%s Service idr could not be obtained for rgroup ID %d rc:%d\n",
-			   hw->cdev.name, rgroup->id, rc);
+			   hw->cdev.name, cxi_rgroup_id(rgroup), rc);
 		goto release_rgroup;
 	}
 
@@ -757,7 +758,7 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 	mutex_unlock(&hw->svc_lock);
 	refcount_inc(&hw->refcount);
 
-	return rgroup->id;
+	return cxi_rgroup_id(rgroup);
 
 free_resources:
 	free_rsrcs(svc_priv);
@@ -765,7 +766,7 @@ unlock:
 	mutex_unlock(&hw->svc_lock);
 	release_rxtx_profiles(dev, svc_priv);
 remove_idr:
-	idr_remove(&hw->svc_ids, rgroup->id);
+	idr_remove(&hw->svc_ids, cxi_rgroup_id(rgroup));
 release_rgroup:
 	cxi_rgroup_dec_refcount(rgroup);
 	return rc;
@@ -779,7 +780,7 @@ EXPORT_SYMBOL(cxi_svc_alloc);
 static void svc_destroy(struct cass_dev *hw, struct cxi_svc_priv *svc_priv)
 {
 	int rc;
-	int svc_id = svc_priv->rgroup->id;
+	int svc_id = cxi_rgroup_id(svc_priv->rgroup);
 
 	free_rsrcs(svc_priv);
 
@@ -1014,7 +1015,7 @@ int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 	struct cxi_resource_entry *entry;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
-	if (!svc_priv->rgroup->state.enabled)
+	if (!cxi_rgroup_is_enabled(svc_priv->rgroup))
 		return -EKEYREVOKED;
 
 	rtype = stype_to_rtype(type, 0);
@@ -1039,7 +1040,7 @@ int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		r_use->shared_use++;
 	} else {
 		pr_debug("rgroup_id:%d %s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
-			 svc_priv->rgroup->id,
+			 cxi_rgroup_id(svc_priv->rgroup),
 			 cxi_resource_type_to_str(rtype),
 			 entry->limits.in_use, entry->limits.reserved,
 			 entry->limits.max, r_use->shared_use);
@@ -1123,6 +1124,9 @@ EXPORT_SYMBOL(cxi_svc_update);
 /**
  * cxi_svc_set_lpr() - Update an existing service to set the LNIs per RGID
  *
+ * For backwards compatibility, check if service is in use instead of
+ * checking if rgroup is enabled.
+ *
  * @dev: Cassini Device
  * @svc_id: Service ID of service to be updated.
  * @lnis_per_rgid: New value of lnis_per_rgid
@@ -1152,7 +1156,7 @@ int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
 		return -EBUSY;
 	}
 
-	svc_priv->rgroup->attr.lnis_per_rgid = lnis_per_rgid;
+	cxi_rgroup_set_lnis_per_rgid_compat(svc_priv->rgroup, lnis_per_rgid);
 
 	mutex_unlock(&hw->svc_lock);
 
@@ -1183,7 +1187,7 @@ int cxi_svc_get_lpr(struct cxi_dev *dev, unsigned int svc_id)
 
 	mutex_unlock(&hw->svc_lock);
 
-	return svc_priv->rgroup->attr.lnis_per_rgid;
+	return cxi_rgroup_lnis_per_rgid(svc_priv->rgroup);
 }
 EXPORT_SYMBOL(cxi_svc_get_lpr);
 

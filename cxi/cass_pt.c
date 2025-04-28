@@ -453,7 +453,8 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	ptl_table.pe_num = cxi_lni_get_pe_num(lni_priv);
 	pt->pe_num = ptl_table.pe_num;
 	ptl_table.le_pool = pt->le_pool =
-		pt->lni_priv->svc_priv->rgroup->pools.le_pool_id[pt->pe_num];
+		cxi_rgroup_le_pool_id(pt->lni_priv->svc_priv->rgroup,
+				      pt->pe_num);
 
 	spin_lock(&hw->lpe_shadow_lock);
 	cass_config_pte(hw, pt_n, &ptl_table);

@@ -217,16 +217,16 @@ static int dump_services(struct seq_file *s, void *unused)
 	idr_for_each_entry(&hw->svc_ids, svc_priv, svc_id) {
 		rgroup = svc_priv->rgroup;
 
-		seq_printf(s, "ID: %u%s\n", rgroup->id,
-			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
+		seq_printf(s, "ID: %u%s\n", cxi_rgroup_id(rgroup),
+			(cxi_rgroup_id(rgroup) == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
 
 		seq_printf(s, "  LNIs/RGID:%d\n", rgroup->attr.lnis_per_rgid);
 		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
-			rgroup->pools.le_pool_id[0],
-			rgroup->pools.le_pool_id[1],
-			rgroup->pools.le_pool_id[2],
-			rgroup->pools.le_pool_id[3],
-			rgroup->pools.tle_pool_id);
+			   cxi_rgroup_le_pool_id(rgroup, 0),
+			   cxi_rgroup_le_pool_id(rgroup, 1),
+			   cxi_rgroup_le_pool_id(rgroup, 2),
+			   cxi_rgroup_le_pool_id(rgroup, 3),
+			   cxi_rgroup_tle_pool_id(rgroup));
 
 		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
 		seq_puts(s, "  Max   ");
@@ -256,7 +256,7 @@ static int dump_services(struct seq_file *s, void *unused)
 		}
 		seq_puts(s, "\n");
 
-		svc_priv = idr_find(&hw->svc_ids, rgroup->id);
+		svc_priv = idr_find(&hw->svc_ids, cxi_rgroup_id(rgroup));
 		if (!svc_priv)
 			continue;
 
