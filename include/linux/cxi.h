@@ -250,6 +250,13 @@ bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile,
 int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
 				    bool exclusive_cp);
 
+/* Rgroup */
+struct cxi_rgroup;
+
+int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
+void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
+bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
+
 struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 			    bool is_user);
 int cxi_ct_wb_update(struct cxi_ct *ct, struct c_ct_writeback *wb);

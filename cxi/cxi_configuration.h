@@ -260,12 +260,6 @@ struct cxi_rgroup {
 void cxi_dev_lock_rgroup_list(struct cass_dev *hw);
 void cxi_dev_unlock_rgroup_list(struct cass_dev *hw);
 
-int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
-
-void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
-
-bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
-
 void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 			struct cxi_rgroup_attr *attr,
 			struct cxi_rgroup_state *state);
@@ -319,6 +313,7 @@ int cxi_rgroup_get_ac_entry_by_user(struct cxi_rgroup *rgroup,
 				    cxi_ac_typeset_t desired_types,
 				    unsigned int *ac_entry_id);
 
+void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup);
 int cxi_rgroup_dec_refcount(struct cxi_rgroup *rgroup);
 
 struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,

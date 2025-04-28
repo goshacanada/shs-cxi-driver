@@ -33,7 +33,6 @@ struct cxi_rgroup_list {
 
 void cxi_dev_rgroup_init(struct cxi_dev *dev);
 void cxi_dev_rgroup_fini(struct cxi_dev *dev);
-void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup);
 
 /**
  * for_each_rgroup() - Iterate over rgroup_list
