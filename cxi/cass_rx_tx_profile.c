@@ -104,5 +104,4 @@ void cass_rx_profile_init(struct cass_dev *hw,
 void cass_tx_profile_init(struct cass_dev *hw,
 			  struct cxi_tx_profile *tx_profile)
 {
-	tx_profile->config.cp_id = -1;
 }
