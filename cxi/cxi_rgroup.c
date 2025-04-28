@@ -558,6 +558,10 @@ unlock_return:
 	return ret;
 }
 
+/* **************************************************************** */
+/* Rgroup API                                                       */
+/* **************************************************************** */
+
 /**
  * cxi_rgroup_is_enabled() - Report Resource group is enabled.
  *
@@ -607,6 +611,162 @@ void cxi_rgroup_disable(struct cxi_rgroup *rgroup)
 	cxi_dev_unlock_rgroup_list(rgroup->hw);
 }
 EXPORT_SYMBOL(cxi_rgroup_disable);
+
+/**
+ * cxi_rgroup_id() - Get the rgroup id
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: ID of rgroup
+ */
+unsigned int cxi_rgroup_id(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->id;
+}
+
+/**
+ * rgroup_name() - Get the rgroup name
+ *
+ * @rgroup: resource group pointer
+ * @dest: Where to copy name string to
+ * @count: Size of destination buffer
+ */
+void cxi_rgroup_name(const struct cxi_rgroup *rgroup, char *dest, size_t count)
+{
+	size_t len = min_t(size_t, count, ARRAY_SIZE(rgroup->attr.name));
+
+	strscpy(dest, rgroup->attr.name, len);
+}
+
+/**
+ * cxi_rgroup_le_pool_id() - Get the rgroup le_pool_id at index
+ *
+ * @rgroup: resource group pointer
+ * @index: pool array index
+ *
+ * Return: LE pool id value
+ */
+int cxi_rgroup_le_pool_id(const struct cxi_rgroup *rgroup, int index)
+{
+	return rgroup->pools.le_pool_id[index];
+}
+
+/**
+ * cxi_rgroup_tle_pool_id() - Get the rgroup tle_pool_id
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: TLE pool id value
+ */
+int cxi_rgroup_tle_pool_id(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->pools.tle_pool_id;
+}
+
+/**
+ * cxi_rgroup_system_service() - Get the rgroup system_service attribute
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: system_service value
+ */
+bool cxi_rgroup_system_service(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->attr.system_service;
+}
+
+/**
+ * cxi_rgroup_lnis_per_rgid() - Get the rgroup lnis_per_rgid
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: the lnis_per_rgid value
+ */
+unsigned int cxi_rgroup_lnis_per_rgid(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->attr.lnis_per_rgid;
+}
+
+/**
+ * cxi_rgroup_refcount() - Get the rgroup refcount
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: the refcount value
+ */
+int cxi_rgroup_refcount(const struct cxi_rgroup *rgroup)
+{
+	return refcount_read(&rgroup->state.refcount);
+}
+
+/**
+ * cxi_rgroup_set_lnis_per_rgid_compat() - Set the rgroup lnis_per_rgid
+ *
+ * For compatibility with the "old" service api, don't check if rgroup
+ * is enabled.
+ *
+ * @rgroup: resource group pointer
+ * @lnis_per_rgid: Value to set
+ */
+void cxi_rgroup_set_lnis_per_rgid_compat(struct cxi_rgroup *rgroup,
+				    int lnis_per_rgid)
+{
+	rgroup->attr.lnis_per_rgid = lnis_per_rgid;
+}
+
+/**
+ * cxi_rgroup_set_lnis_per_rgid() - Set the rgroup lnis_per_rgid
+ *
+ * @rgroup: resource group pointer
+ * @lnis_per_rgid: Value to set
+ *
+ * Return: 0 - success, -EBUSY if not enabled
+ */
+int cxi_rgroup_set_lnis_per_rgid(struct cxi_rgroup *rgroup, int lnis_per_rgid)
+{
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
+	cxi_rgroup_set_lnis_per_rgid_compat(rgroup, lnis_per_rgid);
+
+	return 0;
+}
+
+/**
+ * cxi_rgroup_set_cntr_pool_id() - Set the rgroup cntr_pool_id
+ *
+ * @rgroup: resource group pointer
+ * @cntr_pool_id: Value to set
+ *
+ * Return: 0 - success, -EBUSY if not enabled
+ */
+int cxi_rgroup_set_cntr_pool_id(struct cxi_rgroup *rgroup, int cntr_pool_id)
+{
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
+	rgroup->attr.cntr_pool_id = cntr_pool_id;
+
+	return 0;
+}
+
+/**
+ * cxi_rgroup_set_system_service() - Set the rgroup system_service
+ *
+ * @rgroup: resource group pointer
+ * @system_service: Value to set
+ *
+ * Return: 0 - success, -EBUSY if not enabled
+ */
+int cxi_rgroup_set_system_service(struct cxi_rgroup *rgroup, bool system_service)
+{
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
+	rgroup->attr.system_service = system_service;
+
+	return 0;
+}
 
 /**
  * cxi_rgroup_get_info() - retrieve the attr and state of a resource group

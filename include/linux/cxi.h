@@ -258,6 +258,20 @@ void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
 bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
 void cxi_rgroup_ac_entry_list_destroy(struct cxi_rgroup *rgroup);
 
+unsigned int cxi_rgroup_id(const struct cxi_rgroup *rgroup);
+void cxi_rgroup_name(const struct cxi_rgroup *rgroup, char *dest, size_t count);
+bool cxi_rgroup_system_service(const struct cxi_rgroup *rgroup);
+unsigned int cxi_rgroup_cntr_pool_id(const struct cxi_rgroup *rgroup);
+unsigned int cxi_rgroup_lnis_per_rgid(const struct cxi_rgroup *rgroup);
+int cxi_rgroup_refcount(const struct cxi_rgroup *rgroup);
+int cxi_rgroup_le_pool_id(const struct cxi_rgroup *rgroup, int index);
+int cxi_rgroup_tle_pool_id(const struct cxi_rgroup *rgroup);
+int cxi_rgroup_set_lnis_per_rgid(struct cxi_rgroup *rgroup, int lnis_per_rgid);
+void cxi_rgroup_set_lnis_per_rgid_compat(struct cxi_rgroup *rgroup,
+				     int lnis_per_rgid);
+int cxi_rgroup_set_cntr_pool_id(struct cxi_rgroup *rgroup, int cntr_pool_id);
+int cxi_rgroup_set_system_service(struct cxi_rgroup *rgroup, bool system_service);
+
 struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 			    bool is_user);
 int cxi_ct_wb_update(struct cxi_ct *ct, struct c_ct_writeback *wb);
