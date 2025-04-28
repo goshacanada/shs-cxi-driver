@@ -312,26 +312,6 @@ int cxi_dev_get_rgroup_ids(struct cxi_dev *dev,
 			   unsigned int *rgroup_ids,
 			   size_t *num_ids);
 
-int cxi_dev_rgroup_enable(struct cxi_dev *dev,
-			  unsigned int rgroup_id);
-
-int cxi_dev_rgroup_disable(struct cxi_dev *dev,
-			   unsigned int rgroup_id);
-
-int cxi_dev_rgroup_get_info(struct cxi_dev *dev,
-			    unsigned int rgroup_id,
-			    struct cxi_rgroup_attr *attr,
-			    struct cxi_rgroup_state *state);
-
-int cxi_dev_rgroup_add_resource(struct cxi_dev *dev,
-				unsigned int rgroup_id,
-				enum cxi_resource_type resource_type,
-				struct cxi_resource_limits *limits);
-
-int cxi_dev_rgroup_delete_resource(struct cxi_dev *dev,
-				   unsigned int rgroup_id,
-				   enum cxi_resource_type resource_type);
-
 int cxi_dev_rgroup_get_resource(struct cxi_dev *dev,
 				unsigned int rgroup_id,
 				enum cxi_resource_type resource_type,
