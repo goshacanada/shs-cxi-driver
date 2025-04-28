@@ -164,6 +164,10 @@ int cxi_tx_profile_get_ac_entry_id_by_user(struct cxi_tx_profile *tx_profile,
 
 struct cxi_rgroup;
 
+struct cxi_rgroup_list {
+	struct xarray    xarray;
+};
+
 enum cxi_resource_type {
 	CXI_RESOURCE_PTLTE  = 1,
 	CXI_RESOURCE_TXQ,
@@ -234,28 +238,8 @@ struct cxi_rgroup_pools {
 
 /* Resource Group */
 
-struct cxi_rgroup_attr {
-	unsigned int   cntr_pool_id;
-	bool           system_service;
-	char           name[50];
-	unsigned int   lnis_per_rgid;
-};
-
-struct cxi_rgroup_state {
-	bool           enabled;
-	bool           released;
-	refcount_t     refcount;
-};
-
-struct cxi_rgroup {
-	unsigned int                   id;
-	struct cass_dev                *hw;
-	struct cxi_rgroup_attr         attr;
-	struct cxi_rgroup_state        state;
-	struct cxi_resource_entry_list resource_entry_list;
-	struct cxi_ac_entry_list       ac_entry_list;
-	struct cxi_rgroup_pools        pools;
-};
+struct cxi_rgroup_attr;
+struct cxi_rgroup_state;
 
 void cxi_dev_lock_rgroup_list(struct cass_dev *hw);
 void cxi_dev_unlock_rgroup_list(struct cass_dev *hw);
