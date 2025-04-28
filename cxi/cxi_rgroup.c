@@ -1008,6 +1008,16 @@ int cxi_rgroup_dec_refcount(struct cxi_rgroup *rgroup)
 }
 EXPORT_SYMBOL(cxi_rgroup_dec_refcount);
 
+/**
+ * cxi_rgroup_ac_entry_list_destroy() - destroy the rgroup ac_entry_list
+ *
+ * @rgroup: pointer to rgroup
+ */
+void cxi_rgroup_ac_entry_list_destroy(struct cxi_rgroup *rgroup)
+{
+	cxi_ac_entry_list_destroy(&rgroup->ac_entry_list);
+}
+
 /* **************************************************************** */
 /* Device level Rgroup operations                                   */
 /* **************************************************************** */

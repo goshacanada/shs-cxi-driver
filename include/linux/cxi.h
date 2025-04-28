@@ -256,6 +256,7 @@ struct cxi_rgroup;
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
 void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
 bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
+void cxi_rgroup_ac_entry_list_destroy(struct cxi_rgroup *rgroup);
 
 struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 			    bool is_user);
