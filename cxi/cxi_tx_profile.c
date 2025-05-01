@@ -599,3 +599,37 @@ void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile)
 	cxi_ac_entry_list_destroy(&tx_profile->profile_common.ac_entry_list);
 }
 EXPORT_SYMBOL(cxi_dev_tx_profile_remove_ac_entries);
+
+/**
+ * cxi_tx_profile_exclusive_cp() - Get tx_profile exclusive CP value
+ *
+ * @tx_profile: pointer to Profile
+ *
+ * Return: exclusive_cp value
+ */
+bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile,
+				 bool exclusive_cp)
+{
+	return tx_profile->config.exclusive_cp;
+}
+EXPORT_SYMBOL(cxi_tx_profile_exclusive_cp);
+
+/**
+ * cxi_tx_profile_set_exclusive_cp() - Set tx_profile exclusive CP value
+ *
+ * @tx_profile: pointer to Profile
+ * @exclusive_cp: Value to set
+ *
+ * Return: 0 - success, -EBUSY if not enabled
+ */
+int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
+				    bool exclusive_cp)
+{
+	if (cxi_tx_profile_is_enabled(tx_profile))
+		return -EBUSY;
+
+	tx_profile->config.exclusive_cp = exclusive_cp;
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_tx_profile_set_exclusive_cp);
