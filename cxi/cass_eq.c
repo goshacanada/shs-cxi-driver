@@ -527,7 +527,6 @@ static void set_pct_eq(struct cass_dev *hw, unsigned int eq_n)
 /* Return an available event queue with an ID */
 static struct cxi_eq_priv *pf_get_eq_id(struct cxi_lni_priv *lni_priv)
 {
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cxi_dev *cdev = lni_priv->dev;
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_eq_priv *eq;
@@ -552,7 +551,7 @@ static struct cxi_eq_priv *pf_get_eq_id(struct cxi_lni_priv *lni_priv)
 	/* Check the associated service to see if this EQ can be
 	 * allocated.
 	 */
-	rc = cxi_alloc_resource(cdev, svc_priv, CXI_RSRC_TYPE_EQ);
+	rc = cxi_rgroup_alloc_resource(lni_priv->rgroup, CXI_RESOURCE_EQ);
 	if (rc)
 		return ERR_PTR(rc);
 
@@ -578,7 +577,7 @@ eq_free:
 	kfree(eq);
 
 dec_rsrc_use:
-	cxi_free_resource(cdev, svc_priv, CXI_RSRC_TYPE_EQ);
+	cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_EQ);
 
 	return ERR_PTR(rc);
 }
@@ -587,7 +586,6 @@ dec_rsrc_use:
 static void pf_put_eq_id(struct cxi_eq_priv *eq)
 {
 	struct cxi_lni_priv *lni_priv = eq->lni_priv;
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cxi_dev *cdev = lni_priv->dev;
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 
@@ -597,7 +595,7 @@ static void pf_put_eq_id(struct cxi_eq_priv *eq)
 		spin_unlock(&lni_priv->res_lock);
 	} else {
 		ida_simple_remove(&hw->eq_index_table, eq->eq.eqn);
-		cxi_free_resource(cdev, svc_priv, CXI_RSRC_TYPE_EQ);
+		cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_EQ);
 		kfree(eq);
 	}
 }
@@ -1036,7 +1034,6 @@ void finalize_eq_cleanups(struct cxi_lni_priv *lni)
 	struct cxi_dev *dev = lni->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_eq_priv *eq;
-	struct cxi_svc_priv *svc_priv = lni->svc_priv;
 
 	while ((eq = list_first_entry_or_null(&lni->eq_cleanups_list,
 					      struct cxi_eq_priv, list))) {
@@ -1047,7 +1044,7 @@ void finalize_eq_cleanups(struct cxi_lni_priv *lni)
 
 		refcount_dec(&lni->refcount);
 		atomic_dec(&hw->stats.eq);
-		cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_EQ);
+		cxi_rgroup_free_resource(lni->rgroup, CXI_RESOURCE_EQ);
 		ida_simple_remove(&hw->eq_index_table, eq->eq.eqn);
 		kfree(eq);
 	}

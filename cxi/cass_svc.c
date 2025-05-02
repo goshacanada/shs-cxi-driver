@@ -947,7 +947,7 @@ int cxi_svc_update(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc)
 	}
 
 	/* Service must be unused for it to be updated. */
-	if (refcount_read(&svc_priv->refcount) != 1) {
+	if (refcount_read(&svc_priv->rgroup->state.refcount) > 1) {
 		rc = -EBUSY;
 		goto error;
 	}

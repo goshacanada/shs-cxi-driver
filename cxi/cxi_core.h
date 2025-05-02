@@ -198,7 +198,7 @@ struct cxi_lni_priv {
 	refcount_t refcount;
 
 	/* Service associated with this LNI. */
-	struct cxi_svc_priv *svc_priv;
+	struct cxi_rgroup *rgroup;
 
 	/* Keep track of associated resources. TODO: keep as that may
 	 * help debugging, but should be removed eventually.

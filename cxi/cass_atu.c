@@ -377,7 +377,6 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 	struct cass_ac *cac;
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 
 	/* ac->pg_table_size is limited to 4 bits and a minimum of 8 entries */
 	if ((m_opts->huge_shift - m_opts->page_shift > MAX_PG_TABLE_SIZE) ||
@@ -389,7 +388,7 @@ static struct cass_ac *cass_ac_alloc(struct cxi_lni_priv *lni_priv,
 	}
 
 	/* Check the associated service to see if this AC can be allocated */
-	ret = cxi_alloc_resource(dev, svc_priv, CXI_RSRC_TYPE_AC);
+	ret = cxi_rgroup_alloc_resource(lni_priv->rgroup, CXI_RESOURCE_AC);
 	if (ret)
 		return ERR_PTR(ret);
 
@@ -458,7 +457,7 @@ ac_put:
 cac_free:
 	kfree(cac);
 dec_rsrc_use:
-	cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_AC);
+	cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_AC);
 
 	pr_debug("failed rc %d\n", ret);
 	return ERR_PTR(ret);
@@ -467,7 +466,6 @@ dec_rsrc_use:
 static void cass_ac_free(struct cass_dev *hw, struct cass_ac *cac)
 {
 	struct cxi_lni_priv *lni_priv = cac->lni_priv;
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	int pasid = cac->cfg_ac.ats_pasid;
 
 	pr_debug("freeing ac %d\n", cac->ac.acid);
@@ -476,7 +474,7 @@ static void cass_ac_free(struct cass_dev *hw, struct cass_ac *cac)
 	debugfs_remove_recursive(cac->debug_dir);
 
 	atomic_dec(&hw->stats.ac);
-	cxi_free_resource(lni_priv->dev, svc_priv, CXI_RSRC_TYPE_AC);
+	cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_AC);
 
 	cass_md_list_free(cac);
 	cass_nta_iova_fini(cac);

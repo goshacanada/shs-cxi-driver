@@ -341,7 +341,6 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 {
 	struct cxi_lni_priv *lni_priv =
 		container_of(lni, struct cxi_lni_priv, lni);
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cxi_dev *cdev = lni_priv->dev;
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_pte_priv *pt;
@@ -397,7 +396,8 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 		/* Check the associated service to see if this PTE can be
 		 * allocated
 		 */
-		rc = cxi_alloc_resource(cdev, svc_priv, CXI_RSRC_TYPE_PTE);
+		rc = cxi_rgroup_alloc_resource(lni_priv->rgroup,
+					       CXI_RESOURCE_PTLTE);
 		if (rc)
 			goto pt_free;
 
@@ -453,8 +453,7 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 	ptl_table.pe_num = cxi_lni_get_pe_num(lni_priv);
 	pt->pe_num = ptl_table.pe_num;
 	ptl_table.le_pool = pt->le_pool =
-		cxi_rgroup_le_pool_id(pt->lni_priv->svc_priv->rgroup,
-				      pt->pe_num);
+		cxi_rgroup_le_pool_id(pt->lni_priv->rgroup, pt->pe_num);
 
 	spin_lock(&hw->lpe_shadow_lock);
 	cass_config_pte(hw, pt_n, &ptl_table);
@@ -480,7 +479,7 @@ struct cxi_pte *cxi_pte_alloc(struct cxi_lni *lni, struct cxi_eq *evtq,
 
 dec_rsrc_use:
 	if (!pt_reuse)
-		cxi_free_resource(cdev, svc_priv, CXI_RSRC_TYPE_PTE);
+		cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_PTLTE);
 pt_free:
 	if (pt_reuse) {
 		spin_lock(&lni_priv->res_lock);
@@ -605,7 +604,6 @@ void finalize_pt_cleanups(struct cxi_lni_priv *lni, bool force)
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
 	struct cxi_pte_priv *pt;
 	struct cxi_pte_priv *tmp;
-	struct cxi_svc_priv *svc_priv = lni->svc_priv;
 
 	list_for_each_entry_safe(pt, tmp, &lni->pt_cleanups_list, list) {
 		if (!force && !is_pt_done(hw, pt))
@@ -618,7 +616,7 @@ void finalize_pt_cleanups(struct cxi_lni_priv *lni, bool force)
 
 		refcount_dec(&lni->refcount);
 		atomic_dec(&hw->stats.pt);
-		cxi_free_resource(cdev, svc_priv, CXI_RSRC_TYPE_PTE);
+		cxi_rgroup_free_resource(lni->rgroup, CXI_RESOURCE_PTLTE);
 		ida_simple_remove(&hw->pte_table, pt->pte.id);
 		kfree(pt);
 	}

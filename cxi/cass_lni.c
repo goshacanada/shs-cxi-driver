@@ -34,34 +34,29 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_lni_priv *lni_priv;
-	struct cxi_svc_priv *svc_priv;
+	struct cxi_rgroup *rgroup;
+	int rc;
 	int id;
 	int rgid;
 	void *err;
 
-	/* Verify svc_id exists */
-	mutex_lock(&hw->svc_lock);
-	svc_priv = idr_find(&hw->svc_ids, svc_id);
-	if (svc_priv)
-		refcount_inc(&svc_priv->refcount);
-	mutex_unlock(&hw->svc_lock);
-
-	if (!svc_priv)
+	rc = cxi_dev_find_rgroup_inc_refcount(dev, svc_id, &rgroup);
+	if (rc)
 		return ERR_PTR(-EINVAL);
 
 	/* Ensure service is enabled */
-	if (!cxi_rgroup_is_enabled(svc_priv->rgroup)) {
+	if (!cxi_rgroup_is_enabled(rgroup)) {
 		err = ERR_PTR(-EKEYREVOKED);
 		goto dec_svc;
 	}
 
 	/* Verify calling user/group has permission to use this service */
-	if (!valid_svc_user(svc_priv->rgroup)) {
+	if (!valid_svc_user(rgroup)) {
 		err = ERR_PTR(-EPERM);
 		goto dec_svc;
 	}
 
-	rgid = cass_rgid_get(hw, svc_priv->rgroup);
+	rgid = cass_rgid_get(hw, rgroup);
 	if (rgid < 0) {
 		err = ERR_PTR(rgid);
 		goto dec_svc;
@@ -79,7 +74,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 		goto free_lni_id;
 	}
 
-	lni_priv->svc_priv = svc_priv;
+	lni_priv->rgroup = rgroup;
 	lni_priv->dev = dev;
 	lni_priv->lni.id = id;
 	lni_priv->lni.rgid = rgid;
@@ -107,7 +102,6 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	atomic_inc(&hw->stats.lni);
 	spin_unlock(&hw->lni_lock);
 
-	cxi_rgroup_inc_refcount(svc_priv->rgroup);
 	refcount_inc(&hw->refcount);
 
 	lni_debugfs_create(lni_priv->lni.id, hw, lni_priv);
@@ -119,9 +113,7 @@ free_lni_id:
 put_rgid:
 	cass_rgid_put(hw, rgid);
 dec_svc:
-	mutex_lock(&hw->svc_lock);
-	refcount_dec(&svc_priv->refcount);
-	mutex_unlock(&hw->svc_lock);
+	cxi_rgroup_dec_refcount(rgroup);
 	return err;
 }
 EXPORT_SYMBOL(cxi_lni_alloc);
@@ -158,11 +150,7 @@ static bool try_cleanup_lni(struct cxi_lni_priv *lni, bool force)
 
 	debugfs_remove_recursive(lni->debug_dir);
 
-	/* TODO: this lock is probably not required */
-	mutex_lock(&hw->svc_lock);
-	refcount_dec(&lni->svc_priv->refcount);
-	mutex_unlock(&hw->svc_lock);
-	cxi_rgroup_dec_refcount(lni->svc_priv->rgroup);
+	cxi_rgroup_dec_refcount(lni->rgroup);
 	refcount_dec(&hw->refcount);
 	atomic_dec(&hw->stats.lni);
 	ida_free(&hw->lni_table, lni->lni.id);

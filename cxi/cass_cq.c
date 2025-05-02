@@ -108,8 +108,7 @@ static int setup_hw_tx_cq(struct cass_dev *hw, unsigned int cq_n,
 	txq_cfg.mem_q_pfq = flow_cfg.pfq;
 
 	if (opts->flags & CXI_CQ_TX_WITH_TRIG_CMDS)
-		txq_cfg.mem_q_pfq =
-			cxi_rgroup_tle_pool_id(lni_priv->svc_priv->rgroup);
+		txq_cfg.mem_q_pfq = cxi_rgroup_tle_pool_id(lni_priv->rgroup);
 
 	spin_lock(&hw->cq_shadow_lock);
 	cass_tx_cq_init(hw, &cq->cass_cq, cq_n, &tc, &txq_cfg);
@@ -220,9 +219,8 @@ static struct cxi_cq_priv *pf_get_cq_id(struct cxi_lni_priv *lni_priv,
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw =
 		container_of(dev, struct cass_dev, cdev);
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cxi_cq_priv *cq;
-	enum cxi_rsrc_type rsrc_type;
+	enum cxi_resource_type rsrc_type;
 	int rc;
 
 	cq = kzalloc(sizeof(struct cxi_cq_priv), GFP_KERNEL);
@@ -231,18 +229,18 @@ static struct cxi_cq_priv *pf_get_cq_id(struct cxi_lni_priv *lni_priv,
 
 	/* Check the associated service to see if this CQ can be allocated */
 	if (opts->flags & CXI_CQ_IS_TX)
-		rsrc_type = CXI_RSRC_TYPE_TXQ;
+		rsrc_type = CXI_RESOURCE_TXQ;
 	else
-		rsrc_type = CXI_RSRC_TYPE_TGQ;
+		rsrc_type = CXI_RESOURCE_TGQ;
 
-	rc = cxi_alloc_resource(dev, svc_priv, rsrc_type);
+	rc = cxi_rgroup_alloc_resource(lni_priv->rgroup, rsrc_type);
 	if (rc) {
 		/* Attempt to cleanup all CQs on this LNI to return service
 		 * credits and then reattempt to allocate resource.
 		 */
 		finalize_cq_cleanups(lni_priv, false);
 
-		rc = cxi_alloc_resource(dev, svc_priv, rsrc_type);
+		rc = cxi_rgroup_alloc_resource(lni_priv->rgroup, rsrc_type);
 		if (rc)
 			goto cq_free;
 	}
@@ -277,7 +275,7 @@ static struct cxi_cq_priv *pf_get_cq_id(struct cxi_lni_priv *lni_priv,
 	return cq;
 
 dec_rsrc_use:
-	cxi_free_resource(dev, svc_priv, rsrc_type);
+	cxi_rgroup_free_resource(lni_priv->rgroup, rsrc_type);
 
 cq_free:
 	kfree(cq);
@@ -289,14 +287,13 @@ static void put_cq_id(struct cxi_cq_priv *cq)
 {
 	struct cxi_lni_priv *lni_priv = cq->lni_priv;
 	struct cxi_dev *dev = lni_priv->dev;
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 
 	ida_simple_remove(&hw->cq_table, cq->cass_cq.idx);
 	if (cq->flags & CXI_CQ_IS_TX)
-		cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_TXQ);
+		cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_TXQ);
 	else
-		cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_TGQ);
+		cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_TGQ);
 	kfree(cq);
 }
 

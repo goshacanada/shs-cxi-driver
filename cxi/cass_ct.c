@@ -153,7 +153,6 @@ struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw =
 		container_of(dev, struct cass_dev, cdev);
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cxi_ct_priv *ct_priv;
 	u16 wb_ac;
 	int rc;
@@ -171,7 +170,7 @@ struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 	ct_priv->is_user = is_user;
 
 	/* Check the associated service to see if this CT can be allocated */
-	rc = cxi_alloc_resource(dev, svc_priv, CXI_RSRC_TYPE_CT);
+	rc = cxi_rgroup_alloc_resource(lni_priv->rgroup, CXI_RESOURCE_CT);
 	if (rc)
 		goto free_ct_priv;
 
@@ -236,7 +235,7 @@ free_md_priv:
 	if (wb)
 		ct_wb_unmap(hw, ct_priv, &ct_priv->wb_desc);
 dec_rsrc_use:
-	cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_CT);
+	cxi_rgroup_free_resource(lni_priv->rgroup, CXI_RESOURCE_CT);
 free_ct_priv:
 	kfree(ct_priv);
 
@@ -382,7 +381,6 @@ void finalize_ct_cleanups(struct cxi_lni_priv *lni)
 	struct cxi_dev *dev = lni->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_ct_priv *ct;
-	struct cxi_svc_priv *svc_priv = lni->svc_priv;
 
 	while ((ct = list_first_entry_or_null(&lni->ct_cleanups_list,
 					      struct cxi_ct_priv, entry))) {
@@ -393,7 +391,7 @@ void finalize_ct_cleanups(struct cxi_lni_priv *lni)
 
 		refcount_dec(&lni->refcount);
 		atomic_dec(&hw->stats.ct);
-		cxi_free_resource(dev, svc_priv, CXI_RSRC_TYPE_CT);
+		cxi_rgroup_free_resource(lni->rgroup, CXI_RESOURCE_CT);
 		ida_simple_remove(&hw->ct_table, ct->ct.ctn);
 		kfree(ct);
 	}
