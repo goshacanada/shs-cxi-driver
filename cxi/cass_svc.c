@@ -99,24 +99,21 @@ static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
 }
 
 /* Check if a service allows a particular VNI to be used */
-bool valid_vni(struct cxi_dev *dev, bool restricted,
-	       enum cxi_profile_type type, unsigned int vni)
+bool valid_vni(struct cxi_dev *dev, enum cxi_profile_type type,
+	       unsigned int vni)
 {
 	struct cxi_rxtx_profile_list *list;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct valid_user_data user_data = {
 		.vni_data = {
 			.vni = vni,
-			.restricted = restricted,
+			.restricted = 1,
 		},
 		.ac_data = {
 			.uid = __kuid_val(current_euid()),
 			.gid = __kgid_val(current_egid()),
 		},
 	};
-
-	if (!restricted)
-		return true;
 
 	if (type == CXI_PROF_RX)
 		list = &hw->rx_profile_list;

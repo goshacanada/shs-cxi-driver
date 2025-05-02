@@ -254,7 +254,6 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 						     lni);
 	struct cxi_dev *dev = lni_priv->dev;
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-	struct cxi_svc_priv *svc_priv = lni_priv->svc_priv;
 	struct cass_cp *cass_cp;
 	struct cxi_cp_priv *cp_priv;
 	struct cxi_tx_profile *tx_profile = NULL;
@@ -286,8 +285,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 
 		/* Perform VNI checks. */
 		if (!is_vni_valid(vni_pcp) ||
-		    !valid_vni(dev, svc_priv->svc_desc.restricted_vnis,
-			       CXI_PROF_TX, vni_pcp) ||
+		    !valid_vni(dev, CXI_PROF_TX, vni_pcp) ||
 		    !cxi_tx_profile_valid_tc(tx_profile, tc)) {
 			pr_debug("Invalid tc:%d tx_profile ID:%d\n", tc,
 				 tx_profile->profile_common.id);

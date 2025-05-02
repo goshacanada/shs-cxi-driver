@@ -1194,7 +1194,7 @@ static inline bool is_vni_valid(unsigned int vni)
 	return vni && !(vni & ~0xffff);
 }
 
-bool valid_vni(struct cxi_dev *dev, bool restricted,
+bool valid_vni(struct cxi_dev *dev,
 	       enum cxi_profile_type type, unsigned int vni);
 bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc);
 bool valid_svc_user(struct cxi_rgroup *rgroup);
