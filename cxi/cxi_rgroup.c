@@ -808,6 +808,7 @@ EXPORT_SYMBOL(cxi_rgroup_get_info);
  * * 0       - success
  * * -ENOMEM - unable to allocate memory for resources
  * * -EEXIST - resource already exists within group
+ * * -EBUSY  - rgroup is enabled
  */
 int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 			    enum cxi_resource_type type,
@@ -816,6 +817,9 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	struct cxi_resource_entry_list   *list = &rgroup->resource_entry_list;
 	struct cxi_resource_entry        *resource_entry;
 	int    ret;
+
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
 
 	if (!validate_resource_limits(rgroup->hw, type, limits))
 		return -EINVAL;
