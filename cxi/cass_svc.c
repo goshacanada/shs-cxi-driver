@@ -975,79 +975,16 @@ EXPORT_SYMBOL(cxi_svc_get);
 void cxi_free_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		      enum cxi_rsrc_type type)
 {
-	int rc;
-	enum cxi_resource_type rtype;
-	struct cxi_resource_use *r_use;
-	struct cxi_resource_entry *entry;
-	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-
-	rtype = stype_to_rtype(type, 0);
-	r_use = &hw->resource_use[rtype];
-
-	mutex_lock(&hw->svc_lock);
-
-	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
-	if (rc) {
-		pr_warn("cxi_rgroup_get_resource_entry failed:%d\n", rc);
-		goto unlock;
-	}
-
-	/* Free from shared space if applicable */
-	if (entry->limits.in_use > entry->limits.reserved)
-		r_use->shared_use--;
-
-	r_use->in_use--;
-	entry->limits.in_use--;
-unlock:
-	mutex_unlock(&hw->svc_lock);
+	return cxi_rgroup_free_resource(svc_priv->rgroup,
+					stype_to_rtype(type, 0));
 }
 
 /* used to allocate ACs, etc. */
 int cxi_alloc_resource(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv,
 		       enum cxi_rsrc_type type)
 {
-	int rc;
-	size_t available;
-	enum cxi_resource_type rtype;
-	struct cxi_resource_use *r_use;
-	struct cxi_resource_entry *entry;
-	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
-
-	if (!cxi_rgroup_is_enabled(svc_priv->rgroup))
-		return -EKEYREVOKED;
-
-	rtype = stype_to_rtype(type, 0);
-	r_use = &hw->resource_use[rtype];
-
-	mutex_lock(&hw->svc_lock);
-
-	rc = cxi_rgroup_get_resource_entry(svc_priv->rgroup, rtype, &entry);
-	if (rc) {
-		pr_debug("cxi_rgroup_get_resource_entry failed:%d\n", rc);
-		goto unlock;
-	}
-
-	available = r_use->max - r_use->shared_use;
-
-	if (entry->limits.in_use < entry->limits.reserved) {
-		r_use->in_use++;
-		entry->limits.in_use++;
-	} else if (entry->limits.in_use < entry->limits.max && available) {
-		entry->limits.in_use++;
-		r_use->in_use++;
-		r_use->shared_use++;
-	} else {
-		pr_debug("rgroup_id:%d %s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
-			 cxi_rgroup_id(svc_priv->rgroup),
-			 cxi_resource_type_to_str(rtype),
-			 entry->limits.in_use, entry->limits.reserved,
-			 entry->limits.max, r_use->shared_use);
-		rc = -ENOSPC;
-	}
-
-unlock:
-	mutex_unlock(&hw->svc_lock);
-	return rc;
+	return cxi_rgroup_alloc_resource(svc_priv->rgroup,
+					 stype_to_rtype(type, 0));
 }
 
 /**

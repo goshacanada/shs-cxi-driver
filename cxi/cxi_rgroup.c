@@ -880,6 +880,39 @@ int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
 }
 EXPORT_SYMBOL(cxi_rgroup_add_resource);
 
+void cxi_rgroup_free_resource(struct cxi_rgroup *rgroup,
+			      enum cxi_resource_type type)
+{
+	int rc;
+	struct cxi_resource_entry *entry;
+
+	rc = cxi_rgroup_get_resource_entry(rgroup, type, &entry);
+	if (rc) {
+		pr_warn("Failed to get resource_entry rc:%d\n", rc);
+		return;
+	}
+
+	cass_free_resource(rgroup, entry);
+}
+
+int cxi_rgroup_alloc_resource(struct cxi_rgroup *rgroup,
+			      enum cxi_resource_type type)
+{
+	int rc;
+	struct cxi_resource_entry *entry;
+
+	if (!cxi_rgroup_is_enabled(rgroup))
+		return -EKEYREVOKED;
+
+	rc = cxi_rgroup_get_resource_entry(rgroup, type, &entry);
+	if (rc) {
+		pr_debug("Failed to get resource_entry rc:%d\n", rc);
+		return rc;
+	}
+
+	return cass_alloc_resource(rgroup, entry);
+}
+
 /**
  * cxi_rgroup_delete_resource() - remove a resource from a group
  *

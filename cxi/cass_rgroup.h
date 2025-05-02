@@ -18,4 +18,10 @@ int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
 int cass_rgroup_remove_resource(struct cxi_rgroup *rgroup,
 				struct cxi_resource_entry *resource);
 
+void cass_free_resource(struct cxi_rgroup *rgroup,
+			struct cxi_resource_entry *entry);
+
+int cass_alloc_resource(struct cxi_rgroup *rgroup,
+			struct cxi_resource_entry *entry);
+
 #endif /* _CASS_RGROUP_H_ */

@@ -197,3 +197,53 @@ int cass_rgroup_remove_resource(struct cxi_rgroup *rgroup,
 
 	return 0;
 }
+
+void cass_free_resource(struct cxi_rgroup *rgroup,
+			struct cxi_resource_entry *entry)
+{
+	struct cass_dev *hw = rgroup->hw;
+	struct cxi_resource_use *r_use = &hw->resource_use[entry->type];
+
+	spin_lock(&hw->rgrp_lock);
+
+	/* Free from shared space if applicable */
+	if (entry->limits.in_use > entry->limits.reserved)
+		r_use->shared_use--;
+
+	r_use->in_use--;
+	entry->limits.in_use--;
+
+	spin_unlock(&hw->rgrp_lock);
+}
+
+int cass_alloc_resource(struct cxi_rgroup *rgroup,
+			struct cxi_resource_entry *entry)
+{
+	int rc = 0;
+	size_t available;
+	struct cass_dev *hw = rgroup->hw;
+	struct cxi_resource_use *r_use = &hw->resource_use[entry->type];
+
+	spin_lock(&hw->rgrp_lock);
+
+	available = r_use->max - r_use->shared_use;
+
+	if (entry->limits.in_use < entry->limits.reserved) {
+		r_use->in_use++;
+		entry->limits.in_use++;
+	} else if (entry->limits.in_use < entry->limits.max && available) {
+		entry->limits.in_use++;
+		r_use->in_use++;
+		r_use->shared_use++;
+	} else {
+		pr_debug("%s unavailable use:%ld reserved:%ld max:%ld shared_use:%ld\n",
+			 cxi_resource_type_to_str(entry->type),
+			 entry->limits.in_use, entry->limits.reserved,
+			 entry->limits.max, r_use->shared_use);
+		rc = -ENOSPC;
+	}
+
+	spin_unlock(&hw->rgrp_lock);
+
+	return rc;
+}
