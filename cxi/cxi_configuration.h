@@ -306,12 +306,6 @@ int cxi_dev_rgroup_get_resource_types(struct cxi_dev *dev,
 				      enum cxi_resource_type *resource_types,
 				      size_t *num_types);
 
-int cxi_dev_rgroup_add_ac_entry(struct cxi_dev *dev,
-				unsigned int rgroup_id,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id);
-
 int cxi_dev_rgroup_delete_ac_entry(struct cxi_dev *dev,
 				   unsigned int rgroup_id,
 				   unsigned int ac_entry_id);

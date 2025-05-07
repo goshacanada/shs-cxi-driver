@@ -593,10 +593,8 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 		else if (type == CXI_AC_GID)
 			ac_data.gid = svc_desc->members[i].svc_member.gid;
 
-		rc = cxi_dev_rgroup_add_ac_entry(dev,
-						 cxi_rgroup_id(svc_priv->rgroup),
-						 type, &ac_data,
-						 &ac_entry_id);
+		rc = cxi_rgroup_add_ac_entry(svc_priv->rgroup, type, &ac_data,
+					     &ac_entry_id);
 		if (rc && rc != -EEXIST)
 			goto cleanup;
 	}

@@ -1409,42 +1409,6 @@ int cxi_dev_rgroup_get_resource_types(struct cxi_dev *dev,
 EXPORT_SYMBOL(cxi_dev_rgroup_get_resource_types);
 
 /**
- * cxi_dev_rgroup_add_ac_entry() - Append Access Control entry to
- *                                 an rgrup
- *
- * @dev: CXI Device
- * @rgroup_id: ID of Resource Group
- * @ac_type: one the access control types
- * @ac_data: location of access control data
- * @ac_entry_id: locaton to store id of access control entry on success
- *
- * Return:
- * * 0         - success
- * * -EBADR    - no such rgroup_id
- * * -EBADR    - unknown ac_type
- */
-int cxi_dev_rgroup_add_ac_entry(struct cxi_dev *dev,
-				unsigned int rgroup_id,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id)
-{
-	struct cxi_rgroup  *rgroup;
-	int    ret;
-
-	ret = find_rgroup_inc_refcount(dev, rgroup_id, &rgroup);
-	if (ret)
-		return ret;
-
-	ret = cxi_rgroup_add_ac_entry(rgroup, ac_type,
-				      ac_data, ac_entry_id);
-
-	cxi_rgroup_dec_refcount(rgroup);
-	return ret;
-}
-EXPORT_SYMBOL(cxi_dev_rgroup_add_ac_entry);
-
-/**
  * cxi_dev_rgroup_delete_ac_entry() - Remove an Access Control Entry
  *                                    from an rgroup
  *
