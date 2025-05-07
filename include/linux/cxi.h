@@ -235,6 +235,9 @@ int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 struct cxi_tx_profile *cxi_dev_get_tx_profile(struct cxi_dev *dev,
 					      unsigned int vni);
 int cxi_tx_profile_set_tc(struct cxi_tx_profile *tx_profile, int tc, bool set);
+int cxi_rx_profile_add_ac_entry(struct cxi_rx_profile *rx_profile,
+				enum cxi_ac_type type, uid_t uid, gid_t gid,
+				unsigned int *ac_entry_id);
 int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_tx_profile *tx_profile,

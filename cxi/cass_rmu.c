@@ -144,9 +144,9 @@ static struct cxi_rx_profile *alloc_rx_profile(struct cxi_dev *dev,
 	if (IS_ERR(rx_profile))
 		return rx_profile;
 
-	rc = cxi_dev_rx_profile_add_ac_entry(dev, CXI_AC_UID,
-					     __kuid_val(current_euid()),
-					     0, rx_profile, &ac_entry_id);
+	rc = cxi_rx_profile_add_ac_entry(rx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
 	if (rc)
 		goto err;
 

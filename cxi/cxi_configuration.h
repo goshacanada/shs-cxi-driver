@@ -60,10 +60,6 @@ struct cxi_rxtx_profile_list {
 int tx_profile_find_inc_refcount(struct cxi_dev *dev,
 				 unsigned int tx_profile_id,
 				 struct cxi_tx_profile **tx_profile);
-int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
-				    uid_t uid, gid_t gid,
-				    struct cxi_rx_profile *rx_profile,
-				    unsigned int *ac_entry_id);
 void cxi_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile);
 
 int cxi_rx_profile_release(struct cxi_dev *dev,
@@ -91,10 +87,6 @@ int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_rx_attr *rx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
-int cxi_rx_profile_add_ac_entry(struct cxi_rx_profile *rx_profile,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id);
 int cxi_rx_profile_remove_ac_entry(struct cxi_rx_profile *rx_profile,
 				   unsigned int ac_entry_id);
 int cxi_rx_profile_get_ac_entry_ids(struct cxi_rx_profile *rx_profile,

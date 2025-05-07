@@ -397,29 +397,6 @@ int cxi_rx_profile_get_info(struct cxi_dev *dev,
 }
 
 /**
- * cxi_rx_profile_add_ac_entry() - add an Access Control entry to
- *                                 an existing Profile
- *
- * @rx_profile: pointer to Profile
- * @ac_type: type of AC Entry to add
- * @ac_data: UID/GID for AC Entry
- * @ac_entry_id: location to put AC Entry id on success
- *
- * Return:
- * * 0       - success
- * * -EEXIST - AC Entry already exists
- */
-int cxi_rx_profile_add_ac_entry(struct cxi_rx_profile *rx_profile,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id)
-{
-	return cxi_rxtx_profile_add_ac_entry(&rx_profile->profile_common,
-					     ac_type, ac_data, ac_entry_id);
-}
-EXPORT_SYMBOL(cxi_rx_profile_add_ac_entry);
-
-/**
  * cxi_rx_profile_remove_ac_entry() - disable access control to a Profile
  *                                    by access control id.
  *
@@ -538,24 +515,22 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 EXPORT_SYMBOL(cxi_rx_profile_get_ac_entry_id_by_user);
 
 /**
- * cxi_dev_rx_profile_add_ac_entry() - add an Access Control entry to
- *                                     an existing Profile
+ * cxi_rx_profile_add_ac_entry() - add an Access Control entry to
+ *                                 an existing Profile
  *
- * @dev: Cassini Device
+ * @rx_profile: RX profile to add AC Entry
  * @type: type of AC Entry to add
  * @uid: UID for AC Entry
- * @gid: UID for AC Entry
- * @rx_profile: RX profile to add AC Entry
- * @ac_entry_id: location to put AC Entry id on success
+ * @gid: GID for AC Entry
+ * @ac_entry_id: Location to store resulting id
  *
  * Return:
  * * 0       - success
  * * -EEXIST - AC Entry already exists
  */
-int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
-				    uid_t uid, gid_t gid,
-				    struct cxi_rx_profile *rx_profile,
-				    unsigned int *ac_entry_id)
+int cxi_rx_profile_add_ac_entry(struct cxi_rx_profile *rx_profile,
+				enum cxi_ac_type type, uid_t uid, gid_t gid,
+				unsigned int *ac_entry_id)
 {
 	union cxi_ac_data data = {};
 
@@ -575,7 +550,7 @@ int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 	return cxi_rxtx_profile_add_ac_entry(&rx_profile->profile_common,
 					     type, &data, ac_entry_id);
 }
-EXPORT_SYMBOL(cxi_dev_rx_profile_add_ac_entry);
+EXPORT_SYMBOL(cxi_rx_profile_add_ac_entry);
 
 /**
  * cxi_rx_profile_remove_ac_entries() - remove Access Control entries
