@@ -127,10 +127,6 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
-int cxi_tx_profile_add_ac_entry(struct cxi_tx_profile *tx_profile,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id);
 int cxi_tx_profile_remove_ac_entry(struct cxi_tx_profile *tx_profile,
 				   unsigned int ac_entry_id);
 int cxi_tx_profile_get_ac_entry_ids(struct cxi_tx_profile *tx_profile,

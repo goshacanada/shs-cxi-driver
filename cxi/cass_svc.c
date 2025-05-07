@@ -571,10 +571,10 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 		type = svc_mbr_to_ac_type(svc_desc->members[i].type);
 
 		for (j = 0; j < svc_priv->num_vld_rx_profiles; j++) {
-			rc = cxi_dev_tx_profile_add_ac_entry(dev, type,
+			rc = cxi_tx_profile_add_ac_entry(
+					svc_priv->tx_profile[j], type,
 					svc_desc->members[i].svc_member.uid,
 					svc_desc->members[i].svc_member.gid,
-					svc_priv->tx_profile[j],
 					&ac_entry_id);
 			if (rc && rc != -EEXIST)
 				goto cleanup;

@@ -168,8 +168,8 @@ struct cxi_tx_profile *cxi_dev_get_tx_profile(struct cxi_dev *dev,
 {
 	int i;
 	int rc;
-	struct cass_dev *hw = get_cass_dev(dev);
 	unsigned int ac_entry_id;
+	struct cass_dev *hw = get_cass_dev(dev);
 	struct cxi_tx_profile *tx_profile;
 	struct cxi_tx_attr tx_attr = {
 		.vni_attr = {
@@ -194,9 +194,9 @@ struct cxi_tx_profile *cxi_dev_get_tx_profile(struct cxi_dev *dev,
 	if (IS_ERR(tx_profile))
 		goto done;
 
-	rc = cxi_dev_tx_profile_add_ac_entry(dev, CXI_AC_UID,
-					     __kuid_val(current_euid()),
-					     0, tx_profile, &ac_entry_id);
+	rc = cxi_tx_profile_add_ac_entry(tx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
 	if (rc) {
 		tx_profile = ERR_PTR(rc);
 		goto done;
@@ -404,29 +404,6 @@ int cxi_tx_profile_set_tc(struct cxi_tx_profile *tx_profile, int tc, bool set)
 EXPORT_SYMBOL(cxi_tx_profile_set_tc);
 
 /**
- * cxi_tx_profile_add_ac_entry() - add an Access Control entry to
- *                                 an existing Profile
- *
- * @tx_profile: pointer to Profile
- * @ac_type: type of AC Entry to add
- * @ac_data: UID/GID for AC Entry
- * @ac_entry_id: location to put AC Entry id on success
- *
- * Return:
- * * 0       - success
- * * -EEXIST - AC Entry already exists
- */
-int cxi_tx_profile_add_ac_entry(struct cxi_tx_profile *tx_profile,
-				enum cxi_ac_type ac_type,
-				union cxi_ac_data *ac_data,
-				unsigned int *ac_entry_id)
-{
-	return cxi_rxtx_profile_add_ac_entry(&tx_profile->profile_common,
-					     ac_type, ac_data, ac_entry_id);
-}
-EXPORT_SYMBOL(cxi_tx_profile_add_ac_entry);
-
-/**
  * cxi_tx_profile_remove_ac_entry() - disable access control to a Profile
  *                                    by access control id.
  *
@@ -546,24 +523,22 @@ int cxi_tx_profile_get_ac_entry_id_by_user(struct cxi_tx_profile *tx_profile,
 EXPORT_SYMBOL(cxi_tx_profile_get_ac_entry_id_by_user);
 
 /**
- * cxi_dev_tx_profile_add_ac_entry() - add an Access Control entry to
- *                                     an existing Profile
+ * cxi_tx_profile_add_ac_entry() - add an Access Control entry to
+ *                                 an existing Profile
  *
- * @dev: Cassini Device
+ * @tx_profile: TX profile to add AC Entry
  * @type: type of AC Entry to add
  * @uid: UID for AC Entry
- * @gid: UID for AC Entry
- * @tx_profile: TX profile to add AC Entry
- * @ac_entry_id: location to put AC Entry id on success
+ * @gid: GID for AC Entry
+ * @ac_entry_id: Location to store resulting id
  *
  * Return:
  * * 0       - success
  * * -EEXIST - AC Entry already exists
  */
-int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
-				    uid_t uid, gid_t gid,
-				    struct cxi_tx_profile *tx_profile,
-				    unsigned int *ac_entry_id)
+int cxi_tx_profile_add_ac_entry(struct cxi_tx_profile *tx_profile,
+				enum cxi_ac_type type, uid_t uid, gid_t gid,
+				unsigned int *ac_entry_id)
 {
 	union cxi_ac_data data = {};
 
@@ -583,7 +558,7 @@ int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 	return cxi_rxtx_profile_add_ac_entry(&tx_profile->profile_common,
 					     type, &data, ac_entry_id);
 }
-EXPORT_SYMBOL(cxi_dev_tx_profile_add_ac_entry);
+EXPORT_SYMBOL(cxi_tx_profile_add_ac_entry);
 
 /**
  * cxi_tx_profile_remove_ac_entries() - remove Access Control entries
