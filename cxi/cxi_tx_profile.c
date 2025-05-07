@@ -304,7 +304,7 @@ int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 		return -EBUSY;
 
 	cxi_tx_profile_disable(dev, tx_profile);
-	cxi_dev_tx_profile_remove_ac_entries(tx_profile);
+	cxi_tx_profile_remove_ac_entries(tx_profile);
 
 	refcount_dec(&hw->refcount);
 
@@ -586,19 +586,19 @@ int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 EXPORT_SYMBOL(cxi_dev_tx_profile_add_ac_entry);
 
 /**
- * cxi_dev_tx_profile_remove_ac_entries() - remove Access Control entries
+ * cxi_tx_profile_remove_ac_entries() - remove Access Control entries
  *                                          from profile
  *
  * @tx_profile: TX profile from which to remove AC entries
  */
-void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile)
+void cxi_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile)
 {
 	if (!tx_profile)
 		return;
 
 	cxi_ac_entry_list_destroy(&tx_profile->profile_common.ac_entry_list);
 }
-EXPORT_SYMBOL(cxi_dev_tx_profile_remove_ac_entries);
+EXPORT_SYMBOL(cxi_tx_profile_remove_ac_entries);
 
 /**
  * cxi_tx_profile_exclusive_cp() - Get tx_profile exclusive CP value

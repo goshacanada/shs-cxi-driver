@@ -355,7 +355,7 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 		return -EBUSY;
 
 	cxi_rx_profile_disable(dev, rx_profile);
-	cxi_dev_rx_profile_remove_ac_entries(rx_profile);
+	cxi_rx_profile_remove_ac_entries(rx_profile);
 	refcount_dec(&hw->refcount);
 	cxi_rxtx_profile_list_remove(&hw->rx_profile_list,
 				     rx_profile->profile_common.id);
@@ -578,12 +578,12 @@ int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 EXPORT_SYMBOL(cxi_dev_rx_profile_add_ac_entry);
 
 /**
- * cxi_dev_rx_profile_remove_ac_entries() - remove Access Control entries
- *                                          from profile
+ * cxi_rx_profile_remove_ac_entries() - remove Access Control entries
+ *                                      from profile
  *
  * @rx_profile: RX profile from which to remove AC entries
  */
-void cxi_dev_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile)
+void cxi_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile)
 {
 	if (!rx_profile)
 		return;

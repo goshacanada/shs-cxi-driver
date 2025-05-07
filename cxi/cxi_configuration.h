@@ -64,7 +64,7 @@ int cxi_dev_rx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_rx_profile *rx_profile,
 				    unsigned int *ac_entry_id);
-void cxi_dev_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile);
+void cxi_rx_profile_remove_ac_entries(struct cxi_rx_profile *rx_profile);
 
 int cxi_rx_profile_release(struct cxi_dev *dev,
 			   unsigned int rx_profile_id);

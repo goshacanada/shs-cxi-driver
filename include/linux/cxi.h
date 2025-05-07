@@ -239,7 +239,7 @@ int cxi_dev_tx_profile_add_ac_entry(struct cxi_dev *dev, enum cxi_ac_type type,
 				    uid_t uid, gid_t gid,
 				    struct cxi_tx_profile *tx_profile,
 				    unsigned int *ac_entry_id);
-void cxi_dev_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
+void cxi_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
 int cxi_tx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
 void cxi_tx_profile_disable(struct cxi_dev *dev,

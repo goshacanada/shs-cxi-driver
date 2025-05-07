@@ -536,8 +536,8 @@ static void remove_ac_entries(struct cxi_dev *dev,
 	cxi_ac_entry_list_destroy(&svc_priv->rgroup->ac_entry_list);
 
 	for (i = 0; i < svc_desc->num_vld_vnis; i++) {
-		cxi_dev_tx_profile_remove_ac_entries(svc_priv->tx_profile[i]);
-		cxi_dev_rx_profile_remove_ac_entries(svc_priv->rx_profile[i]);
+		cxi_tx_profile_remove_ac_entries(svc_priv->tx_profile[i]);
+		cxi_rx_profile_remove_ac_entries(svc_priv->rx_profile[i]);
 	}
 }
 
