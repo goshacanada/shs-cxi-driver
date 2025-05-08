@@ -625,7 +625,7 @@ unsigned int cxi_rgroup_id(const struct cxi_rgroup *rgroup)
 }
 
 /**
- * rgroup_name() - Get the rgroup name
+ * cxi_rgroup_name() - Get the rgroup name
  *
  * @rgroup: resource group pointer
  * @dest: Where to copy name string to
