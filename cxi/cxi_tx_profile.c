@@ -582,8 +582,7 @@ EXPORT_SYMBOL(cxi_tx_profile_remove_ac_entries);
  *
  * Return: exclusive_cp value
  */
-bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile,
-				 bool exclusive_cp)
+bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile)
 {
 	return tx_profile->config.exclusive_cp;
 }

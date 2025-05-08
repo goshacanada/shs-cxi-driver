@@ -251,8 +251,7 @@ int cxi_tx_profile_enable(struct cxi_dev *dev,
 void cxi_tx_profile_disable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
 bool cxi_tx_profile_is_enabled(const struct cxi_tx_profile *tx_profile);
-bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile,
-				 bool exclusive_cp);
+bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile);
 int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
 				    bool exclusive_cp);
 
