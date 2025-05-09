@@ -1003,11 +1003,6 @@ struct cass_dev {
 	struct cass_sl_dev sl;
 };
 
-enum cxi_profile_type {
-	CXI_PROF_RX = 1,
-	CXI_PROF_TX
-};
-
 /* Communication profile. */
 struct cass_cp {
 	struct cass_dev *hw;
@@ -1194,8 +1189,6 @@ static inline bool is_vni_valid(unsigned int vni)
 	return vni && !(vni & ~0xffff);
 }
 
-bool valid_vni(struct cxi_dev *dev,
-	       enum cxi_profile_type type, unsigned int vni);
 bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc);
 bool valid_svc_user(struct cxi_rgroup *rgroup);
 int register_error_handlers(struct cass_dev *hw);

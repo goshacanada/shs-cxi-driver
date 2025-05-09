@@ -138,6 +138,14 @@ int cxi_tx_profile_get_ac_entry_id_by_user(struct cxi_tx_profile *tx_profile,
 					   cxi_ac_typeset_t desired_types,
 					   unsigned int *ac_entry_id);
 
+enum cxi_profile_type {
+	CXI_PROF_RX = 1,
+	CXI_PROF_TX
+};
+
+bool cxi_valid_vni(struct cxi_dev *dev, enum cxi_profile_type type,
+		   unsigned int vni);
+
 /* Resource Group Entries */
 
 struct cxi_rgroup;

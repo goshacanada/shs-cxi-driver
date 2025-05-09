@@ -285,7 +285,7 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 
 		/* Perform VNI checks. */
 		if (!is_vni_valid(vni_pcp) ||
-		    !valid_vni(dev, CXI_PROF_TX, vni_pcp) ||
+		    !cxi_valid_vni(dev, CXI_PROF_TX, vni_pcp) ||
 		    !cxi_tx_profile_valid_tc(tx_profile, tc)) {
 			pr_debug("Invalid tc:%d tx_profile ID:%d\n", tc,
 				 tx_profile->profile_common.id);

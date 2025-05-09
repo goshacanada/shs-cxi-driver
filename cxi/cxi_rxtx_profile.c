@@ -297,3 +297,79 @@ int cxi_rxtx_profile_get_ac_entry_id_by_user(struct cxi_rxtx_profile *rxtx_profi
 	return cxi_ac_entry_list_retrieve_by_user(&rxtx_profile->ac_entry_list,
 						  uid, gid, desired_types, ac_entry_id);
 }
+
+struct valid_ac_data {
+	uid_t uid;
+	gid_t gid;
+};
+
+struct valid_user_data {
+	unsigned int vni;
+	struct valid_ac_data ac_data;
+};
+
+static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
+			       void *user_data)
+{
+	int rc;
+	bool valid = false;
+	unsigned int ac_entry_id;
+	struct cxi_rxtx_vni_attr vni_attr;
+	struct cxi_rxtx_profile_state state;
+	struct valid_user_data *data = user_data;
+	struct cxi_rxtx_vni_attr user_vni = {
+		.match = data->vni,
+	};
+	struct valid_ac_data ac_data = data->ac_data;
+
+	cxi_rxtx_profile_get_info(rxtx_profile, &vni_attr, &state);
+
+	if (!state.enable)
+		return false;
+
+	/* If there is a vni match, check if user is authorized */
+	if (vni_overlap(&user_vni, &vni_attr)) {
+		rc = cxi_rxtx_profile_get_ac_entry_id_by_user(rxtx_profile,
+							      ac_data.uid,
+							      ac_data.gid,
+							      CXI_AC_ANY,
+							      &ac_entry_id);
+		if (!rc)
+			valid = true;
+	}
+
+	return valid;
+}
+
+/**
+ * cxi_valid_vni() - Check if user has permission to use a VNI by searching
+ *                   for a profile containing the VNI.
+ *
+ * @dev: Cassini Device
+ * @type: TX or RX profile
+ * @vni: VNI to verify
+ *
+ * Return:
+ * * true if VNI is valid
+ */
+bool cxi_valid_vni(struct cxi_dev *dev, enum cxi_profile_type type,
+		   unsigned int vni)
+{
+	struct cxi_rxtx_profile_list *list;
+	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
+	struct valid_user_data user_data = {
+		.vni = vni,
+		.ac_data = {
+			.uid = __kuid_val(current_euid()),
+			.gid = __kgid_val(current_egid()),
+		},
+	};
+
+	if (type == CXI_PROF_RX)
+		list = &hw->rx_profile_list;
+	else
+		list = &hw->tx_profile_list;
+
+	return cxi_rxtx_profile_list_iterate(list, valid_vni_operator,
+					     &user_data);
+}

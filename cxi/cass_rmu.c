@@ -63,7 +63,7 @@ int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 	if (!is_vni_valid(vni))
 		return -EINVAL;
 
-	if (!valid_vni(cdev, CXI_PROF_RX, vni))
+	if (!cxi_valid_vni(cdev, CXI_PROF_RX, vni))
 		return -EINVAL;
 
 	if (pid >= cdev->prop.pid_count && pid != C_PID_ANY)
