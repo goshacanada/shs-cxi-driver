@@ -435,10 +435,13 @@ static void rgroup_init(struct cxi_dev *dev,
 		rgroup->pools.le_pool_id[i] = -1;
 
 	rgroup->pools.tle_pool_id = -1;
+	rgroup->attr.lnis_per_rgid = CXI_DEFAULT_LNIS_PER_RGID;
 
-	rgroup->hw             = get_cass_dev(dev);
-	rgroup->attr           = *attr;
-	rgroup->state.enabled  = false;
+	if (attr)
+		rgroup->attr = *attr;
+
+	rgroup->hw = get_cass_dev(dev);
+	rgroup->state.enabled = false;
 	refcount_set(&rgroup->state.refcount, 1);
 	resource_entry_list_init(&rgroup->resource_entry_list);
 	cxi_ac_entry_list_init(&rgroup->ac_entry_list);
