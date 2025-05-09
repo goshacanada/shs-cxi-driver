@@ -7,11 +7,6 @@
 /* Parameter for use with the 'by_user' retrieve functions */
 #define CXI_AC_ANY (CXI_AC_UID | CXI_AC_GID | CXI_AC_OPEN)
 
-union cxi_ac_data {
-	uid_t     uid;
-	gid_t     gid;
-};
-
 void cxi_ac_entry_list_init(struct cxi_ac_entry_list *list);
 
 void cxi_ac_entry_list_purge(struct cxi_ac_entry_list *list);
@@ -151,33 +146,18 @@ struct cxi_rgroup_list {
 	struct xarray    xarray;
 };
 
-enum cxi_resource_type {
-	CXI_RESOURCE_PTLTE  = 1,
-	CXI_RESOURCE_TXQ,
-	CXI_RESOURCE_TGQ,
-	CXI_RESOURCE_EQ,
-	CXI_RESOURCE_CT,
-	CXI_RESOURCE_PE0_LE,
-	CXI_RESOURCE_PE1_LE,
-	CXI_RESOURCE_PE2_LE,
-	CXI_RESOURCE_PE3_LE,
-	CXI_RESOURCE_TLE,
-	CXI_RESOURCE_AC,
-	CXI_RESOURCE_MAX,
-};
-
 static const char * const cxi_resource_type_strs[] = {
-	[CXI_RESOURCE_PTLTE] = "PTLTE",
-	[CXI_RESOURCE_TXQ] = "TXQ",
-	[CXI_RESOURCE_TGQ] = "TGQ",
-	[CXI_RESOURCE_EQ] = "EQ",
-	[CXI_RESOURCE_CT] = "CT",
-	[CXI_RESOURCE_PE0_LE] = "PE0_LE",
-	[CXI_RESOURCE_PE1_LE] = "PE1_LE",
-	[CXI_RESOURCE_PE2_LE] = "PE2_LE",
-	[CXI_RESOURCE_PE3_LE] = "PE3_LE",
-	[CXI_RESOURCE_TLE] = "TLE",
-	[CXI_RESOURCE_AC] = "AC",
+	[CXI_RESOURCE_PTLTE] = "ptlte",
+	[CXI_RESOURCE_TXQ] = "txq",
+	[CXI_RESOURCE_TGQ] = "tgq",
+	[CXI_RESOURCE_EQ] = "eq",
+	[CXI_RESOURCE_CT] = "ct",
+	[CXI_RESOURCE_PE0_LE] = "pe0_le",
+	[CXI_RESOURCE_PE1_LE] = "pe1_le",
+	[CXI_RESOURCE_PE2_LE] = "pe2_le",
+	[CXI_RESOURCE_PE3_LE] = "pe3_le",
+	[CXI_RESOURCE_TLE] = "tle",
+	[CXI_RESOURCE_AC] = "ac",
 };
 
 static inline
@@ -188,12 +168,6 @@ const char *cxi_resource_type_to_str(enum cxi_resource_type type)
 
 	return "(invalid)";
 }
-
-struct cxi_resource_limits {
-	size_t     reserved;
-	size_t     max;
-	size_t     in_use;
-};
 
 struct cxi_resource_use {
 	size_t     reserved;
@@ -231,10 +205,6 @@ void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 			struct cxi_rgroup_attr *attr,
 			struct cxi_rgroup_state *state);
 
-int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
-			    enum cxi_resource_type resource_type,
-			    const struct cxi_resource_limits *limits);
-
 int cxi_rgroup_delete_resource(struct cxi_rgroup *rgroup,
 			       enum cxi_resource_type resource_type);
 
@@ -251,10 +221,10 @@ int cxi_rgroup_get_resource_types(struct cxi_rgroup *rgroup,
 				  enum cxi_resource_type *resource_types,
 				  size_t *num_resources);
 
-int cxi_rgroup_add_ac_entry(struct cxi_rgroup *rgroup,
-			    enum cxi_ac_type type,
-			    const union cxi_ac_data *data,
-			    unsigned int *ac_entry_id);
+int cxi_rgroup_alloc_resource(struct cxi_rgroup *rgroup,
+			      enum cxi_resource_type type);
+void cxi_rgroup_free_resource(struct cxi_rgroup *rgroup,
+			      enum cxi_resource_type type);
 
 int cxi_rgroup_delete_ac_entry(struct cxi_rgroup *rgroup,
 			       unsigned int ac_entry_id);
@@ -281,10 +251,6 @@ int cxi_rgroup_get_ac_entry_by_user(struct cxi_rgroup *rgroup,
 				    unsigned int *ac_entry_id);
 
 void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup);
-int cxi_rgroup_dec_refcount(struct cxi_rgroup *rgroup);
-
-struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,
-					const struct cxi_rgroup_attr *attr);
 
 int cxi_dev_find_rgroup_inc_refcount(struct cxi_dev *dev,
 				     unsigned int id,

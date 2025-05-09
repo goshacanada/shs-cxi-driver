@@ -626,6 +626,7 @@ unsigned int cxi_rgroup_id(const struct cxi_rgroup *rgroup)
 {
 	return rgroup->id;
 }
+EXPORT_SYMBOL(cxi_rgroup_id);
 
 /**
  * cxi_rgroup_name() - Get the rgroup name
@@ -734,6 +735,7 @@ int cxi_rgroup_set_lnis_per_rgid(struct cxi_rgroup *rgroup, int lnis_per_rgid)
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_rgroup_set_lnis_per_rgid);
 
 /**
  * cxi_rgroup_set_cntr_pool_id() - Set the rgroup cntr_pool_id
@@ -752,6 +754,7 @@ int cxi_rgroup_set_cntr_pool_id(struct cxi_rgroup *rgroup, int cntr_pool_id)
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_rgroup_set_cntr_pool_id);
 
 /**
  * cxi_rgroup_set_system_service() - Set the rgroup system_service
@@ -770,6 +773,28 @@ int cxi_rgroup_set_system_service(struct cxi_rgroup *rgroup, bool system_service
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_rgroup_set_system_service);
+
+/**
+ * cxi_rgroup_set_name() - Set the rgroup name
+ *
+ * @rgroup: resource group pointer
+ * @name: name string
+ *
+ * Return: 0 - success, -EBUSY if not enabled
+ */
+int cxi_rgroup_set_name(struct cxi_rgroup *rgroup, char *name)
+{
+	size_t len = min_t(size_t, strlen(name), ARRAY_SIZE(rgroup->attr.name));
+
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
+	strscpy(rgroup->attr.name, name, len);
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_rgroup_set_name);
 
 /**
  * cxi_rgroup_get_info() - retrieve the attr and state of a resource group

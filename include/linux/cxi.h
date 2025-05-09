@@ -151,6 +151,11 @@ enum cxi_ac_type {
 #define MAX_PID_BITS 9
 #define DEFAULT_PID_BITS MAX_PID_BITS
 
+union cxi_ac_data {
+	uid_t     uid;
+	gid_t     gid;
+};
+
 struct cxi_ac_entry_list {
 	struct cxi_ac_entry *open_entry;
 	struct {
@@ -257,6 +262,28 @@ int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
 
 /* Rgroup */
 struct cxi_rgroup;
+struct cxi_rgroup_attr;
+
+struct cxi_resource_limits {
+	size_t     reserved;
+	size_t     max;
+	size_t     in_use;
+};
+
+enum cxi_resource_type {
+	CXI_RESOURCE_PTLTE  = 1,
+	CXI_RESOURCE_TXQ,
+	CXI_RESOURCE_TGQ,
+	CXI_RESOURCE_EQ,
+	CXI_RESOURCE_CT,
+	CXI_RESOURCE_PE0_LE,
+	CXI_RESOURCE_PE1_LE,
+	CXI_RESOURCE_PE2_LE,
+	CXI_RESOURCE_PE3_LE,
+	CXI_RESOURCE_TLE,
+	CXI_RESOURCE_AC,
+	CXI_RESOURCE_MAX,
+};
 
 int cxi_rgroup_enable(struct cxi_rgroup *rgroup);
 void cxi_rgroup_disable(struct cxi_rgroup *rgroup);
@@ -276,6 +303,17 @@ void cxi_rgroup_set_lnis_per_rgid_compat(struct cxi_rgroup *rgroup,
 				     int lnis_per_rgid);
 int cxi_rgroup_set_cntr_pool_id(struct cxi_rgroup *rgroup, int cntr_pool_id);
 int cxi_rgroup_set_system_service(struct cxi_rgroup *rgroup, bool system_service);
+int cxi_rgroup_set_name(struct cxi_rgroup *rgroup, char *name);
+struct cxi_rgroup *cxi_dev_alloc_rgroup(struct cxi_dev *dev,
+					const struct cxi_rgroup_attr *attr);
+int cxi_rgroup_dec_refcount(struct cxi_rgroup *rgroup);
+int cxi_rgroup_add_resource(struct cxi_rgroup *rgroup,
+			    enum cxi_resource_type resource_type,
+			    const struct cxi_resource_limits *limits);
+int cxi_rgroup_add_ac_entry(struct cxi_rgroup *rgroup,
+			    enum cxi_ac_type type,
+			    const union cxi_ac_data *data,
+			    unsigned int *ac_entry_id);
 
 struct cxi_ct *cxi_ct_alloc(struct cxi_lni *lni, struct c_ct_writeback *wb,
 			    bool is_user);
