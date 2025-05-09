@@ -55,16 +55,6 @@ static enum cxi_resource_type stype_to_rtype(enum cxi_rsrc_type type, int pe)
 	}
 }
 
-bool valid_svc_user(struct cxi_rgroup *rgroup)
-{
-	unsigned int ac_entry_id;
-	uid_t uid = __kuid_val(current_euid());
-	gid_t gid = __kgid_val(current_egid());
-
-	return !cxi_rgroup_get_ac_entry_by_user(rgroup, uid, gid,
-						CXI_AC_ANY, &ac_entry_id);
-}
-
 static void copy_rsrc_use(struct cxi_dev *dev, struct cxi_rsrc_use *rsrcs,
 			  struct cxi_rgroup *rgroup)
 {

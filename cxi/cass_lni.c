@@ -51,7 +51,7 @@ struct cxi_lni *cxi_lni_alloc(struct cxi_dev *dev, unsigned int svc_id)
 	}
 
 	/* Verify calling user/group has permission to use this service */
-	if (!valid_svc_user(rgroup)) {
+	if (!cxi_rgroup_valid_user(rgroup)) {
 		err = ERR_PTR(-EPERM);
 		goto dec_svc;
 	}

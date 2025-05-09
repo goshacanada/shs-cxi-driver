@@ -823,6 +823,24 @@ void cxi_rgroup_get_info(struct cxi_rgroup *rgroup,
 EXPORT_SYMBOL(cxi_rgroup_get_info);
 
 /**
+ * cxi_rgroup_valid_user() - Verify user is has permission to use rgroup
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return:
+ * * true if user has permission
+ */
+bool cxi_rgroup_valid_user(struct cxi_rgroup *rgroup)
+{
+	unsigned int ac_entry_id;
+	uid_t uid = __kuid_val(current_euid());
+	gid_t gid = __kgid_val(current_egid());
+
+	return !cxi_rgroup_get_ac_entry_by_user(rgroup, uid, gid,
+						CXI_AC_ANY, &ac_entry_id);
+}
+
+/**
  * cxi_rgroup_add_resource() - add a resource to this resource group
  *
  * @rgroup: resource group pointer

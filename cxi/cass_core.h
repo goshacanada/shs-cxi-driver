@@ -1189,8 +1189,6 @@ static inline bool is_vni_valid(unsigned int vni)
 	return vni && !(vni & ~0xffff);
 }
 
-bool valid_svc_tc(const struct cxi_svc_priv *svc_priv, unsigned int tc);
-bool valid_svc_user(struct cxi_rgroup *rgroup);
 int register_error_handlers(struct cass_dev *hw);
 void deregister_error_handlers(struct cass_dev *hw);
 int cass_sriov_configure(struct pci_dev *pdev, int num_vfs);

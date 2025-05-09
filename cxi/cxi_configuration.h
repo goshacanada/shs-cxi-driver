@@ -206,6 +206,8 @@ struct cxi_rgroup_pools {
 struct cxi_rgroup_attr;
 struct cxi_rgroup_state;
 
+bool cxi_rgroup_valid_user(struct cxi_rgroup *rgroup);
+
 void cxi_dev_lock_rgroup_list(struct cass_dev *hw);
 void cxi_dev_unlock_rgroup_list(struct cass_dev *hw);
 
