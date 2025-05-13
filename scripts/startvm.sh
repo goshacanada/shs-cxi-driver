@@ -18,6 +18,8 @@ cd $DIR
 
 VM_INIT_SCRIPT=${VM_INIT_SCRIPT:='./startvm-setup.sh'}
 
+export OMPI_MCA_btl_base_warn_component_unused=0
+
 # If the emulator is not running, start it. This script must run under
 # its control, so qemu can connect to it. Simply relaunch self under
 # netsim's control.

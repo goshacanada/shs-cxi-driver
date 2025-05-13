@@ -7,6 +7,8 @@
 # If not in a VM, start one and execute self.
 HYP=$(grep -c "^flags.* hypervisor" /proc/cpuinfo)
 
+export OMPI_MCA_btl_base_warn_component_unused=0
+
 if [[ $HYP -eq 0 ]]; then
 	. ./framework.sh
 
