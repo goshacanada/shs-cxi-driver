@@ -1088,13 +1088,17 @@ EXPORT_SYMBOL(cxi_rgroup_get_resource_types);
  * * 0       - success
  * * -EBADR  - invalid type value
  * * -ENOMEM - unable to allocate memory for request
- * * -EBUSY  - access control entry already exists
+ * * -EEXIST - access control entry already exists
+ * * -EBUSY  - rgroup is enabled
  */
 int cxi_rgroup_add_ac_entry(struct cxi_rgroup *rgroup,
 			    enum cxi_ac_type type,
 			    const union cxi_ac_data *data,
 			    unsigned int *ac_entry_id)
 {
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
 	return cxi_ac_entry_list_insert(&rgroup->ac_entry_list,
 					type, data, ac_entry_id);
 }
@@ -1110,10 +1114,14 @@ EXPORT_SYMBOL(cxi_rgroup_add_ac_entry);
  * Return:
  * * 0        - success
  * * -ENODATA - access control entry does not exist
+ * * -EBUSY  - rgroup is enabled
  */
 int cxi_rgroup_delete_ac_entry(struct cxi_rgroup *rgroup,
 			       unsigned int ac_entry_id)
 {
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
 	return cxi_ac_entry_list_delete(&rgroup->ac_entry_list,
 					ac_entry_id);
 }
