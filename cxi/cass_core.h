@@ -1003,6 +1003,11 @@ struct cass_dev {
 	struct cass_sl_dev sl;
 };
 
+static inline struct cass_dev *cxi_to_cass_dev(struct cxi_dev *dev)
+{
+	return container_of(dev, struct cass_dev, cdev);
+}
+
 /* Communication profile. */
 struct cass_cp {
 	struct cass_dev *hw;
