@@ -998,6 +998,7 @@ int cxi_rgroup_get_resource_entry(struct cxi_rgroup *rgroup,
 
 /**
  * cxi_rgroup_get_resource() - retrieve limits for a resource
+ *                             The TLE in_use needs to be read from hw.
  *
  * @rgroup: resource group pointer
  * @type: resource type to retrieve parameters for
@@ -1020,7 +1021,11 @@ int cxi_rgroup_get_resource(struct cxi_rgroup *rgroup,
 	if (ret || !resource_entry)
 		return -ENODATA;
 
+	if (type == CXI_RESOURCE_TLE)
+		cass_get_tle_in_use(rgroup, resource_entry);
+
 	*limits = resource_entry->limits;
+
 	return 0;
 }
 EXPORT_SYMBOL(cxi_rgroup_get_resource);
