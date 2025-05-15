@@ -24,4 +24,7 @@ void cass_free_resource(struct cxi_rgroup *rgroup,
 int cass_alloc_resource(struct cxi_rgroup *rgroup,
 			struct cxi_resource_entry *entry);
 
+void cass_get_tle_in_use(struct cxi_rgroup *rgroup,
+			 struct cxi_resource_entry *entry);
+
 #endif /* _CASS_RGROUP_H_ */

@@ -254,3 +254,18 @@ int cass_alloc_resource(struct cxi_rgroup *rgroup,
 
 	return rc;
 }
+
+void cass_get_tle_in_use(struct cxi_rgroup *rgroup,
+			 struct cxi_resource_entry *entry)
+{
+	union c_cq_sts_tle_in_use tle_in_use;
+
+	if (cxi_rgroup_tle_pool_id(rgroup) == -1)
+		return;
+
+	cass_read(rgroup->hw,
+		  C_CQ_STS_TLE_IN_USE(cxi_rgroup_tle_pool_id(rgroup)),
+		  &tle_in_use, sizeof(tle_in_use));
+
+	entry->limits.in_use = tle_in_use.count;
+}
