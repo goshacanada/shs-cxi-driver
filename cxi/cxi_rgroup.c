@@ -949,6 +949,9 @@ int cxi_rgroup_delete_resource(struct cxi_rgroup *rgroup,
 	struct cxi_resource_entry       *resource_entry;
 	int    ret;
 
+	if (cxi_rgroup_is_enabled(rgroup))
+		return -EBUSY;
+
 	resource_entry_list_lock(list);
 
 	ret = resource_entry_list_retrieve_resource_entry(list, type,
