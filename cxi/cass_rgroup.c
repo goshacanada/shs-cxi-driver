@@ -76,10 +76,17 @@ int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	spin_lock(&hw->rgrp_lock);
 
 	if (resource->limits.reserved > r_use->shared) {
-		pr_debug("Resource %s reserved:%lu max:%lu unavailable. %lu is currently available.\n",
+		pr_debug("Error - %s reserved requested (%lu) > shared available (%lu)\n",
 			 cxi_resource_type_to_str(resource->type),
-			 resource->limits.reserved, resource->limits.max,
-			 r_use->shared);
+			 resource->limits.reserved, r_use->shared);
+		rc = -ENOSPC;
+		goto unlock;
+	}
+
+	if (resource->limits.max > r_use->max) {
+		pr_debug("Error - %s max requested (%lu) > max available (%lu)\n",
+			 cxi_resource_type_to_str(resource->type),
+			 resource->limits.max, r_use->max);
 		rc = -ENOSPC;
 		goto unlock;
 	}
