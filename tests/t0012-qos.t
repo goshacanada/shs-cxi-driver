@@ -15,7 +15,7 @@ test_expect_success "Load SBL and SL" "
 "
 
 test_expect_success "Load HPC" "
-	insmod ../../../cxi/cxi-ss1.ko active_qos_profile=1 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko active_qos_profile=1 &&
 	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_ss1) -eq 0 ]
 "
 
@@ -35,7 +35,7 @@ test_expect_success "Validate HPC" "
 rmmod cxi-ss1
 
 test_expect_success "Load LL_BE_BD_ET" "
-	insmod ../../../cxi/cxi-ss1.ko active_qos_profile=2 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko active_qos_profile=2 &&
 	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_ss1) -eq 0 ]
 "
 
@@ -55,7 +55,7 @@ test_expect_success "Validate LL_BE_BD_ET" "
 rmmod cxi-ss1
 
 test_expect_success "Load LL_BE_BD_ET1_ET2" "
-	insmod ../../../cxi/cxi-ss1.ko active_qos_profile=3 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko active_qos_profile=3 &&
 	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_ss1) -eq 0 ]
 "
 

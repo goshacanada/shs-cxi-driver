@@ -11,12 +11,12 @@ test_description="EQ alloc tests"
 test_expect_success "Inserting core driver" "
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko disable_default_svc=0 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko disable_default_svc=0 &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
 test_expect_success "Inserting eq alloc test driver" "
-	insmod ../../../cxi/tests/test-eq-alloc.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/tests/test-eq-alloc.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 

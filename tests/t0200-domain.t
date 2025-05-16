@@ -11,13 +11,13 @@ test_description="Basic tests for domains"
 test_expect_success "Inserting core driver" "
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko disable_default_svc=0 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko disable_default_svc=0 &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
 test_expect_success "Inserting domain test driver" "
 	dmesg --clear &&
-	insmod ../../../cxi/tests/test-domain.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/tests/test-domain.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 

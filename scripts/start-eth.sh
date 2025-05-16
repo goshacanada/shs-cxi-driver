@@ -10,7 +10,7 @@
 #
 # Then run this script on each xterm to bring up the Ethernet and IP interface.
 
-insmod ../cxi/cxi-eth.ko
+insmod ../drivers/net/ethernet/hpe/ss1/cxi-eth.ko
 
 # Short sleep to let Linux configure Ethernet interface.
 sleep 3

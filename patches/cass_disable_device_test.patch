@@ -8,10 +8,10 @@ Date:   Mon Apr 22 15:35:55 2024 -0500
     
     Signed-off-by: John Heemstra <john.heemstra@hpe.com>
 
-diff --git a/cxi/cass_core.c b/cxi/cass_core.c
+diff --git a/drivers/net/ethernet/hpe/ss1/cass_core.c b/drivers/net/ethernet/hpe/ss1/cass_core.c
 index 22b12a7..c300924 100644
---- a/cxi/cass_core.c
-+++ b/cxi/cass_core.c
+--- a/drivers/net/ethernet/hpe/ss1/cass_core.c
++++ b/drivers/net/ethernet/hpe/ss1/cass_core.c
 @@ -1255,6 +1255,7 @@ void cass_disable_device(struct pci_dev *pdev)
  
  	hw->pci_disabled = true;
@@ -20,31 +20,32 @@ index 22b12a7..c300924 100644
  
  static struct pci_device_id cass_ids[] = {
  	{ PCI_DEVICE(PCI_VENDOR_ID_CRAY, PCI_DEVICE_ID_CASSINI_1) },
-diff --git a/cxi/tests/Kbuild b/cxi/tests/Kbuild
+diff --git a/drivers/net/ethernet/hpe/ss1/tests/Kbuild b/drivers/net/ethernet/hpe/ss1/tests/Kbuild
 index 76f42ac..9d9c0fa 100644
---- a/cxi/tests/Kbuild
-+++ b/cxi/tests/Kbuild
-@@ -1,6 +1,6 @@
+--- a/drivers/net/ethernet/hpe/ss1/tests/Kbuild
++++ b/drivers/net/ethernet/hpe/ss1/tests/Kbuild
+@@ -1,7 +1,7 @@
+ # Copyright 2018-2020,2024 Hewlett Packard Enterprise Development LP
  obj-m += test-domain.o test-atu.o test-vfpfcomm.o test-dmac.o test-dmac-api.o
- obj-m += test-eq-reserved-fc.o test-lmon-example.o test-cntrs-api.o
+ obj-m += test-eq-reserved-fc.o test-telem-api.o
 -obj-m += test-eq-alloc.o test-service.o test-ptlte.o
 +obj-m += test-eq-alloc.o test-service.o test-ptlte.o test-uncor.o
  
  test-atu-objs := test_atu.o
  test-dmac-objs := test_dmac.o
-@@ -13,6 +13,7 @@ test-eq-reserved-fc-objs := test_eq_reserved_fc.o
+@@ -13,6 +13,7 @@
  test-eq-alloc-objs := test_eq_alloc.o
  test-service-objs := test_service.o
  test-ptlte-objs := test_ptlte.o
 +test-uncor-objs := test_uncor.o
  
- ccflags-y += -I$(src)/.. -I$(src)/../../include \
- 	     -I$(src)/../../../cassini-headers/install/include \
-diff --git a/cxi/tests/test_uncor.c b/cxi/tests/test_uncor.c
+ ccflags-y += -I$(src)/../ss1 -I$(src)/../../../../../include \
+ 	     -I$(src)/../../../../../../cassini-headers/install/include \
+diff --git a/drivers/net/ethernet/hpe/ss1/tests/test_uncor.c b/drivers/net/ethernet/hpe/ss1/tests/test_uncor.c
 new file mode 100644
 index 0000000..1ef467e
 --- /dev/null
-+++ b/cxi/tests/test_uncor.c
++++ b/drivers/net/ethernet/hpe/ss1/tests/test_uncor.c
 @@ -0,0 +1,96 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/* Copyright 2024 Hewlett Packard Enterprise Development LP */
@@ -53,7 +54,7 @@ index 0000000..1ef467e
 +
 +#include <linux/kernel.h>
 +#include <linux/module.h>
-+#include <linux/cxi.h>
++#include <linux/cxi/cxi.h>
 +
 +#include "cass_core.h"
 +#include "cxi_core.h"
@@ -175,12 +176,12 @@ index 0000000..771ecf8
 +"
 +
 +test_expect_success "Inserting core driver" "
-+	insmod ../../../cxi/cxi-ss1.ko disable_default_svc=0 &&
++	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko disable_default_svc=0 &&
 +	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_ss1) -eq 0 ]
 +"
 +
 +test_expect_success "Inserting user driver" "
-+	insmod ../../../cxi/cxi-user.ko &&
++	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-user.ko &&
 +	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_user) -eq 0 ]
 +"
 +
@@ -189,7 +190,7 @@ index 0000000..771ecf8
 +"
 +
 +test_expect_success "Inserting test-uncor module" "
-+	insmod ../../../cxi/tests/test-uncor.ko &&
++	insmod ../../../drivers/net/ethernet/hpe/ss1/tests/test-uncor.ko &&
 +	[ $(lsmod | awk '{ print $1 }' | grep -c test_uncor) -eq 0 ]
 +"
 +
@@ -217,11 +218,11 @@ index 0000000..771ecf8
 +"
 +
 +test_expect_success "Inserting core driver" "
-+	insmod ../../../cxi/cxi-ss1.ko
++	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko
 +"
 +
 +test_expect_success "Inserting user driver" "
-+	insmod ../../../cxi/cxi-user.ko
++	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-user.ko
 +"
 +
 +test_expect_success "cxi0 reported as enabled in sysfs" "

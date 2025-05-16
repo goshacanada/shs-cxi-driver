@@ -36,8 +36,8 @@ function create_vfs {
 test_expect_success "Inserting driver" "
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko &&
-	insmod ../../../cxi/cxi-user.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-user.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 

@@ -134,7 +134,7 @@ for flavor in %flavors_to_build; do
     cp -r source obj/$flavor
 
     make -C %{kernel_source $flavor} modules \
-        M=$PWD/obj/$flavor/cxi \
+        M=$PWD/obj/$flavor/drivers/net/ethernet/hpe/ss1 \
         NO_BUILD_TESTS=1 \
         CASSINI_HEADERS_DIR=%{_includedir} \
         FIRMWARE_CASSINI_DIR=%{_includedir} \
@@ -150,14 +150,14 @@ done
 export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{name}
 for flavor in %flavors_to_build; do
-    make -C %{kernel_source $flavor} M=$PWD/obj/$flavor/cxi NO_BUILD_TESTS=1 modules_install 
-    install -D $PWD/obj/$flavor/cxi/Module.symvers $RPM_BUILD_ROOT/%{prefix}/src/cxi/$flavor/Module.symvers
+    make -C %{kernel_source $flavor} M=$PWD/obj/$flavor/drivers/net/ethernet/hpe/ss1 NO_BUILD_TESTS=1 modules_install
+    install -D $PWD/obj/$flavor/drivers/net/ethernet/hpe/ss1/Module.symvers $RPM_BUILD_ROOT/%{prefix}/src/cxi/$flavor/Module.symvers
 done
 
 # Remove any test modules (test-atu.ko, test-domain.ko, etc.) that got installed
 rm -rf $INSTALL_MOD_PATH/lib/modules/*/$INSTALL_MOD_DIR/tests/
 
-install -D source/include/linux/cxi.h %{buildroot}/%{_includedir}/linux/cxi.h
+install -D source/include/linux/cxi/cxi.h %{buildroot}/%{_includedir}/linux/cxi/cxi.h
 install -D source/include/uapi/misc/cxi.h %{buildroot}/%{_includedir}/uapi/misc/cxi.h
 install -D --mode=0644 --target-directory=%{buildroot}/%{_udevrulesdir} source/50-cxi-driver.rules
 
@@ -261,7 +261,7 @@ ${postinst} %{name} %{version}-%{release}
 %{_udevrulesdir}/50-cxi-driver.rules
 
 %files devel
-%{_includedir}/linux/cxi.h
+%{_includedir}/linux/cxi/cxi.h
 %{_includedir}/uapi/misc/cxi.h
 %{prefix}/src/cxi/*/Module.symvers
 

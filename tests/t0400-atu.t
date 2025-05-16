@@ -12,13 +12,13 @@ test_expect_success "Inserting core driver" "
 	dmesg --clear &&
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko disable_default_svc=0 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko disable_default_svc=0 &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
 test_expect_success "Inserting CXI User test driver" "
 	dmesg --clear &&
-	insmod ../../../cxi/cxi-user.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-user.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
@@ -52,12 +52,12 @@ test_expect_success "Inserting core driver" "
 	dmesg --clear &&
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko disable_default_svc=0 &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko disable_default_svc=0 &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
 test_expect_success "Run ATU test driver" "
-	insmod ../../../cxi/tests/test-atu.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/tests/test-atu.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 

@@ -3,7 +3,7 @@
 
 export TOPDIR := $(if $(TOPDIR),$(TOPDIR),$(shell readlink -e .))
 
-SUBDIRS = cxi ucxi
+SUBDIRS = drivers/net/ethernet/hpe/ss1 ucxi
 
 all clean: $(SUBDIRS)
 	rm -rf WORKSPACE
@@ -24,10 +24,10 @@ PACKAGE = cray-cxi-driver
 VERSION = 0.9
 
 DIST_FILES = \
-	cxi/*.c \
-	cxi/*.h \
-	cxi/Makefile \
-	cxi/Kbuild \
+	drivers/net/ethernet/hpe/ss1/*.c \
+	drivers/net/ethernet/hpe/ss1/*.h \
+	drivers/net/ethernet/hpe/ss1/Makefile \
+	drivers/net/ethernet/hpe/ss1/Kbuild \
 	ucxi/*.c \
 	ucxi/*.h \
 	ucxi/Makefile \

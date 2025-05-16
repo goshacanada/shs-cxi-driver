@@ -24,12 +24,12 @@ test_expect_success "Inserting slingshot link driver" "
 "
 
 test_expect_success "Inserting core driver" "
-	insmod ../../../cxi/cxi-ss1.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko &&
 	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_ss1) -eq 0 ]
 "
 
 test_expect_success "Inserting user driver" "
-	insmod ../../../cxi/cxi-user.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-user.ko &&
 	[ $(lsmod | awk '{ print $1 }' | grep -c cxi_user) -eq 0 ]
 "
 

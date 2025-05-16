@@ -13,13 +13,13 @@ test_description="Basic test for CXI DMAC API"
 test_expect_success "Inserting core driver" "
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&
-	insmod ../../../cxi/cxi-ss1.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/cxi-ss1.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
 test_expect_success "Inserting DMAC test driver" "
 	dmesg --clear &&
-	insmod ../../../cxi/tests/test-dmac-api.ko &&
+	insmod ../../../drivers/net/ethernet/hpe/ss1/tests/test-dmac-api.ko &&
 	[ $(dmesg | grep -c 'Modules linked in') -eq 0 ]
 "
 
