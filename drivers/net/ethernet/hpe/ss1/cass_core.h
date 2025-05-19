@@ -1163,6 +1163,16 @@ static inline void cass_cond_unlock(struct mutex *lock, bool need_lock)
 		mutex_unlock(lock);
 }
 
+static inline void cass_cp_lock(struct cass_dev *hw)
+{
+	mutex_lock(&hw->cp_lock);
+}
+
+static inline void cass_cp_unlock(struct cass_dev *hw)
+{
+	mutex_unlock(&hw->cp_lock);
+}
+
 void cass_device_put_pages(struct cxi_md_priv *md_priv);
 int cxi_dmabuf_get_pages(struct ac_map_opts *m_opts);
 void cxi_dmabuf_put_pages(struct cxi_md_priv *md_priv);

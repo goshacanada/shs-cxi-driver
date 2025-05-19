@@ -57,16 +57,6 @@ static void rx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
 	cxi_rx_profile_dec_refcount(data->cxi_dev, co_rx_profile(rxtx_profile));
 }
 
-static void tx_profile_destroy(struct cxi_rxtx_profile *rxtx_profile,
-			       void *user_arg)
-{
-	struct profile_destroy_data *data = user_arg;
-
-	refcount_dec(&rxtx_profile->state.refcount);
-	cxi_tx_profile_dec_refcount(data->cxi_dev, co_tx_profile(rxtx_profile),
-				    false);
-}
-
 /**
  * cass_dev_rx_tx_profiles_fini() - Destroy all RX and TX Profile entries
  * associated with this device, as well as locks, etc.
@@ -81,8 +71,7 @@ void cass_dev_rx_tx_profiles_fini(struct cass_dev *hw)
 
 	cxi_rxtx_profile_list_destroy(&hw->rx_profile_list,
 				      rx_profile_destroy, &data);
-	cxi_rxtx_profile_list_destroy(&hw->tx_profile_list,
-				      tx_profile_destroy, &data);
+	cxi_tx_profile_list_destroy(hw);
 }
 
 /**

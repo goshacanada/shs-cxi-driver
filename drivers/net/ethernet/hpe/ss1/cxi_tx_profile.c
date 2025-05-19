@@ -45,6 +45,40 @@ void cxi_dev_init_eth_tx_profile(struct cass_dev *hw)
 EXPORT_SYMBOL(cxi_dev_init_eth_tx_profile);
 
 /**
+ * cxi_tx_profile_list_destroy() - remove all Profile references from
+ *                                 the TX profile list and free the
+ *                                 underlying resources.
+ *
+ * Take the cp_lock so that the cass_cp_table can be iterated
+ * over to disable the CPs associated with each TX profile.
+ *
+ * @hw: Cassini Device ptr
+ */
+void cxi_tx_profile_list_destroy(struct cass_dev *hw)
+{
+	struct cxi_rxtx_profile *profile;
+	struct cxi_rxtx_profile_list *list = &hw->tx_profile_list;
+	unsigned long index = list->limits->min;
+
+	cass_cp_lock(hw);
+	xa_lock(&list->xarray);
+
+	xa_for_each(&list->xarray, index, profile) {
+		__xa_erase(&list->xarray, index);
+
+		refcount_dec(&profile->state.refcount);
+		cxi_tx_profile_dec_refcount(&hw->cdev,
+					    co_tx_profile(profile),
+					    false);
+	}
+
+	xa_unlock(&list->xarray);
+	cass_cp_unlock(hw);
+
+	xa_destroy(&list->xarray);
+}
+
+/**
  * cxi_dev_alloc_tx_profile() - Allocate a TX Profile
  *
  * @dev: Cassini Device

@@ -26,13 +26,12 @@ static int cass_cp_clear_table(int id, void *ptr, void *data)
  * @tx_profile: TX profile to clean
  */
 void cass_clear_cps(struct cxi_tx_profile *tx_profile)
+	__must_hold(&hw->cp_lock)
 {
 	struct cass_dev *hw = tx_profile->config.hw;
 
-	mutex_lock(&hw->cp_lock);
 	idr_for_each(&tx_profile->config.cass_cp_table, &cass_cp_clear_table,
 		     hw);
-	mutex_unlock(&hw->cp_lock);
 }
 
 struct vni_tc_data {

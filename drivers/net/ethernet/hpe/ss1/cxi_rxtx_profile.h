@@ -62,6 +62,8 @@ int cxi_rxtx_profile_get_ac_entry_id_by_user(struct cxi_rxtx_profile *rxtx_profi
 					     cxi_ac_typeset_t desired_types,
 					     unsigned int *ac_entry_id);
 
+void cxi_tx_profile_list_destroy(struct cass_dev *cdev);
+
 __maybe_unused
 static struct cxi_rx_profile *co_rx_profile(struct cxi_rxtx_profile *profile)
 {
