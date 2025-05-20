@@ -22,6 +22,7 @@ static int add_device(struct cxi_dev *dev)
 	struct cxi_domain *domain;
 	int i;
 	int rc;
+	int ac_entry_id;
 	int ndom_alloc;
 	int ndom2_alloc;
 	struct cxi_lni *lni;
@@ -62,6 +63,8 @@ static int add_device(struct cxi_dev *dev)
 		return 0;
 	}
 
+	pr_info("Created RX profile id %d\n", rx_profile->profile_common.id);
+
 	rc = cxi_rx_profile_enable(dev, rx_profile);
 	if (rc) {
 		pr_err("TEST-ERROR: cannot enable RX profile\n");
@@ -76,6 +79,15 @@ static int add_device(struct cxi_dev *dev)
 		pr_err("TEST-ERROR: cannot create lni\n");
 		goto remove_profile;
 	}
+
+	pr_info("TEST: alloc should fail without an ac entry\n");
+	domain = cxi_domain_alloc(lni, vni, 0);
+	if (!IS_ERR(domain))
+		pr_err("TEST-ERROR: domains %u is allocated\n", i);
+
+	rc = cxi_rx_profile_add_ac_entry(rx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
 
 	/* Allocate 256 different VNI */
 	pr_info("Create %d different domains\n", C_RMU_CFG_VNI_LIST_ENTRIES);

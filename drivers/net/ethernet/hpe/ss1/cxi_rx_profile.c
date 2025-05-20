@@ -320,11 +320,12 @@ struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
 						&rx_profile->profile_common,
 						uid, gid, CXI_AC_ANY,
 						&ac_entry_id);
-			if (rc)
-				continue;
+			if (!rc) {
+				refcount_inc(&profile->state.refcount);
+				break;
+			}
 
-			refcount_inc(&profile->state.refcount);
-			break;
+			rx_profile = NULL;
 		}
 	}
 
