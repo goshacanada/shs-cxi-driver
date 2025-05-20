@@ -369,6 +369,7 @@ void cxi_cp_free(struct cxi_cp *cp)
 {
 	struct cxi_cp_priv *cp_priv = container_of(cp, struct cxi_cp_priv, cp);
 	struct cass_dev *hw = cp_priv->cass_cp->hw;
+	struct cxi_tx_profile *tx_profile = cp_priv->cass_cp->tx_profile;
 
 	mutex_lock(&hw->cp_lock);
 
@@ -391,8 +392,7 @@ void cxi_cp_free(struct cxi_cp *cp)
 
 	mutex_unlock(&hw->cp_lock);
 
-	cxi_tx_profile_dec_refcount(&hw->cdev, cp_priv->cass_cp->tx_profile,
-				    true);
+	cxi_tx_profile_dec_refcount(&hw->cdev, tx_profile, true);
 	kfree(cp_priv);
 
 	cass_flush_pci(hw);
