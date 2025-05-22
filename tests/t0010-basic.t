@@ -67,26 +67,35 @@ test_expect_success "sbl sysfs entry exists" "
 	[ -d /sys/class/cxi/cxi0/device/port ]
 "
 
-test_expect_success "Create 1 VFs" "
+test_expect_success SRIOV "Create 1 VFs" "
 	echo 1 > /sys/class/cxi/cxi0/device/sriov_numvfs
 "
 
-test_expect_success "Two devices are now present" "
-	[ $(lspci  -n | grep -c '17db:0501') -eq 2 ]
+if test_have_prereq SRIOV; then
+	n_devices=2
+else
+	n_devices=1
+fi
+
+test_expect_success SRIOV "$n_devices devices are now present" "
+	[ $(lspci  -n | grep -c '17db:0501') -eq $n_devices ]
 "
 
 test_expect_success "Intel IOMMU is properly set up" "
 	[ $(dmesg | grep -c 'DMAR: IOMMU enabled') -eq 1 ]
 "
 
-test_expect_success "MSI-X is present" "
-	[ $(lspci -d 17db: -vv | grep -c 'Capabilities: \[b0\] MSI-X: Enable+ Count=63 Masked-') -eq 1 ] &&
+test_expect_success "MSI-X is present (PF)" "
 	[ $(lspci -d 17db: -vv | grep -c 'Capabilities: \[b0\] MSI-X: Enable+ Count=512 Masked-') -eq 1 ]
 "
 
+test_expect_success SRIOV "MSI-X is present (VF)" "
+	[ $(lspci -d 17db: -vv | grep -c 'Capabilities: \[b0\] MSI-X: Enable+ Count=63 Masked-') -eq 1 ]
+"
+
 test_expect_success "PCI capabilities" "
-	[ $(lspci -d 17db: -vv | grep -c 'Advanced Error Reporting') -eq 2 ] &&
-	[ $(lspci -d 17db: -vv | grep -c 'Alternative Routing-ID Interpretation') -eq 2 ] &&
+	[ $(lspci -d 17db: -vv | grep -c 'Advanced Error Reporting') -eq $n_devices ] &&
+	[ $(lspci -d 17db: -vv | grep -c 'Alternative Routing-ID Interpretation') -eq $n_devices ] &&
 	[ $(lspci -d 17db: -vv | grep -c 'Address Translation Service') -eq 1 ] &&
 	[ $(lspci -d 17db: -vv | grep -c 'Single Root I/O Virtualization') -eq 1 ]
 "

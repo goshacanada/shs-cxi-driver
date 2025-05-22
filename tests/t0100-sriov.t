@@ -33,6 +33,11 @@ function create_vfs {
 	[[ $(cat $PFDEV/sriov_numvfs) -eq $1 ]]
 }
 
+if ! test_have_prereq SRIOV; then
+	skip_all="vsock SR-IOV requires VFs bound to guest VMs"
+	test_done
+fi
+
 test_expect_success "Inserting driver" "
 	insmod ../../../../slingshot_base_link/cxi-sbl.ko &&
 	insmod ../../../../sl-driver/knl/cxi-sl.ko &&

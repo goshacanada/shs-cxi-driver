@@ -1,81 +1,297 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright 2019 Hewlett Packard Enterprise Development LP */
 
-/* Cassini SRIOV and VFs handler */
+/*
+ * Cassini SRIOV and VFs handler
+ *
+ * AF_VSOCK sockets are used to pass messages and responses from the VF to the
+ * PF. As a simplifying assumption, the current implementation uses a fixed
+ * mapping from vsock CIDs 10-73 to VFs 0-63 respectively. This approach works
+ * for the basic virtualization use case of multiple virtual machines, each with
+ * one VF attached to them, but the following shortcomings should be noted:
+ *
+ * - Only one VF may be attached to any given VM.
+ *
+ * - A VM with a VF attached must have also have a vsock device assigned to it,
+ *   with the appropriate CID statically configured.
+ *
+ * - VFs attached to the host (i.e. not attached to a VM) are not supported
+ *   (since these all come from the same vsock CID).
+ *
+ * Communication is initiated by the VF, and an acknowledgment from the PF is
+ * always expected. Messages are prefixed with an integer result code (only used
+ * by the response from the PF) and message length.
+ *
+ * A hardware mechanism exists for the PF to interrupt a specific VF, this could
+ * be used for e.g. asynchronous events or other VF-initiated communications,
+ * but software support for this is not currently implemented.
+ */
 
-#include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/types.h>
-#include <linux/msi.h>
-#include <linux/bitops.h>
+#include <linux/kthread.h>
+#include <linux/net.h>
+#include <linux/vm_sockets.h>
+#include <net/sock.h>
 
 #include "cass_core.h"
 #include "cxi_core.h"
 
-/* The 2 bytes to use are the last 2 in the MSI-X vector */
-#define MSG_OFFSET (PCI_MSIX_ENTRY_VECTOR_CTRL + 2)
+/* TODO: make port configurable (0x17db is arbitrary, taken from C1 PCI vendor ID) */
+#define CXI_SRIOV_VSOCK_PORT 0x17db
 
-static void pf_intr_task(struct work_struct *work);
-
-/* Interrupt handler for VFs to PF channel. */
-static irqreturn_t vf_to_pf_irqh(int irq, void *context)
+static int map_cid_to_vf(const struct cass_dev *hw, const struct sockaddr_vm *addr)
 {
-	struct cass_dev *hw = context;
+	/*
+	 * TODO: in absence of userspace service to map vsock CIDs to VFs,
+	 * assume a static mapping of CID = 10 + vf_idx.
+	 *
+	 * Note that while PCI functions for VFs are numbered from 1 upward
+	 * (function 0 being the PF), vf_idx is zero-indexed, i.e. CID 10 and
+	 * vf_idx 0 correspond to PCI function 1, CID 13 and vf_idx 3 to
+	 * function 4, etc.
+	 */
 
-	schedule_work(&hw->pf_intr_task);
+	int vf = addr->svm_cid - 10;
 
-	return IRQ_HANDLED;
+	if (vf < 0 || vf >= C_NUM_VFS)
+		return -1;
+	else
+		return vf;
 }
 
-int register_pf_vf_handler(struct cass_dev *hw)
+static int write_message_to_vsock(struct socket *sock, const void *msg, size_t msg_len, int msg_rc)
 {
+	struct vf_pf_msg_hdr hdr = {
+		.len = msg_len,
+		.rc = msg_rc
+	};
+	struct msghdr msghdr = {};
+	struct kvec vec[] = {
+		{
+			.iov_base = &hdr,
+			.iov_len = sizeof(hdr),
+		},
+		{
+			.iov_base = (void *)msg,
+			.iov_len = msg_len
+		}
+	};
+
+	return kernel_sendmsg(sock, &msghdr, vec, 2, sizeof(hdr) + msg_len);
+}
+
+static int read_message_from_vsock(struct socket *sock, void *msg, size_t *msg_len, int *msg_rc)
+{
+	struct vf_pf_msg_hdr hdr;
+	struct msghdr msghdr = {};
+	struct kvec hdrvec = {
+		.iov_base = &hdr,
+		.iov_len = sizeof(hdr),
+	};
+	struct kvec msgvec = {
+		.iov_base = msg,
+		.iov_len = *msg_len,
+	};
 	int rc;
 
-	sprintf(hw->pf_vf_int_name, "%s_from_vf", hw->cdev.name);
-	hw->pf_vf_vec = pci_irq_vector(hw->cdev.pdev,
-				       C_PI_IPD_VF_PF_MSIX_INT);
+	rc = kernel_recvmsg(sock, &msghdr, &hdrvec, 1, sizeof(hdr), 0);
+	if (rc < 0)
+		return rc;
+	else if (rc < sizeof(hdr))
+		return -EINVAL;
 
-	rc = request_irq(hw->pf_vf_vec, vf_to_pf_irqh, 0,
-			 hw->pf_vf_int_name, hw);
-	if (rc) {
-		cxidev_err(&hw->cdev, "Failed to request IRQ %u for VF to PF.\n",
-			   C_PI_IPD_VF_PF_MSIX_INT);
+	if (hdr.len > MAX_VFMSG_SIZE || hdr.len > *msg_len)
+		return -EINVAL;
+
+	*msg_len = hdr.len;
+	if (msg_rc)
+		*msg_rc = hdr.rc;
+
+	rc = kernel_recvmsg(sock, &msghdr, &msgvec, 1, hdr.len, 0);
+	if (rc >= 0 && rc < hdr.len)
+		return -EINVAL;
+
+	return rc;
+}
+
+static int vf_msghandler(void *data)
+{
+	struct cass_vf *vf = (struct cass_vf *)data;
+	struct cass_dev *hw = vf->hw;
+	int rc, msg_rc;
+	size_t request_len = MAX_VFMSG_SIZE;
+	size_t reply_len;
+
+	vf->sock->sk->sk_rcvtimeo = HZ / 10;
+
+	cxidev_dbg(&hw->cdev, "vf %d: started message handler", vf->vf_idx);
+
+	while (!kthread_should_stop()) {
+		rc = read_message_from_vsock(vf->sock, vf->request,
+					     &request_len, NULL);
+		if (rc == -EAGAIN) {
+			continue;
+		} else if (rc == -EINTR) {
+			/* Expected when thread is asked to terminate */
+			continue;
+		} else if (rc == -ECONNRESET) {
+			/* Expected when VF driver disappears. TODO: clean up resources */
+			break;
+		} else if (rc < 0) {
+			cxidev_err(&hw->cdev, "vf %d: error reading request: %d",
+				   vf->vf_idx, rc);
+			break;
+		}
+		cxidev_dbg(&hw->cdev, "vf %d: got %ld byte message", vf->vf_idx,
+			   request_len);
+
+		mutex_lock(&hw->msg_relay_lock);
+		if (hw->msg_relay) {
+			reply_len = MAX_VFMSG_SIZE;
+			msg_rc = hw->msg_relay(hw->msg_relay_data, vf->vf_idx,
+						vf->request, request_len,
+						vf->reply, &reply_len);
+		}
+		mutex_unlock(&hw->msg_relay_lock);
+
+		if (reply_len > MAX_VFMSG_SIZE) {
+			reply_len = 0;
+			msg_rc = -E2BIG;
+		}
+
+		cxidev_dbg(&hw->cdev, "vf %d: responding with %ld bytes, rc=%d",
+				vf->vf_idx, reply_len, msg_rc);
+		rc = write_message_to_vsock(vf->sock, vf->reply, reply_len,
+					    msg_rc);
+		if (rc < 0) {
+			cxidev_err(&hw->cdev, "vf %d: error sending response: %d",
+					vf->vf_idx, rc);
+			break;
+		}
+	}
+
+	if (rc > 0)
+		rc = 0;
+
+	cxidev_dbg(&hw->cdev, "vf %d: handler exiting, rc=%d", vf->vf_idx, rc);
+
+	kernel_sock_shutdown(vf->sock, SHUT_RDWR);
+	sock_release(vf->sock);
+	vf->sock = NULL;
+
+	return rc;
+}
+
+static int vf_listener(void *data)
+{
+	struct cass_dev *hw = (struct cass_dev *)data;
+	struct cass_vf *vf;
+	struct socket *incoming;
+	struct sockaddr_vm peeraddr;
+	const struct sockaddr_vm myaddr = {
+		.svm_family = AF_VSOCK,
+		.svm_port = CXI_SRIOV_VSOCK_PORT,
+		.svm_cid = VMADDR_CID_ANY
+	};
+	int rc = 0;
+	int vf_idx;
+	int i;
+
+	cxidev_dbg(&hw->cdev, "started vf listener");
+
+	rc = sock_create_kern(&init_net, PF_VSOCK, SOCK_STREAM, 0, &hw->vf_sock);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "vf listener socket create error: %d", rc);
 		return rc;
 	}
 
-	return 0;
-}
+	rc = kernel_bind(hw->vf_sock, (struct sockaddr *)&myaddr, sizeof(myaddr));
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "vf listener socket bind error: %d", rc);
+		goto release_sock;
+	}
 
-void deregister_pf_vf_handler(struct cass_dev *hw)
-{
-	static const union c_pi_ipd_cfg_msixc cfg_msixc = {
-		.vf_pf_irq_enable = 0,
-	};
+	hw->vf_sock->sk->sk_rcvtimeo = HZ / 10;
+	rc = kernel_listen(hw->vf_sock, hw->num_vfs);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "vf listener socket listen error: %d", rc);
+		goto release_sock;
+	}
 
-	/* Disable VF to PF interrupts */
-	cass_write(hw, C_PI_IPD_CFG_MSIXC, &cfg_msixc, sizeof(cfg_msixc));
+	while (!kthread_should_stop()) {
+		rc = kernel_accept(hw->vf_sock, &incoming, 0);
+		if (rc == -EAGAIN) {
+			continue;
+		} else if (rc == -EINTR) {
+			/* Expected when listener thread is asked to terminate */
+			continue;
+		} else if (rc < 0) {
+			cxidev_err(&hw->cdev, "vf listener socket accept error: %d", rc);
+			break;
+		}
 
-	free_irq(hw->pf_vf_vec, hw);
+		rc = kernel_getpeername(incoming, (struct sockaddr *) &peeraddr);
+		if (rc < 0) {
+			cxidev_err(&hw->cdev, "could not get CID of incoming VF: %d", rc);
+			kernel_sock_shutdown(incoming, SHUT_RDWR);
+			sock_release(incoming);
+			break;
+		}
+
+		cxidev_dbg(&hw->cdev, "pf got connection from cid %d",
+			   peeraddr.svm_cid);
+
+		vf_idx = map_cid_to_vf(hw, &peeraddr);
+		if (vf_idx < 0) {
+			cxidev_err(&hw->cdev, "can't map vsock cid %d to VF",
+				   peeraddr.svm_cid);
+			rc = kernel_sock_shutdown(incoming, SHUT_RDWR);
+			if (rc < 0)
+				cxidev_err(&hw->cdev, "pf sock_shutdown error %d", rc);
+			sock_release(incoming);
+		} else {
+			vf = &hw->vfs[vf_idx];
+			vf->vf_idx = vf_idx;
+			vf->hw = hw;
+			vf->sock = incoming;
+			vf->task = kthread_run(vf_msghandler, vf, "cxi_vf_%d", vf_idx);
+			if (!vf->task) {
+				cxidev_err(&hw->cdev, "failed to start vf task for vf %d",
+					   vf_idx);
+				kernel_sock_shutdown(incoming, SHUT_RDWR);
+				sock_release(incoming);
+				vf->sock = NULL;
+			}
+		}
+	}
+
+	cxidev_dbg(&hw->cdev, "vf listener gracefully exiting");
+
+	for (i = 0; i < C_NUM_VFS; i++) {
+		if (hw->vfs[i].task) {
+			kthread_stop(hw->vfs[i].task);
+			hw->vfs[i].task = NULL;
+		}
+	}
+
+	kernel_sock_shutdown(hw->vf_sock, SHUT_RDWR);
+release_sock:
+	sock_release(hw->vf_sock);
+	hw->vf_sock = NULL;
+	return rc;
 }
 
 static void disable_sriov(struct pci_dev *pdev)
 {
 	struct cass_dev *hw = pci_get_drvdata(pdev);
-	unsigned int vf;
-	static const union c_pi_ipd_cfg_msixc cfg_msixc = {
-		.vf_pf_irq_enable = 0,
-	};
 
 	pci_disable_sriov(pdev);
 
-	/* TODO? instead of looping, do a single write. */
-	for (vf = 0; vf < hw->num_vfs; vf++)
-		cass_set_vf_pf_int(hw, vf, false);
-
-	/* Disable VF to PF interrupts */
-	cass_write(hw, C_PI_IPD_CFG_MSIXC, &cfg_msixc, sizeof(cfg_msixc));
-
-	cancel_work_sync(&hw->pf_intr_task);
+	if (hw->vf_listener) {
+		kthread_stop(hw->vf_listener);
+		hw->vf_listener = NULL;
+	}
 
 	hw->num_vfs = 0;
 }
@@ -88,20 +304,11 @@ static int enable_sriov(struct pci_dev *pdev, int num_vfs)
 	u16 stride;
 	union c_pi_cfg_pri_sriov pri_sriov = {};
 	struct cass_dev *hw = pci_get_drvdata(pdev);
-	union c_pi_ipd_cfg_msixc cfg_msixc = {
-		.vf_pf_irq_enable = 1,
-	};
-	unsigned int vf;
-
-	cass_write(hw, C_PI_IPD_CFG_MSIXC, &cfg_msixc, sizeof(cfg_msixc));
-
-	/* Allow all the VFs to generate that interrupt */
-	for (vf = 0; vf < num_vfs; vf++)
-		cass_set_vf_pf_int(hw, vf, true);
 
 	hw->num_vfs = num_vfs;
 
-	INIT_WORK(&hw->pf_intr_task, pf_intr_task);
+	if (!hw->vf_listener)
+		hw->vf_listener = kthread_run(vf_listener, hw, "cxi_vf_listener");
 
 	/*
 	 * The VF Offset and Stride need to match the SR-IOV configuration.
@@ -132,14 +339,6 @@ static int enable_sriov(struct pci_dev *pdev, int num_vfs)
 cap_err:
 	pci_disable_sriov(pdev);
 err:
-	/* TODO? instead of looping, do a single write. */
-	for (vf = 0; vf < hw->num_vfs; vf++)
-		cass_set_vf_pf_int(hw, vf, false);
-
-	/* Disable VF to PF interrupts */
-	cfg_msixc.vf_pf_irq_enable = 0;
-	cass_write(hw, C_PI_IPD_CFG_MSIXC, &cfg_msixc, sizeof(cfg_msixc));
-
 	hw->num_vfs = 0;
 
 	return rc;
@@ -158,60 +357,33 @@ int cass_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	return enable_sriov(pdev, num_vfs);
 }
 
-/* The VF got an interrupt from the PF */
-static irqreturn_t pf_to_vf_int_cb(int irq, void *context)
-{
-	struct cass_dev *hw = context;
-
-	complete(&hw->pf_to_vf_comp);
-
-	return IRQ_HANDLED;
-}
-
 int cass_vf_init(struct cass_dev *hw)
 {
 	int rc;
-	struct msi_desc *entry;
+	struct sockaddr_vm addr = {
+		.svm_family = AF_VSOCK,
+		.svm_port = CXI_SRIOV_VSOCK_PORT,
+		.svm_cid = VMADDR_CID_HOST,
+	};
 
 	if (!hw->with_vf_support)
 		return 0;
 
-	sprintf(hw->pf_vf_int_name, "%s_from_pf", hw->cdev.name);
-	hw->pf_vf_vec = pci_irq_vector(hw->cdev.pdev, 0);
-	rc = request_irq(hw->pf_vf_vec, pf_to_vf_int_cb, 0,
-			 hw->pf_vf_int_name, hw);
-	if (rc)
+	rc = sock_create_kern(&init_net, PF_VSOCK, SOCK_STREAM, 0, &hw->vf_sock);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "vf socket create failed: %d", rc);
 		return rc;
-
-	/* Find the descriptor. entry->mask_base is where the MSI-X bar was
-	 * mapped for that device.
-	 */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0) || defined(RHEL9_3_PLUS)
-	msi_lock_descs(&hw->cdev.pdev->dev);
-	msi_for_each_desc(entry, &hw->cdev.pdev->dev, MSI_DESC_ASSOCIATED)
-#else
-	for_each_pci_msi_entry(entry, hw->cdev.pdev)
-#endif
-	{
-		if (entry->irq == hw->pf_vf_vec)
-			break;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0) || defined(RHEL9_3_PLUS)
-	msi_unlock_descs(&hw->cdev.pdev->dev);
-#endif
+	hw->vf_sock->sk->sk_rcvtimeo = HZ * 10;
 
-	/* That shouldn't be possible */
-	if (!entry) {
-		free_irq(hw->pf_vf_vec, hw);
-		return -EINVAL;
+	rc = kernel_connect(hw->vf_sock, (struct sockaddr *) &addr, sizeof(addr), 0);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "vf socket connect failed: %d", rc);
+		sock_release(hw->vf_sock);
+		hw->vf_sock = NULL;
+		return rc;
 	}
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)) || defined(RHEL9_3_PLUS)
-	hw->msix_base = entry->pci.mask_base;
-#else
-	hw->msix_base = entry->mask_base;
-#endif
 
 	return 0;
 }
@@ -221,134 +393,30 @@ void cass_vf_fini(struct cass_dev *hw)
 	if (!hw->with_vf_support)
 		return;
 
-	free_irq(hw->pf_vf_vec, hw);
-}
-
-/* Reassemble a message from the MSI-X area into msg.
- * start might point inside C_PI_IPD_CFG_MSIX_TABLE or
- * C_PI_IPD_CFG_VF_MSIX_TABLE.
- */
-static int read_message_from_msix(void __iomem *start,
-				  void *msg, size_t *msg_len)
-{
-	int i;
-	union msix_msg_hdr hdr;
-	u16 *data = msg;
-	int len;
-
-	/* Get the length of the message in bytes from the highest bit */
-	hdr.data16 = readw(start + MSG_OFFSET);
-	len = hdr.len;
-
-	if (len > MAX_VFMSG_SIZE || len > *msg_len || len % 2 == 1)
-		return -EINVAL;
-
-	*msg_len = len;
-
-	len /= 2;
-
-	for (i = 0; i < len; i++)
-		data[i] = readw(start + MSG_OFFSET +
-				(1 + i) * PCI_MSIX_ENTRY_SIZE);
-
-	return -hdr.rc;
-}
-
-/* Write a message to MSI-X area */
-static void write_message_to_msix(void __iomem *start,
-				  const void *msg, size_t msg_len, int rc)
-{
-	int i;
-	union msix_msg_hdr hdr = {
-		.len = msg_len,
-		.rc = rc,
-	};
-	const u16 *data = msg;
-
-	writew(hdr.data16, start + MSG_OFFSET);
-
-	msg_len /= 2;
-	for (i = 0; i < msg_len; i++)
-		writew(data[i], start + MSG_OFFSET +
-		       (1 + i) * PCI_MSIX_ENTRY_SIZE);
-}
-
-/* Consume a message from a VF, and reply to it. */
-static void msg_from_vf(struct cass_dev *hw, unsigned int vf_num)
-{
-	const union c_pi_ipd_cfg_pf_vf_irq cfg_pf_vf_irq = {
-		.irq = 1ULL << vf_num,
-	};
-	size_t reply_len;
-	void __iomem *msg_loc = cass_csr(hw,
-			C_PI_IPD_CFG_VF_MSIX_TABLE(vf_num * 2048 + 1));
-	size_t request_len;
-	int rc;
-
-	/* Not possible */
-	WARN_ON(vf_num > 63);
-
-	request_len = MAX_VFMSG_SIZE;
-	read_message_from_msix(msg_loc, hw->vf_request[vf_num],
-			       &request_len);
-
-	mutex_lock(&hw->msg_relay_lock);
-
-	if (hw->msg_relay) {
-		reply_len = MAX_VFMSG_SIZE;
-		rc = hw->msg_relay(hw->msg_relay_data, vf_num,
-				   hw->vf_request[vf_num], request_len,
-				   hw->vf_reply[vf_num], &reply_len);
-	} else {
-		mutex_unlock(&hw->msg_relay_lock);
-		return;
+	if (hw->vf_sock) {
+		kernel_sock_shutdown(hw->vf_sock, SHUT_RDWR);
+		sock_release(hw->vf_sock);
+		hw->vf_sock = NULL;
 	}
-
-	mutex_unlock(&hw->msg_relay_lock);
-
-	if (reply_len > MAX_VFMSG_SIZE) {
-		reply_len = 0;
-		rc = E2BIG;
-	} else if (reply_len % 2 != 0) {
-		rc = EINVAL;
-	}
-
-	write_message_to_msix(msg_loc, hw->vf_reply[vf_num], reply_len, rc);
-
-	/* Generate interrupt on the VF */
-	cass_write(hw, C_PI_IPD_CFG_PF_VF_IRQ,
-		   &cfg_pf_vf_irq, sizeof(cfg_pf_vf_irq));
 }
 
-/* Offload work handle for PF interrupts */
-static void pf_intr_task(struct work_struct *work)
-{
-	struct cass_dev *hw = container_of(work, struct cass_dev, pf_intr_task);
-	union c_pi_ipd_sts_vf_pf_irq sts;
-	unsigned int vf;
-
-	cass_read(hw, C_PI_IPD_STS_VF_PF_IRQ, &sts, sizeof(sts));
-
-	/* Acknowledge all the requests now before the reply is
-	 * sent. Otherwise the reply might trigger a new request,
-	 * which may not be seen.
-	 */
-	cass_write(hw, C_PI_IPD_CFG_VF_PF_IRQ_CLR, &sts, sizeof(sts));
-
-	for_each_set_bit(vf, (unsigned long *)&sts.irq, 64)
-		msg_from_vf(hw, vf);
-}
-
-/* Send a message to PF and wait for the reply. */
-/* The requestor has put his message in cdev->request, and will get the reply in
- * cdev->reply.
+/**
+ * cxi_send_msg_to_pf() - Send a message to PF and wait for the reply.
+ *
+ * The VF driver calls this function to send messages to the PF.
+ *
+ * @cdev: the device
+ * @req: message data
+ * @req_len: length of message
+ * @rsp: buffer for response from PF
+ * @rsp_len: length of response buffer (updated to reflect response length)
  */
 int cxi_send_msg_to_pf(struct cxi_dev *cdev, const void *req, size_t req_len,
 		       void *rsp, size_t *rsp_len)
 {
 	struct cass_dev *hw = container_of(cdev, struct cass_dev, cdev);
-	void __iomem *msg_loc = hw->msix_base + PCI_MSIX_ENTRY_SIZE;
 	int rc;
+	int msg_rc;
 
 	if (cdev->is_physfn)
 		return -ENOTSUPP;
@@ -356,25 +424,26 @@ int cxi_send_msg_to_pf(struct cxi_dev *cdev, const void *req, size_t req_len,
 	if (req_len % 2 != 0 || req_len > MAX_VFMSG_SIZE)
 		return -EINVAL;
 
-	mutex_lock(&hw->msg_to_pf_lock);
 
-	write_message_to_msix(msg_loc, req, req_len, 0);
+	cxidev_dbg(&hw->cdev, "Sending %ld bytes to PF", req_len);
 
-	/* Trigger the interrupt and flush the bus */
-	writew(0x8000, hw->msix_base + MSG_OFFSET);
-	readl(hw->msix_base);
-
-	rc = wait_for_completion_timeout(&hw->pf_to_vf_comp, 10 * HZ);
-	if (!rc) {
+	rc = write_message_to_vsock(hw->vf_sock, req, req_len, 0);
+	if (rc < 0) {
+		cxidev_err(&hw->cdev, "Failed to send message to PF: %d\n", rc);
+		return rc;
+	}
+	rc = read_message_from_vsock(hw->vf_sock, rsp, rsp_len, &msg_rc);
+	if (rc == -EAGAIN) {
 		cxidev_err(&hw->cdev, "PF didn't reply in time\n");
-		rc = -ETIMEDOUT;
-	} else {
-		rc = read_message_from_msix(msg_loc, rsp, rsp_len);
+		return rc;
+	} else if (rc < 0) {
+		cxidev_err(&hw->cdev, "Failed to read response from PF: %d", rc);
+		return rc;
 	}
 
-	mutex_unlock(&hw->msg_to_pf_lock);
+	cxidev_dbg(&hw->cdev, "Got %ld byte reply from PF", *rsp_len);
 
-	return -rc;
+	return msg_rc;
 }
 EXPORT_SYMBOL(cxi_send_msg_to_pf);
 

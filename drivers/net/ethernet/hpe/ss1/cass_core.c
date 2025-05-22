@@ -849,7 +849,6 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	ida_init(&hw->tle_pool_ids);
 	mutex_init(&hw->msg_relay_lock);
-	mutex_init(&hw->msg_to_pf_lock);
 
 	mutex_init(&hw->err_flg_mutex);
 	INIT_LIST_HEAD(&hw->err_flg_list);
@@ -1083,13 +1082,9 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 				goto link_fini;
 		}
 
-		rc = register_pf_vf_handler(hw);
-		if (rc)
-			goto unregister_port;
-
 		rc = cass_ptp_init(hw);
 		if (rc)
-			goto free_pf_vf_handler;
+			goto unregister_port;
 
 		rc = cxi_dmac_desc_set_alloc(&hw->cdev, 1, "pt_id");
 		if (rc < 0)
@@ -1109,8 +1104,6 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 					   C_MST_DBG_MST_TABLE_SIZE);
 		if (rc)
 			goto cass_mst_fini;
-	} else {
-		init_completion(&hw->pf_to_vf_comp);
 	}
 
 	/* Set after TC/QOS init */
@@ -1142,7 +1135,9 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		struct cxi_properties_info resp;
 		size_t reply_len = sizeof(resp);
 
-		cass_vf_init(hw);
+		rc = cass_vf_init(hw);
+		if (rc)
+			goto svc_fini;
 
 		/* Retrieve the device properties */
 		rc = cxi_send_msg_to_pf(&hw->cdev, &cmd, sizeof(cmd),
@@ -1190,7 +1185,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 vf_fini:
 	if (!is_physfn)
 		cass_vf_fini(hw);
-
+svc_fini:
 	cass_svc_fini(hw);
 rgroup_fini:
 	cass_dev_rgroup_fini(hw);
@@ -1205,9 +1200,6 @@ cass_dmac_fini:
 cass_ptp_fini:
 	if (is_physfn)
 		cass_ptp_fini(hw);
-free_pf_vf_handler:
-	if (is_physfn)
-		deregister_pf_vf_handler(hw);
 unregister_port:
 	if (is_physfn)
 		if (cass_version(hw, CASSINI_1))
@@ -1275,7 +1267,6 @@ static void cass_remove(struct pci_dev *pdev)
 				  hw->mst_entries, hw->mst_entries_dma_addr);
 		cxi_dmac_desc_set_free(&hw->cdev, hw->dmac_pt_id);
 		cass_ptp_fini(hw);
-		deregister_pf_vf_handler(hw);
 		uc_cmd_set_link_leds(hw, LED_OFF);
 		cass_unregister_uc(hw);
 		if (cass_version(hw, CASSINI_1))

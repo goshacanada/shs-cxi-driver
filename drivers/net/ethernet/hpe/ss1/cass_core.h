@@ -19,6 +19,7 @@
 #include <linux/completion.h>
 #include <linux/hrtimer.h>
 #include <linux/hwmon.h>
+#include <linux/socket.h>
 
 #include "cxi_link.h"
 #include "cxi_core.h"
@@ -357,19 +358,12 @@ struct sts_idle {
 	bool ib_wait;
 };
 
-/* Each VF/PF message is written in a pair of bytes in the MSI-X
- * entries 1 to 62. The first 2 bytes are reserved to store the header
- * of the message (msix_msg_hdr), leaving 122 bytes for the message.
- */
 #define MAX_VFMSG_SIZE 122
 
 /* A VF to PF message header */
-union msix_msg_hdr {
-	struct {
-		u8 len;		/* whole message length */
-		u8 rc;		/* return code */
-	};
-	u16 data16;
+struct vf_pf_msg_hdr {
+	unsigned int len;	/* whole message length */
+	int rc;			/* return code */
 };
 
 /* Traffic Class descriptions. */
@@ -493,6 +487,19 @@ struct dmac_desc_set {
 	const char *name;	/* descriptive name to identify use */
 };
 
+struct cass_vf {
+	struct task_struct *task;
+	struct socket *sock;
+
+	/* Index and back-pointer to hardware struct for use by VF handler thread */
+	struct cass_dev *hw;
+	int vf_idx;
+
+	/* Per-VF message buffers */
+	char request[MAX_VFMSG_SIZE];
+	char reply[MAX_VFMSG_SIZE];
+};
+
 /* Private hardware data for Cassini. This is not seen by clients. */
 struct cass_dev {
 	/* Embed a cxi device. */
@@ -501,7 +508,6 @@ struct cass_dev {
 	/* Register base in BAR0 */
 	void __iomem *regs;
 	unsigned long regs_base;
-	void __iomem *msix_base;
 
 	/* /sys/class interface */
 	struct device class_dev;
@@ -518,22 +524,15 @@ struct cass_dev {
 	/* Number of VFs currently configured in the PF. */
 	unsigned int num_vfs;
 
-	/* Interrupt vector used for the PF/ VF communication */
-	unsigned int pf_vf_vec;
-	char pf_vf_int_name[CASS_MAX_IRQ_NAME];
-
-	/* Landing area for the requests from the VFs and the replies
-	 * to them.
+	/* Virtual function communication socket for SR-IOV. Used by PF to
+	 * listen for incoming VF connections, used by VF to initiate connection
 	 */
-	char vf_request[64][MAX_VFMSG_SIZE];
-	char vf_reply[64][MAX_VFMSG_SIZE];
-
+	struct socket *vf_sock;
+	struct task_struct *vf_listener;
+	struct cass_vf vfs[C_NUM_VFS];
 	cxi_msg_relay_t msg_relay;
 	void *msg_relay_data;
 	struct mutex msg_relay_lock;
-	struct work_struct pf_intr_task;
-	struct completion pf_to_vf_comp;
-	struct mutex msg_to_pf_lock;
 
 	/* PCIe info */
 	bool esm_active;
@@ -1210,8 +1209,6 @@ void deregister_error_handlers(struct cass_dev *hw);
 int cass_sriov_configure(struct pci_dev *pdev, int num_vfs);
 int cass_vf_init(struct cass_dev *hw);
 void cass_vf_fini(struct cass_dev *hw);
-void deregister_pf_vf_handler(struct cass_dev *hw);
-int register_pf_vf_handler(struct cass_dev *hw);
 
 #define ATU_CFG_AC_TABLE_MB_SHIFT 15
 /* Based on note in MEM_SIZE description - MEM_BASE must be aligned to
