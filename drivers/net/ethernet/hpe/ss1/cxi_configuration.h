@@ -7,6 +7,11 @@
 /* Parameter for use with the 'by_user' retrieve functions */
 #define CXI_AC_ANY (CXI_AC_UID | CXI_AC_GID | CXI_AC_OPEN)
 
+#define AC_TYPE(type) \
+	ac_type == CXI_AC_UID ? "uid" : \
+	ac_type == CXI_AC_GID ? "gid" : \
+	ac_type == CXI_AC_OPEN ? "open" : ""
+
 void cxi_ac_entry_list_init(struct cxi_ac_entry_list *list);
 
 void cxi_ac_entry_list_purge(struct cxi_ac_entry_list *list);
@@ -97,6 +102,7 @@ int cxi_rx_profile_get_ac_entry_id_by_user(struct cxi_rx_profile *rx_profile,
 					   gid_t gid,
 					   cxi_ac_typeset_t desired_types,
 					   unsigned int *ac_entry_id);
+void cxi_rx_profile_print(struct seq_file *s);
 
 void cxi_dev_init_eth_tx_profile(struct cass_dev *hw);
 void cxi_eth_tx_profile_cleanup(struct cass_dev *hw);
@@ -137,6 +143,7 @@ int cxi_tx_profile_get_ac_entry_id_by_user(struct cxi_tx_profile *tx_profile,
 					   gid_t gid,
 					   cxi_ac_typeset_t desired_types,
 					   unsigned int *ac_entry_id);
+void cxi_tx_profile_print(struct seq_file *s);
 
 enum cxi_profile_type {
 	CXI_PROF_RX = 1,

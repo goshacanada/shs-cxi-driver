@@ -437,6 +437,113 @@ int cxi_tx_profile_set_tc(struct cxi_tx_profile *tx_profile, int tc, bool set)
 }
 EXPORT_SYMBOL(cxi_tx_profile_set_tc);
 
+static void print_tx_profile_ac_entry_info(struct cxi_tx_profile *tx_profile,
+					   struct seq_file *s)
+{
+	int i;
+	int rc;
+	size_t num_ids;
+	size_t max_ids;
+	unsigned int *ac_entry_ids = NULL;
+	enum cxi_ac_type ac_type;
+	union cxi_ac_data ac_data;
+
+	rc = cxi_tx_profile_get_ac_entry_ids(tx_profile, 0, ac_entry_ids,
+					     &num_ids);
+	if (rc && rc != -ENOSPC)
+		goto done;
+
+	ac_entry_ids = kmalloc_array(num_ids, sizeof(*ac_entry_ids),
+				     GFP_KERNEL);
+	if (!ac_entry_ids) {
+		rc = -ENOMEM;
+		goto done;
+	}
+
+	rc = cxi_tx_profile_get_ac_entry_ids(tx_profile, num_ids, ac_entry_ids,
+					     &max_ids);
+	if (rc)
+		goto freemem;
+
+	seq_puts(s, "        AC-entries: ");
+	for (i = 0; i < num_ids; i++) {
+		rc = cxi_tx_profile_get_ac_entry_data(tx_profile,
+						      ac_entry_ids[i],
+						      &ac_type, &ac_data);
+		if (rc)
+			break;
+
+		seq_printf(s, "ID:%d type:%s uid/gid:%d%s",
+			   ac_entry_ids[i], AC_TYPE(ac_type),
+			   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid,
+			   i < (num_ids - 1) ? "," : "");
+	}
+
+freemem:
+	kfree(ac_entry_ids);
+done:
+	if (rc)
+		seq_puts(s, "\n");
+}
+
+static void print_profile(struct cxi_tx_profile *tx_profile, struct seq_file *s)
+{
+	struct cxi_rxtx_vni_attr vni_attr;
+	struct cxi_rxtx_profile_state state;
+	struct cxi_rxtx_profile *profile = &tx_profile->profile_common;
+
+	cxi_rxtx_profile_get_info(profile, &vni_attr, &state);
+	seq_printf(s, "  ID:%-2d Name:%s VNI:match:%u ignore:%u State:%s refcount:%d Exclusive-CP:%d\n",
+		   profile->id,
+		   vni_attr.name[0] ? vni_attr.name : "none",
+		   vni_attr.match, vni_attr.ignore,
+		   state.enable ? "enabled" : "disabled",
+		   refcount_read(&state.refcount),
+		   tx_profile->config.exclusive_cp);
+
+	print_tx_profile_ac_entry_info(tx_profile, s);
+}
+
+/**
+ * cxi_tx_profile_print() - Print the TX profile info
+ *
+ * @s: file ptr
+ *
+ */
+void cxi_tx_profile_print(struct seq_file *s)
+{
+	struct cass_dev *hw = s->private;
+	struct cxi_rxtx_profile_list *list = &hw->tx_profile_list;
+	struct cxi_tx_profile *tx_profile;
+	struct cxi_rxtx_profile *profile;
+	unsigned long index;
+	int tcs;
+	int i;
+
+	seq_puts(s, "\nTX profiles:\n");
+
+	cxi_rxtx_profile_list_lock(list);
+
+	xa_for_each(&list->xarray, index, profile) {
+		tx_profile = container_of(profile, struct cxi_tx_profile,
+					  profile_common);
+		print_profile(tx_profile, s);
+
+		seq_puts(s, "\n        TCs:");
+		for (i = 0, tcs = 0; i < CXI_TC_MAX; i++) {
+			if (test_bit(i, tx_profile->config.tc_table)) {
+				seq_printf(s, "%s%s", tcs ? ", " : "",
+					   cxi_tc_strs[i]);
+				tcs++;
+			}
+		}
+
+		seq_puts(s, "\n");
+	}
+
+	cxi_rxtx_profile_list_unlock(list);
+}
+
 /**
  * cxi_tx_profile_remove_ac_entry() - disable access control to a Profile
  *                                    by access control id.
