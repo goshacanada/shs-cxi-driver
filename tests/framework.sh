@@ -27,21 +27,32 @@ function error {
 function startvm {
     export PATH=$QEMU_DIR:$VIRTME_DIR:/sbin:$PATH
 
-    # -M q35 = Standard PC (Q35 + ICH9, 2009) (alias of pc-q35-2.10)
-    QEMU_OPTS="--qemu-opts -device ccn -machine q35,kernel-irqchip=split -device intel-iommu,intremap=on,caching-mode=on -m 2G"
+    NETSIM_NICS=${NETSIM_NICS:-1}
+    NETSIM_CCN=${NETSIM_CCN:-ccn11}
+
+    if [[ $NETSIM_NICS -eq 1 ]]; then
+        CCN_OPTS="-device $NETSIM_CCN,addr=8"
+    elif [[ $NETSIM_NICS -eq 2 ]]; then
+        CCN_OPTS="-device $NETSIM_CCN,addr=8 -device $NETSIM_CCN,addr=13"
+    elif [[ $NETSIM_NICS -eq 4 ]]; then
+        CCN_OPTS="-device $NETSIM_CCN,addr=8 -device $NETSIM_CCN,addr=0xd -device $NETSIM_CCN,addr=0x12 -device $NETSIM_CCN,addr=0x17"
+    fi
+    QEMU_OPTS="--qemu-opts -machine q35,kernel-irqchip=split -global q35-pcihost.pci-hole64-size=40G -device intel-iommu,intremap=on,caching-mode=on -m 2G $CCN_OPTS"
+
     KERN_OPTS="--kopt iommu=pt --kopt intel_iommu=on --kopt iomem=relaxed"
+    KERN_OPTS="$KERN_OPTS --kopt transparent_hugepage=never --kopt hugepagesz=1g --kopt default_hugepagesz=1g --kopt hugepages=1"
     VIRTME_OPTS="--rodir=/lib/firmware=${TOP_DIR}/hms-artifacts"
     if [[ -v KDIR ]]; then
-	KERNEL="--kdir $KDIR --mods=auto"
+        KERNEL="--kdir $KDIR --mods=auto"
     else
-	KERNEL="--installed-kernel"
+        KERNEL="--installed-kernel"
     fi
 
     mkdir -p $(pwd)/tmptests
     echo "virtme-run $KERNEL --pwd --rwdir=$(pwd)/tmptests " \
          "--script-sh $1 $VIRTME_OPTS $KERN_OPTS $QEMU_OPTS" > test_cmd.sh
     chmod +x test_cmd.sh
-    ../../nic-emu/netsim ./test_cmd.sh
+    ../../nic-emu/netsim -N $NETSIM_NICS ./test_cmd.sh
 }
 
 # Returns the log name for the output
