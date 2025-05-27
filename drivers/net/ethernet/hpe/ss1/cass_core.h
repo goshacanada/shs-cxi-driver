@@ -906,6 +906,7 @@ struct cass_dev {
 	struct cxi_rxtx_profile_list rx_profile_list;
 	struct cxi_rxtx_profile_list tx_profile_list;
 	struct mutex tx_profile_get_lock;
+	struct mutex rx_profile_get_lock;
 
 	/* Services */
 	struct mutex svc_lock;

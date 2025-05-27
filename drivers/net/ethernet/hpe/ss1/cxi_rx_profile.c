@@ -335,6 +335,68 @@ struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
 }
 
 /**
+ * cxi_dev_get_rx_profile - Get an RX profile
+ *
+ * For a given VNI check if an RX profile is already allocated
+ * and return it.
+ * For kernel users (i.e. kcxi), allocate one if not found, add
+ * an AC entry, set the TCs and enable the profile.
+ *
+ * @dev: Cassini Device
+ * @vni: VNI to find
+ *
+ * Return: rx_profile ptr on success, or a negative errno value.
+ */
+struct cxi_rx_profile *cxi_dev_get_rx_profile(struct cxi_dev *dev,
+					      unsigned int vni)
+{
+	int rc;
+	unsigned int ac_entry_id;
+	struct cass_dev *hw = get_cass_dev(dev);
+	struct cxi_rx_profile *rx_profile;
+	struct cxi_rx_attr rx_attr = {
+		.vni_attr = {
+			.match = vni,
+			.ignore = 0
+		}
+	};
+
+	mutex_lock(&hw->rx_profile_get_lock);
+
+	rx_profile = cxi_dev_find_rx_profile(dev, vni);
+	if (rx_profile)
+		goto done;
+
+	/* For a non-root user, just report no entry found.*/
+	if (__kuid_val(current_euid())) {
+		rx_profile = ERR_PTR(-ENOENT);
+		goto done;
+	}
+
+	rx_profile = cxi_dev_alloc_rx_profile(dev, &rx_attr);
+	if (IS_ERR(rx_profile))
+		goto done;
+
+	rc = cxi_rx_profile_add_ac_entry(rx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
+	if (rc) {
+		rx_profile = ERR_PTR(rc);
+		goto done;
+	}
+
+	rc = cxi_rx_profile_enable(dev, rx_profile);
+	if (rc)
+		rx_profile = ERR_PTR(rc);
+
+done:
+	mutex_unlock(&hw->rx_profile_get_lock);
+
+	return rx_profile;
+}
+EXPORT_SYMBOL(cxi_dev_get_rx_profile);
+
+/**
  * cxi_rx_profile_dec_refcount() - Decrement refcount and cleanup
  *                                 if last reference
  *

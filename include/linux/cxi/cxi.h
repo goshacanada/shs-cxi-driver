@@ -237,6 +237,8 @@ int cxi_rx_profile_dec_refcount(struct cxi_dev *dev,
 int cxi_tx_profile_dec_refcount(struct cxi_dev *dev,
 				struct cxi_tx_profile *tx_profile,
 				bool list_remove);
+struct cxi_rx_profile *cxi_dev_get_rx_profile(struct cxi_dev *dev,
+					      unsigned int vni);
 struct cxi_tx_profile *cxi_dev_get_tx_profile(struct cxi_dev *dev,
 					      unsigned int vni);
 int cxi_tx_profile_set_tc(struct cxi_tx_profile *tx_profile, int tc, bool set);

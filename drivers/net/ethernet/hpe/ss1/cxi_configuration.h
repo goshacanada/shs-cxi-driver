@@ -69,6 +69,8 @@ int cxi_rx_profile_revoke(struct cxi_dev *dev,
 
 struct cxi_rx_profile *cxi_dev_find_rx_profile(struct cxi_dev *dev,
 					       uint16_t vni);
+struct cxi_rx_profile *cxi_dev_get_rx_profile(struct cxi_dev *dev,
+					      unsigned int vni);
 void cxi_rx_profile_update_pid_table(struct cxi_rx_profile *rx_profile, int pid,
 				     int count, bool set);
 void cxi_rx_profile_andnot_pid_table(struct cxi_reserved_pids *pids,

@@ -41,6 +41,7 @@ void cass_dev_rx_tx_profiles_init(struct cass_dev *hw)
 				   TX_PROFILE_XARRAY_FLAGS,
 				   TX_PROFILE_GFP_OPTS);
 
+	mutex_init(&hw->rx_profile_get_lock);
 	mutex_init(&hw->tx_profile_get_lock);
 }
 
