@@ -273,13 +273,10 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 
 		tx_profile = cxi_dev_get_eth_tx_profile(&hw->cdev);
 	} else {
-		tx_profile = cxi_dev_get_tx_profile(&hw->cdev, vni_pcp);
-		if (IS_ERR(tx_profile)) {
-			rc = PTR_ERR(tx_profile);
-			pr_debug("tx_profile not found for vni:%d rc:%d\n",
-				 vni_pcp, rc);
-
-			return ERR_PTR(rc);
+		tx_profile = cxi_dev_find_tx_profile(&hw->cdev, vni_pcp);
+		if (!tx_profile) {
+			pr_debug("tx_profile not found for vni:%d\n", vni_pcp);
+			return ERR_PTR(-ENOENT);
 		}
 
 		/* Perform VNI checks. */
