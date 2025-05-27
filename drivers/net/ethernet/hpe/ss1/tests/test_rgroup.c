@@ -25,6 +25,8 @@ unsigned int vni;
 unsigned int pid;
 
 struct cxi_rgroup *rgroup;
+struct cxi_rx_profile *rx_profile;
+struct cxi_tx_profile *tx_profile;
 struct cxi_lni *lni;
 struct cxi_domain *domain;
 void *eq_buf;
@@ -146,10 +148,72 @@ static int alloc_rgroup_rsrcs(struct cxi_dev *dev)
 
 	cxi_rgroup_enable(rgroup);
 
+	pr_info("Allocated %s id:%d\n", cxi_rgroup_name(rgroup),
+		cxi_rgroup_id(rgroup));
+
 	return 0;
 
 err:
 	cxi_rgroup_dec_refcount(rgroup);
+
+	return rc;
+}
+
+static void free_profiles(void)
+{
+	cxi_tx_profile_dec_refcount(dev, tx_profile, true);
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
+}
+
+static int alloc_profiles(void)
+{
+	int rc;
+	int ac_entry_id;
+	struct cxi_rx_attr rx_attr = {.vni_attr.match = VNI};
+	struct cxi_tx_attr tx_attr = {.vni_attr.match = VNI};
+
+	rx_profile = cxi_dev_alloc_rx_profile(dev, &rx_attr);
+	if (IS_ERR(rx_profile)) {
+		rc = PTR_ERR(rx_profile);
+		pr_info("Allocate RX profile failed vni:%d rc:%d", VNI, rc);
+		return rc;
+	}
+
+	rc = cxi_rx_profile_add_ac_entry(rx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
+	if (rc)
+		goto remove_rx_profile;
+
+	rc = cxi_rx_profile_enable(dev, rx_profile);
+	if (rc)
+		goto remove_rx_profile;
+
+	tx_profile = cxi_dev_alloc_tx_profile(dev, &tx_attr);
+	if (IS_ERR(tx_profile)) {
+		rc = PTR_ERR(tx_profile);
+		pr_info("Allocate TX profile failed vni:%d rc:%d", VNI, rc);
+		goto remove_rx_profile;
+	}
+
+	rc = cxi_tx_profile_add_ac_entry(tx_profile, CXI_AC_UID,
+					 __kuid_val(current_euid()), 0,
+					 &ac_entry_id);
+	if (rc)
+		goto remove_tx_profile;
+
+	cxi_tx_profile_set_tc(tx_profile, CXI_TC_BEST_EFFORT, true);
+
+	rc = cxi_tx_profile_enable(dev, tx_profile);
+	if (rc)
+		goto remove_tx_profile;
+
+	return 0;
+
+remove_tx_profile:
+	cxi_tx_profile_dec_refcount(dev, tx_profile, true);
+remove_rx_profile:
+	cxi_rx_profile_dec_refcount(dev, rx_profile);
 
 	return rc;
 }
@@ -232,14 +296,18 @@ static int test_setup(struct cxi_dev *dev)
 		return rc;
 	}
 
+	rc = alloc_profiles();
+	if (rc)
+		goto out;
+
 	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
 	if (IS_ERR(lni)) {
 		rc = PTR_ERR(lni);
-		goto out;
+		goto free_the_profiles;
 	}
 
 	/* Choose a random pid */
-	vni = 1;
+	vni = VNI;
 	pid = 30;
 	pid_offset = 3;
 	domain = cxi_domain_alloc(lni, vni, pid);
@@ -330,6 +398,8 @@ free_dom:
 	cxi_domain_free(domain);
 free_ni:
 	cxi_lni_free(lni);
+free_the_profiles:
+	free_profiles();
 out:
 	cxi_rgroup_dec_refcount(rgroup);
 	return rc;
@@ -345,6 +415,7 @@ static void test_teardown(void)
 	cxi_cp_free(cp);
 	cxi_domain_free(domain);
 	cxi_lni_free(lni);
+	free_profiles();
 	cxi_rgroup_dec_refcount(rgroup);
 }
 
@@ -551,11 +622,15 @@ static int test_rgroup(struct cxi_dev *dev)
 		goto err;
 	}
 
+	rc = alloc_profiles();
+	if (rc)
+		goto err_free_rgroup;
+
 	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
 	if (IS_ERR(lni)) {
 		rc = PTR_ERR(lni);
 		pr_err("LNI alloc failed: %d\n", rc);
-		goto err_free_rgroup;
+		goto err_free_profiles;
 	}
 
 	wb = kzalloc(sizeof(*wb), GFP_KERNEL);
@@ -669,6 +744,8 @@ err_free_wb:
 	kfree(wb);
 err_free_lni:
 	cxi_lni_free(lni);
+err_free_profiles:
+	free_profiles();
 err_free_rgroup:
 	cxi_rgroup_dec_refcount(rgroup);
 err:
@@ -733,6 +810,9 @@ static int test_resources(struct cxi_dev *dev)
 		goto err;
 	}
 
+	rc = alloc_profiles();
+	if (rc)
+		goto err_free_rgroup;
 
 	limits.max = C_NUM_PTLTES + 1;
 	limits.reserved = C_NUM_PTLTES;
@@ -741,7 +821,7 @@ static int test_resources(struct cxi_dev *dev)
 		pr_err("Add %s resource should fail rc:%d\n",
 			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
 
-		goto err_free_rgroup;
+		goto err_free_profiles;
 	}
 
 	cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_PTLTE);
@@ -753,7 +833,7 @@ static int test_resources(struct cxi_dev *dev)
 		pr_err("Add %s resource should fail rc:%d\n",
 			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
 
-		goto err_free_rgroup;
+		goto err_free_profiles;
 	}
 
 	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
@@ -769,7 +849,7 @@ static int test_resources(struct cxi_dev *dev)
 	if (IS_ERR(lni)) {
 		rc = PTR_ERR(lni);
 		pr_err("LNI alloc failed: %d\n", rc);
-		goto err_free_rgroup;
+		goto err_free_profiles;
 	}
 
 	wb = kzalloc(sizeof(*wb), GFP_KERNEL);
@@ -885,6 +965,8 @@ err_free_wb:
 	kfree(wb);
 err_free_lni:
 	cxi_lni_free(lni);
+err_free_profiles:
+	free_profiles();
 err_free_rgroup:
 	cxi_rgroup_dec_refcount(rgroup);
 err:
