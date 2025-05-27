@@ -293,7 +293,7 @@ bool cxi_rgroup_is_enabled(struct cxi_rgroup *rgroup);
 void cxi_rgroup_ac_entry_list_destroy(struct cxi_rgroup *rgroup);
 
 unsigned int cxi_rgroup_id(const struct cxi_rgroup *rgroup);
-void cxi_rgroup_name(const struct cxi_rgroup *rgroup, char *dest, size_t count);
+char *cxi_rgroup_name(struct cxi_rgroup *rgroup);
 bool cxi_rgroup_system_service(const struct cxi_rgroup *rgroup);
 unsigned int cxi_rgroup_cntr_pool_id(const struct cxi_rgroup *rgroup);
 unsigned int cxi_rgroup_lnis_per_rgid(const struct cxi_rgroup *rgroup);

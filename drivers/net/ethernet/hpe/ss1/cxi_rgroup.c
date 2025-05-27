@@ -635,12 +635,11 @@ EXPORT_SYMBOL(cxi_rgroup_id);
  * @dest: Where to copy name string to
  * @count: Size of destination buffer
  */
-void cxi_rgroup_name(const struct cxi_rgroup *rgroup, char *dest, size_t count)
+char *cxi_rgroup_name(struct cxi_rgroup *rgroup)
 {
-	size_t len = min_t(size_t, count, ARRAY_SIZE(rgroup->attr.name));
-
-	strscpy(dest, rgroup->attr.name, len);
+	return rgroup->attr.name;
 }
+EXPORT_SYMBOL(cxi_rgroup_name);
 
 /**
  * cxi_rgroup_le_pool_id() - Get the rgroup le_pool_id at index
@@ -785,12 +784,10 @@ EXPORT_SYMBOL(cxi_rgroup_set_system_service);
  */
 int cxi_rgroup_set_name(struct cxi_rgroup *rgroup, char *name)
 {
-	size_t len = min_t(size_t, strlen(name), ARRAY_SIZE(rgroup->attr.name));
-
 	if (cxi_rgroup_is_enabled(rgroup))
 		return -EBUSY;
 
-	strscpy(rgroup->attr.name, name, len);
+	strscpy(rgroup->attr.name, name, ARRAY_SIZE(rgroup->attr.name));
 
 	return 0;
 }
