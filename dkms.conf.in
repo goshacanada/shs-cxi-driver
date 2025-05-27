@@ -270,7 +270,7 @@ SL_SYMVERS=${dkms_tree}/sl-driver/kernel-${kernelver}-${arch}/module/Module.symv
 
 SHS_MAKE_ARGS="\
  -C ${kernel_source_dir}\
- M=${SHS_DKMS_BUILDROOT}/cxi\
+ M=${SHS_DKMS_BUILDROOT}/drivers/net/ethernet/hpe/ss1\
  NO_BUILD_TESTS=1\
  FIRMWARE_CASSINI_DIR=/usr/include\
  CASSINI_HEADERS_DIR=/usr/include\
@@ -289,7 +289,7 @@ AUTOINSTALL='yes'
 #
 # cxi-ss1.ko
 #
-BUILT_MODULE_LOCATION[0]=cxi
+BUILT_MODULE_LOCATION[0]=drivers/net/ethernet/hpe/ss1
 DEST_MODULE_LOCATION[0]=/extra
 BUILT_MODULE_NAME[0]=cxi-ss1
 DEST_MODULE_NAME[0]=cxi-ss1
@@ -298,7 +298,7 @@ STRIP[0]=no
 #
 # cxi-eth.ko
 #
-BUILT_MODULE_LOCATION[1]=cxi
+BUILT_MODULE_LOCATION[1]=drivers/net/ethernet/hpe/ss1
 DEST_MODULE_LOCATION[1]=/extra
 BUILT_MODULE_NAME[1]=cxi-eth
 DEST_MODULE_NAME[1]=cxi-eth
@@ -307,7 +307,7 @@ STRIP[1]=no
 #
 # cxi-user.ko
 #
-BUILT_MODULE_LOCATION[2]=cxi
+BUILT_MODULE_LOCATION[2]=drivers/net/ethernet/hpe/ss1
 DEST_MODULE_LOCATION[2]=/extra
 BUILT_MODULE_NAME[2]=cxi-user
 DEST_MODULE_NAME[2]=cxi-user
@@ -317,4 +317,4 @@ STRIP[2]=no
 # Post-build hook to copy our Module.symvers into the DKMS tree
 # so that other modules can build against it
 #
-POST_BUILD="dkms.post_build.sh ${SHS_DKMS_BUILDROOT}/cxi ${SHS_DKMS_PACKAGEROOT}"
+POST_BUILD="dkms.post_build.sh ${SHS_DKMS_BUILDROOT}/drivers/net/ethernet/hpe/ss1 ${SHS_DKMS_PACKAGEROOT}"
