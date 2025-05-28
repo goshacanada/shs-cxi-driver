@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2020-2024 Hewlett Packard Enterprise Development LP */
+/* Copyright 2020-2024,2025 Hewlett Packard Enterprise Development LP */
 
 /* Cassini device handler */
 
@@ -861,7 +861,7 @@ static int cass_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	spin_lock_init(&hw->sbl_state_lock);
 
 	mutex_init(&hw->qsfp_eeprom_lock);
-	mutex_init(&hw->phy.lock);
+	spin_lock_init(&hw->phy.lock);
 
 	INIT_DELAYED_WORK(&hw->lni_cleanups_work, lni_cleanups_work);
 	mutex_init(&hw->lni_cleanups_lock);

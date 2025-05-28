@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2020 Hewlett Packard Enterprise Development LP */
+/* Copyright 2020,2025 Hewlett Packard Enterprise Development LP */
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -20,8 +20,6 @@
  */
 void cass_link_async_down(struct cass_dev *hw, u32 origin)
 {
-	unsigned long irq_flags;
-
 	cxidev_dbg(&hw->cdev,
 		   "async link down, origin %s, (current dirn %s, origin %s)\n",
 		   cass_link_down_origin_str(origin),
@@ -40,7 +38,7 @@ void cass_link_async_down(struct cass_dev *hw, u32 origin)
 		return;
 	}
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	if (hw->port->link_down_origin != CASS_DOWN_ORIGIN_CMD) {
 		/*
 		 * We are executing a command don't overwrite origin
@@ -48,7 +46,7 @@ void cass_link_async_down(struct cass_dev *hw, u32 origin)
 		 */
 		hw->port->link_down_origin = origin;
 	}
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 	if (cass_version(hw, CASSINI_1))
 		atomic_inc(&hw->sbl_counters[link_async_down]);
 	cass_lmon_request_down(hw);
@@ -65,7 +63,6 @@ void cass_link_async_down(struct cass_dev *hw, u32 origin)
  */
 int cass_link_async_down_wait(struct cass_dev *hw, u32 origin)
 {
-	unsigned long irq_flags;
 	unsigned long timeout = jiffies +
 		msecs_to_jiffies(CASS_LINK_ASYNC_DOWN_TIMEOUT);
 
@@ -76,23 +73,23 @@ int cass_link_async_down_wait(struct cass_dev *hw, u32 origin)
 		atomic_inc(&hw->sbl_counters[link_async_down_tries]);
 
 	/* stop the link if its coming up */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 
 	case CASS_LINK_STATUS_STARTING:
 	case CASS_LINK_STATUS_UP:
 		hw->port->link_down_origin = origin;
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 		cass_lmon_request_down(hw);
 		break;
 
 	default:
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 	}
 
 	/* wait for it to get to a "down" state */
 	do {
-		spin_lock_irqsave(&hw->port->lock, irq_flags);
+		spin_lock(&hw->port->lock);
 		switch (hw->port->lstate) {
 
 		case CASS_LINK_STATUS_DOWN:
@@ -103,11 +100,11 @@ int cass_link_async_down_wait(struct cass_dev *hw, u32 origin)
 				   cass_link_state_str(hw->port->lstate));
 			if (cass_version(hw, CASSINI_1))
 				atomic_inc(&hw->sbl_counters[link_async_down]);
-			spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+			spin_unlock(&hw->port->lock);
 			return 0;
 
 		default:
-			spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+			spin_unlock(&hw->port->lock);
 			msleep(CASS_LINK_ASYNC_DOWN_INTERVAL);
 			break;
 		}
@@ -128,7 +125,6 @@ int cass_link_async_down_wait(struct cass_dev *hw, u32 origin)
  */
 int cass_link_async_reset_wait(struct cass_dev *hw, u32 origin)
 {
-	unsigned long irq_flags;
 	unsigned long timeout = jiffies +
 		msecs_to_jiffies(CASS_LINK_ASYNC_RESET_TIMEOUT);
 
@@ -136,7 +132,7 @@ int cass_link_async_reset_wait(struct cass_dev *hw, u32 origin)
 		   cass_link_down_origin_str(origin));
 
 	/* stop the link if its coming up */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 
 	case CASS_LINK_STATUS_STARTING:
@@ -146,27 +142,27 @@ int cass_link_async_reset_wait(struct cass_dev *hw, u32 origin)
 	case CASS_LINK_STATUS_ERROR:
 	case CASS_LINK_STATUS_UNCONFIGURED:
 		hw->port->link_down_origin = origin;
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 		cass_lmon_request_reset(hw);
 		break;
 
 	default:
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 	}
 
 	/* wait for it to get to an "unconfigured" state */
 	do {
-		spin_lock_irqsave(&hw->port->lock, irq_flags);
+		spin_lock(&hw->port->lock);
 		switch (hw->port->lstate) {
 
 		case CASS_LINK_STATUS_UNCONFIGURED:
 			cxidev_dbg(&hw->cdev, "async reset wait done (%s)\n",
 				   cass_link_state_str(hw->port->lstate));
-			spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+			spin_unlock(&hw->port->lock);
 			return 0;
 
 		default:
-			spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+			spin_unlock(&hw->port->lock);
 			msleep(CASS_LINK_ASYNC_RESET_INTERVAL);
 			break;
 		}
@@ -185,11 +181,10 @@ int cass_link_sysfs_sprint(struct cass_dev *hw, char *buf, size_t size)
 {
 	int rc;
 	int state;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	state = hw->port->lstate;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	rc = scnprintf(buf, size, "%s", cass_link_state_str(state));
 

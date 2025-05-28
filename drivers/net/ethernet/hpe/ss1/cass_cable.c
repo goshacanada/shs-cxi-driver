@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2021-2022 Hewlett Packard Enterprise Development LP */
+/* Copyright 2021-2022,2025 Hewlett Packard Enterprise Development LP */
 
 /* Cassini HSN cable support */
 
@@ -603,12 +603,11 @@ int cass_link_headshell_error(struct cass_dev *hw)
 static int cass_link_headshell_down_no_media(struct cass_dev *hw, int reason)
 {
 	int err;
-	unsigned long irq_flags;
 
 	cxidev_dbg(&hw->cdev, "headshell down no media\n");
 
 	/* ensure link down  */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 	case CASS_LINK_STATUS_DOWN:
 	case CASS_LINK_STATUS_ERROR:
@@ -616,10 +615,10 @@ static int cass_link_headshell_down_no_media(struct cass_dev *hw, int reason)
 	case CASS_LINK_STATUS_UNKNOWN:
 		cxidev_dbg(&hw->cdev, "headshell down - already link down (%s)\n",
 			   cass_link_state_str(hw->port->lstate));
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 		break;
 	default:
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 		err = cass_link_async_down_wait(hw, reason);
 		if (err) {
 			cxidev_err(&hw->cdev,

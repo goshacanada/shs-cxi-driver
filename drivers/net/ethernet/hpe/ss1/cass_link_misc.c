@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2020 Hewlett Packard Enterprise Development LP */
+/* Copyright 2020,2025 Hewlett Packard Enterprise Development LP */
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -20,11 +20,10 @@
 int cass_link_get_state(struct cass_dev *hw)
 {
 	int state;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	state = hw->port->lstate;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	return state;
 }
@@ -72,13 +71,11 @@ void cass_link_set_led(struct cass_dev *hw)
 
 void cass_link_set_state(struct cass_dev *hw, int state, int err)
 {
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	hw->port->prev_lstate = hw->port->lstate;
 	hw->port->lstate = state;
 	hw->port->lerr = err;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	cass_link_set_led(hw);
 }
@@ -86,22 +83,19 @@ void cass_link_set_state(struct cass_dev *hw, int state, int err)
 int cass_link_get_down_origin(struct cass_dev *hw)
 {
 	int origin;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	origin = hw->port->link_down_origin;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	return origin;
 }
 
 void cass_link_set_down_origin(struct cass_dev *hw, int origin)
 {
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	hw->port->link_down_origin = origin;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 }
 
 /*

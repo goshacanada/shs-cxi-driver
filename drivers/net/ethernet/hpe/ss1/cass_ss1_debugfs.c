@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2018 Hewlett Packard Enterprise Development LP */
+/* Copyright 2018,2025 Hewlett Packard Enterprise Development LP */
 
 /* cxi-ss1 debug fs*/
 #include <linux/etherdevice.h>
@@ -283,15 +283,14 @@ static void cass_lmon_debugfs_print(struct cass_dev *hw, struct seq_file *s)
 	int dirn;
 	bool active;
 	u32 restart_count;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	lmon  = hw->port->lmon;
 	limiter  = hw->port->lmon_limiter_on;
 	dirn  = hw->port->lmon_dirn;
 	active = hw->port->lmon_active;
 	restart_count = hw->port->link_restart_count;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	if (!lmon)
 		return;
@@ -313,13 +312,12 @@ static void cass_link_debugfs_print(struct cass_dev *hw, struct seq_file *s)
 	int state;
 	int down_origin;
 	int lerr;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	state = hw->port->lstate;
 	lerr = hw->port->lerr;
 	down_origin = hw->port->link_down_origin;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	seq_printf(s, "link state: %s", cass_link_state_str(state));
 
@@ -337,7 +335,6 @@ static int cass_port_show(struct seq_file *s, void *unused)
 	struct cass_dev *hw = s->private;
 	char buf[DEBUGFS_BUFSIZE];
 	int nic_num = hw->uc_nic;
-	unsigned long irq_flags;
 
 	if (!cass_version(hw, CASSINI_1)) {
 		seq_puts(s, "NOT IMPLEMENTED!!\n");
@@ -347,7 +344,7 @@ static int cass_port_show(struct seq_file *s, void *unused)
 	seq_printf(s, "** %d **\n", nic_num);
 
 	/* config */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	seq_printf(s, "configured: %c%c%c%c\n",
 		 (hw->port->config_state & CASS_TYPE_CONFIGURED)   ? 't' : '-',
 		 (hw->port->config_state & CASS_PORT_CONFIGURED)   ? 'p' : '-',
@@ -357,7 +354,7 @@ static int cass_port_show(struct seq_file *s, void *unused)
 	/* port */
 	seq_printf(s, "type: ether (%s)\n",
 		   cass_port_subtype_str(hw->port->subtype));
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	/* uptime */
 	cass_uptime_debugfs_print(hw, s);

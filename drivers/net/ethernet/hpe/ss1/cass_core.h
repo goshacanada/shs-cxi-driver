@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright 2020-2024 Hewlett Packard Enterprise Development LP */
+/* Copyright 2020-2024,2025 Hewlett Packard Enterprise Development LP */
 
 #ifndef _CASS_CORE_H
 #define _CASS_CORE_H
@@ -929,10 +929,10 @@ struct cass_dev {
 	/* PML */
 	struct cxi_reg_err_flg pml_err;
 	struct {
-		struct mutex lock;
+		spinlock_t lock;
 		enum cass_phy_state state;
 		struct delayed_work state_queue;
-
+		atomic_t cancel_state_machine;
 	} phy;
 
 	u32 max_eth_rxsize;

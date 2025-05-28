@@ -708,6 +708,7 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 }
 
 #define CASS_SL_CALLBACKS (SL_LGRP_NOTIF_MEDIA_PRESENT     | \
+			   SL_LGRP_NOTIF_MEDIA_NOT_PRESENT | \
 			   SL_LGRP_NOTIF_LINK_UP           | \
 			   SL_LGRP_NOTIF_LINK_UP_FAIL      | \
 			   SL_LGRP_NOTIF_LINK_ASYNC_DOWN   | \
@@ -744,6 +745,10 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 			cass_dev->sl.link_config.options |= SL_LINK_CONFIG_OPT_AUTONEG_ENABLE;
 		}
 		cass_dev->sl.has_cable = true;
+		break;
+	case SL_LGRP_NOTIF_MEDIA_NOT_PRESENT:
+		memset(&cass_dev->sl.media_attr, 0, sizeof(cass_dev->sl.media_attr));
+		cass_dev->sl.has_cable = false;
 		break;
 	case SL_LGRP_NOTIF_LINK_UP:
 		cass_dev->sl.link_state = SL_LINK_STATE_UP;

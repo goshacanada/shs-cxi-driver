@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Cassini link monitor
- * Copyright 2020-2024 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2024,2025 Hewlett Packard Enterprise Development LP
  */
 
 #include <linux/iopoll.h>
@@ -29,7 +29,8 @@
 
 /* wakeup rate limiting */
 #define CASS_LMON_MAX_WAKEUPS                       10
-#define CASS_LMON_WAKEUP_DELAY                      10    /* ms */
+#define CASS_LMON_WAKEUP_DELAY                     100    /* ms */
+#define CASS_LMON_WAKEUP_LIMITER                   500    /* ms */
 #define CASS_LMON_WAKEUP_WINDOW                   1000    /* ms */
 
 /* thread init data */
@@ -75,16 +76,15 @@ static bool cass_lmon_wakeup(struct cass_dev *hw)
 	int lmon_dirn;
 	int lstate;
 	bool auto_restart;
-	unsigned long irq_flags;
 
 	if (kthread_should_stop())
 		return true;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	lmon_dirn = hw->port->lmon_dirn;
 	lstate = hw->port->lstate;
 	auto_restart = cass_lmon_link_should_auto_restart(hw);
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	if (lmon_dirn == CASS_LMON_DIRECTION_RESET) {
 		/* always do reset */
@@ -110,14 +110,12 @@ static bool cass_lmon_wakeup(struct cass_dev *hw)
 
 static void cass_lmon_wakeup_limiter_reset(struct cass_dev *hw)
 {
-	unsigned long irq_flags;
-
+	spin_lock(&hw->port->lock);
 	hw->port->lmon_wake_cnt = 0;
 	hw->port->lmon_wake_jiffies = jiffies +
 		msecs_to_jiffies(CASS_LMON_WAKEUP_WINDOW);
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
 	hw->port->lmon_limiter_on = false;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 }
 
 /*
@@ -125,23 +123,24 @@ static void cass_lmon_wakeup_limiter_reset(struct cass_dev *hw)
  */
 static void cass_lmon_wakeup_limiter(struct cass_dev *hw)
 {
-	unsigned long irq_flags;
-
-	if (time_is_before_jiffies(hw->port->lmon_wake_jiffies)) {
+	spin_lock(&hw->port->lock);
+	if (time_is_after_jiffies(hw->port->lmon_wake_jiffies)) {
 		if (++hw->port->lmon_wake_cnt < CASS_LMON_MAX_WAKEUPS) {
+			spin_unlock(&hw->port->lock);
+			msleep(CASS_LMON_WAKEUP_DELAY);
 			cxidev_dbg(&hw->cdev, "lmon wakeup limiter - %d\n",
 				   hw->port->lmon_wake_cnt);
 			return;
 		}
 
 		cxidev_dbg(&hw->cdev, "lmon wakeup limiter - sleeping\n");
-		spin_lock_irqsave(&hw->port->lock, irq_flags);
 		hw->port->lmon_limiter_on = true;
-		spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+		spin_unlock(&hw->port->lock);
 		atomic_inc(&hw->port->lmon_counters[lmon_limiter]);
-		msleep(CASS_LMON_WAKEUP_DELAY);
+		msleep(CASS_LMON_WAKEUP_LIMITER);
+		return;
 	}
-
+	spin_unlock(&hw->port->lock);
 	cass_lmon_wakeup_limiter_reset(hw);
 }
 
@@ -152,9 +151,8 @@ int cass_lmon_request_up(struct cass_dev *hw)
 {
 	bool wakeup_lmon = false;
 	int err = 0;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 
 	case CASS_LINK_STATUS_UNKNOWN:
@@ -190,7 +188,7 @@ int cass_lmon_request_up(struct cass_dev *hw)
 		err = -EBUSY;
 		break;
 	}
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	if (wakeup_lmon)
 		wake_up_interruptible(&hw->port->lmon_wq);
@@ -202,14 +200,13 @@ int cass_lmon_request_down(struct cass_dev *hw)
 {
 	bool wakeup_lmon = false;
 	int err = 0;
-	unsigned long irq_flags;
 
 	/*
 	 * first change direction
 	 * then, if we need to cancel an ongoing startup, it
 	 * will restarts with the new direction
 	 */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 
 	case CASS_LINK_STATUS_UNCONFIGURED:
@@ -243,7 +240,7 @@ int cass_lmon_request_down(struct cass_dev *hw)
 			(hw->port->lstate == CASS_LINK_STATUS_STARTING)) {
 		sbl_base_link_cancel_start(hw->sbl, 0);
 	}
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	if (wakeup_lmon)
 		wake_up_interruptible(&hw->port->lmon_wq);
@@ -255,14 +252,13 @@ int cass_lmon_request_reset(struct cass_dev *hw)
 {
 	bool wakeup_lmon = false;
 	int err = 0;
-	unsigned long irq_flags;
 
 	/*
 	 * first change direction
 	 * then, if we need to cancel an ongoing startup, it
 	 * will restarts with the new direction
 	 */
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	switch (hw->port->lstate) {
 
 	case CASS_LINK_STATUS_UNKNOWN:
@@ -289,7 +285,7 @@ int cass_lmon_request_reset(struct cass_dev *hw)
 			(hw->port->lstate == CASS_LINK_STATUS_STARTING)) {
 		sbl_base_link_cancel_start(hw->sbl, 0);
 	}
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	if (wakeup_lmon)
 		wake_up_interruptible(&hw->port->lmon_wq);
@@ -300,52 +296,44 @@ int cass_lmon_request_reset(struct cass_dev *hw)
 int cass_lmon_get_dirn(struct cass_dev *hw)
 {
 	int dirn;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	dirn = hw->port->lmon_dirn;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	return dirn;
 }
 
 void cass_lmon_set_dirn(struct cass_dev *hw, int dirn)
 {
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	hw->port->lmon_dirn = dirn;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 }
 
 bool cass_lmon_get_active(struct cass_dev *hw)
 {
 	bool state;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	state = hw->port->lmon_active;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	return state;
 }
 
 void cass_lmon_set_active(struct cass_dev *hw, bool state)
 {
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	hw->port->lmon_active = state;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 }
 
 void cass_lmon_set_up_pause(struct cass_dev *hw, bool state)
 {
-	unsigned long irq_flags;
-
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	hw->port->lmon_up_pause = state;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 	if (!state)
 		wake_up_interruptible(&hw->port->lmon_wq);
 }
@@ -353,11 +341,10 @@ void cass_lmon_set_up_pause(struct cass_dev *hw, bool state)
 bool cass_lmon_get_up_pause(struct cass_dev *hw)
 {
 	bool state;
-	unsigned long irq_flags;
 
-	spin_lock_irqsave(&hw->port->lock, irq_flags);
+	spin_lock(&hw->port->lock);
 	state = hw->port->lmon_up_pause;
-	spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+	spin_unlock(&hw->port->lock);
 
 	return state;
 }
@@ -370,7 +357,6 @@ static int cass_lmon(void *data)
 	int down_origin;
 	int status;
 	char base_link_state_str[SBL_BASE_LINK_STATE_STR_LEN];
-	unsigned long irq_flags;
 
 	cxidev_dbg(&hw->cdev, "lmon starting");
 
@@ -449,7 +435,7 @@ static int cass_lmon(void *data)
 
 			hw->link_ops->link_down(hw);
 
-			spin_lock_irqsave(&hw->port->lock, irq_flags);
+			spin_lock(&hw->port->lock);
 			if (cass_lmon_link_should_auto_restart(hw)) {
 				if (cass_version(hw, CASSINI_1))
 					atomic_inc(&hw->sbl_counters[link_auto_restart]);
@@ -463,10 +449,14 @@ static int cass_lmon(void *data)
 				if (hw->port->link_restart_time_idx >=
 					CASS_SBL_LINK_RESTART_TIME_SIZE)
 					hw->port->link_restart_time_idx = 0;
-				if (cass_version(hw, CASSINI_2))
+			}
+			spin_unlock(&hw->port->lock);
+
+			if (cass_version(hw, CASSINI_2)) {
+				if (cass_lmon_link_should_auto_restart(hw))
 					cass_phy_trigger_machine(hw);
 			}
-			spin_unlock_irqrestore(&hw->port->lock, irq_flags);
+
 			break;
 
 		case CASS_LMON_DIRECTION_RESET:

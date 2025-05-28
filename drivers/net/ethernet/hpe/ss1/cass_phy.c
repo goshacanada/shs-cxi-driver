@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2020-2021 Hewlett Packard Enterprise Development LP */
+/* Copyright 2020-2021,2025 Hewlett Packard Enterprise Development LP */
 /* Cassini pseudo PHY interface
  * Copy the interface from drivers/net/phy/phy.c
  */
@@ -29,19 +29,25 @@ bool cass_phy_is_headshell_removed(struct cass_dev *hw)
 
 void cass_phy_set_state(enum cass_phy_state state, struct cass_dev *hw)
 {
-	mutex_lock(&hw->phy.lock);
+	spin_lock(&hw->phy.lock);
 	hw->phy.state = state;
-	mutex_unlock(&hw->phy.lock);
+	spin_unlock(&hw->phy.lock);
 }
 
 static void cass_phy_queue_state_machine(struct cass_dev *hw,
 					 unsigned long jiffies)
 {
-	if (!cass_phy_is_started(hw))
+	bool is_started;
+
+	spin_lock(&hw->phy.lock);
+	is_started = cass_phy_is_started(hw);
+	spin_unlock(&hw->phy.lock);
+
+	if (!is_started)
 		return;
 
-	mod_delayed_work(system_power_efficient_wq, &hw->phy.state_queue,
-			 jiffies);
+	if (!(work_busy(&hw->phy.state_queue.work) & WORK_BUSY_PENDING))
+		mod_delayed_work(system_power_efficient_wq, &hw->phy.state_queue, jiffies);
 }
 
 void cass_phy_trigger_machine(struct cass_dev *hw)
@@ -83,14 +89,16 @@ static void cass_phy_check_link_status(struct cass_dev *hw)
 /* cass_phy_start_aneg - start auto-negotiation for the device */
 static void cass_phy_start_aneg(struct cass_dev *hw)
 {
-	mutex_lock(&hw->phy.lock);
+	bool is_started;
 
 	cass_lmon_request_up(hw);
 
-	if (cass_phy_is_started(hw))
-		cass_phy_check_link_status(hw);
+	spin_lock(&hw->phy.lock);
+	is_started = cass_phy_is_started(hw);
+	spin_unlock(&hw->phy.lock);
 
-	mutex_unlock(&hw->phy.lock);
+	if (is_started)
+		cass_phy_check_link_status(hw);
 }
 
 static void cass_phy_state_machine(struct work_struct *work)
@@ -99,11 +107,15 @@ static void cass_phy_state_machine(struct work_struct *work)
 	struct cass_dev *hw =
 		container_of(dwork, struct cass_dev, phy.state_queue);
 	enum cass_phy_state old_state;
+	enum cass_phy_state new_state;
 	bool needs_aneg = false;
 
-	mutex_lock(&hw->phy.lock);
+	if (atomic_read(&hw->phy.cancel_state_machine) == 1)
+		return;
 
+	spin_lock(&hw->phy.lock);
 	old_state = hw->phy.state;
+	spin_unlock(&hw->phy.lock);
 
 	switch (old_state) {
 	case CASS_PHY_DOWN:
@@ -126,8 +138,6 @@ static void cass_phy_state_machine(struct work_struct *work)
 		break;
 	}
 
-	mutex_unlock(&hw->phy.lock);
-
 	if (needs_aneg)
 		cass_phy_start_aneg(hw);
 
@@ -136,12 +146,12 @@ static void cass_phy_state_machine(struct work_struct *work)
 			   old_state, hw->phy.state);
 	}
 
-	mutex_lock(&hw->phy.lock);
+	spin_lock(&hw->phy.lock);
+	new_state = hw->phy.state;
+	spin_unlock(&hw->phy.lock);
 
-	if (hw->phy.state != CASS_PHY_RUNNING)
+	if (new_state != CASS_PHY_RUNNING)
 		cass_phy_queue_state_machine(hw, HZ);
-
-	mutex_unlock(&hw->phy.lock);
 }
 
 void cass_phy_bounce(struct cass_dev *hw)
@@ -152,6 +162,8 @@ void cass_phy_bounce(struct cass_dev *hw)
 
 void cass_phy_start(struct cass_dev *hw, bool force_reconfig)
 {
+	atomic_set(&hw->phy.cancel_state_machine, 0);
+
 	/* Start the PHY directly in UP mode */
 	INIT_DELAYED_WORK(&hw->phy.state_queue, cass_phy_state_machine);
 
@@ -168,12 +180,14 @@ void cass_phy_stop(struct cass_dev *hw, bool block)
 {
 	int err;
 
+	atomic_set(&hw->phy.cancel_state_machine, 1);
+
 	cancel_delayed_work_sync(&hw->phy.state_queue);
 
-	mutex_lock(&hw->phy.lock);
+	spin_lock(&hw->phy.lock);
 	if (cass_phy_is_started(hw))
 		hw->phy.state = CASS_PHY_UP;
-	mutex_unlock(&hw->phy.lock);
+	spin_unlock(&hw->phy.lock);
 
 	if (!block)
 		err = cass_lmon_request_down(hw);
