@@ -187,6 +187,7 @@ int cass_vf_init(struct cass_dev *hw)
 	 * mapped for that device.
 	 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0) || defined(RHEL9_3_PLUS)
+	msi_lock_descs(&hw->cdev.pdev->dev);
 	msi_for_each_desc(entry, &hw->cdev.pdev->dev, MSI_DESC_ASSOCIATED)
 #else
 	for_each_pci_msi_entry(entry, hw->cdev.pdev)
@@ -195,6 +196,10 @@ int cass_vf_init(struct cass_dev *hw)
 		if (entry->irq == hw->pf_vf_vec)
 			break;
 	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0) || defined(RHEL9_3_PLUS)
+	msi_unlock_descs(&hw->cdev.pdev->dev);
+#endif
 
 	/* That shouldn't be possible */
 	if (!entry) {
