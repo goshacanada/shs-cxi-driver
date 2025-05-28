@@ -273,17 +273,19 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni_pcp,
 
 		tx_profile = cxi_dev_get_eth_tx_profile(&hw->cdev);
 	} else {
+		if (!is_vni_valid(vni_pcp)) {
+			pr_debug("Invalid vni:%d\n", vni_pcp);
+			return ERR_PTR(-EINVAL);
+		}
+
 		tx_profile = cxi_dev_find_tx_profile(&hw->cdev, vni_pcp);
 		if (!tx_profile) {
 			pr_debug("tx_profile not found for vni:%d\n", vni_pcp);
 			return ERR_PTR(-ENOENT);
 		}
 
-		/* Perform VNI checks. */
-		if (!is_vni_valid(vni_pcp) ||
-		    !cxi_valid_vni(dev, CXI_PROF_TX, vni_pcp) ||
-		    !cxi_tx_profile_valid_tc(tx_profile, tc)) {
-			pr_debug("Invalid tc:%d tx_profile ID:%d\n", tc,
+		if (!cxi_tx_profile_valid_tc(tx_profile, tc)) {
+			pr_debug("Invalid tc:%d for tx_profile ID:%d\n", tc,
 				 tx_profile->profile_common.id);
 			rc = -EINVAL;
 			goto free_tx_profile;
