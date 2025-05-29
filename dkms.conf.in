@@ -215,6 +215,11 @@ then
     fi
 fi
 
+if [ -z "${PATH_GPU_NVIDIA}" ] && [ -z "${PATH_GPU_NVIDIA_OPEN}" ]
+then
+        printf "dkms.conf:  ERROR: No Nvidia driver installed"
+fi
+
 #
 # dependencies
 #
@@ -243,15 +248,15 @@ then
         BUILD_DEPENDS+=("intel-dmabuf")
     fi
 fi
-if [ -n "${PATH_GPU_NVIDIA}" ]
-then
-    nvidia_version=$(echo "${PATH_GPU_NVIDIA}" | sed -e 's,^.*/nvidia-\([^/]*\)/.*$,\1,g')
-    count=$(dkms status -m nvidia -v ${nvidia_version} 2>/dev/null | wc -l)
-    if [ ${count} -ne 0 ]
-    then
-        BUILD_DEPENDS+=("nvidia")
-    fi
-fi
+#if [ -n "${PATH_GPU_NVIDIA}" ]
+#then
+#    nvidia_version=$(echo "${PATH_GPU_NVIDIA}" | sed -e 's,^.*/nvidia-\([^/]*\)/.*$,\1,g')
+#    count=$(dkms status -m nvidia -v ${nvidia_version} 2>/dev/null | wc -l)
+#    if [ ${count} -ne 0 ]
+#    then
+#        BUILD_DEPENDS+=("nvidia")
+#    fi
+#fi
 if [ -n "${PATH_GPU_NVIDIA_OPEN}" ]
 then
     nvidia_open_version=$(echo "${PATH_GPU_NVIDIA_OPEN}" | sed -e 's,^.*/nvidia-open-\([^/]*\)/.*$,\1,g')
