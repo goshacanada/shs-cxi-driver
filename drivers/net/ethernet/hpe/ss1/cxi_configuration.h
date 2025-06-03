@@ -79,11 +79,6 @@ int cxi_rx_profile_alloc_pid(struct cxi_lni_priv *lni_priv,
 			     struct cxi_rx_profile *rx_profile,
 			     int pid, int vni, int count, bool reserve);
 
-int cxi_rx_profile_get_info(struct cxi_dev *dev,
-			    struct cxi_rx_profile *rx_profile,
-			    struct cxi_rx_attr *rx_attr,
-			    struct cxi_rxtx_profile_state *state);
-
 int cxi_rx_profile_remove_ac_entry(struct cxi_rx_profile *rx_profile,
 				   unsigned int ac_entry_id);
 int cxi_rx_profile_get_ac_entry_ids(struct cxi_rx_profile *rx_profile,

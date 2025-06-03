@@ -90,6 +90,20 @@ static inline bool vni_well_formed(const struct cxi_rxtx_vni_attr *attr)
 }
 
 /**
+ * zero_vni() - Check for the zero vni which is invalid
+ *              Used for allocating an rx profile with unknown attributes
+ *              which will be updated later.
+ *
+ * @attr: pointer to the VNI attributes
+ *
+ * Return: The set of attributes are the default value of 0.
+ */
+static inline bool zero_vni(const struct cxi_rxtx_vni_attr *attr)
+{
+	return !attr->match && !attr->ignore;
+}
+
+/**
  * vni_overlap() - determine if 2 vni specifications share
  *                 any VNI space.
  *
