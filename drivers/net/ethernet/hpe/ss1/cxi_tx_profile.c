@@ -454,7 +454,7 @@ static void print_tx_profile_ac_entry_info(struct cxi_tx_profile *tx_profile,
 		goto done;
 
 	ac_entry_ids = kmalloc_array(num_ids, sizeof(*ac_entry_ids),
-				     GFP_KERNEL);
+				     GFP_ATOMIC);
 	if (!ac_entry_ids) {
 		rc = -ENOMEM;
 		goto done;
