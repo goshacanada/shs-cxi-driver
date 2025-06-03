@@ -347,6 +347,8 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni,
 			    enum cxi_traffic_class_type tc_type);
 void cxi_cp_free(struct cxi_cp *cp);
 
+int cxi_cp_modify(struct cxi_cp *cp, unsigned int vni_pcp);
+
 int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 		       unsigned int count);
 struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
