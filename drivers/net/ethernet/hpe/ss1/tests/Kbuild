@@ -2,13 +2,14 @@
 obj-m += test-domain.o test-atu.o test-vfpfcomm.o test-dmac.o test-dmac-api.o
 obj-m += test-eq-reserved-fc.o test-telem-api.o
 obj-m += test-eq-alloc.o test-service.o test-ptlte.o
-obj-m += test-rgroup.o
+obj-m += test-rgroup.o test-profiles.o
 
 test-atu-objs := test_atu.o
 test-dmac-objs := test_dmac.o
 test-dmac-api-objs := test_dmac_api.o
 test-domain-objs := test_domain.o
 test-rgroup-objs := test_rgroup.o
+test-profiles-objs := test_profiles.o
 test-vfpfcomm-objs := test_vfpfcomm.o
 test-telem-api-objs := test_telem_api.o
 test-eq-reserved-fc-objs := test_eq_reserved_fc.o
