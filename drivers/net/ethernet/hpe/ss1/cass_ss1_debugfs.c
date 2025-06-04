@@ -109,6 +109,7 @@ static int dump_rgroups(struct cass_dev *hw, struct seq_file *s)
 		seq_printf(s, "\nID: %u%s\n", rgroup->id,
 			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
 
+		seq_printf(s, "  State:%s\n", rgroup->state.enabled ? "Enabled" : "Disabled");
 		seq_printf(s, "  LNIs/RGID:%d\n", rgroup->attr.lnis_per_rgid);
 		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
 			   rgroup->pools.le_pool_id[0],
