@@ -632,8 +632,6 @@ EXPORT_SYMBOL(cxi_rgroup_id);
  * cxi_rgroup_name() - Get the rgroup name
  *
  * @rgroup: resource group pointer
- * @dest: Where to copy name string to
- * @count: Size of destination buffer
  */
 char *cxi_rgroup_name(struct cxi_rgroup *rgroup)
 {
