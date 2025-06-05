@@ -82,7 +82,8 @@ struct cxi_tx_profile *cxi_dev_alloc_tx_profile(struct cxi_dev *dev,
 	struct cass_dev        *hw = get_cass_dev(dev);
 	struct cxi_tx_profile  *tx_profile;
 
-	if (!vni_well_formed(&tx_attr->vni_attr))
+	if (!zero_vni(&tx_attr->vni_attr) &&
+	    !vni_well_formed(&tx_attr->vni_attr))
 		return ERR_PTR(-EDOM);
 
 	/* Allocate memory */
@@ -260,6 +261,48 @@ bool cxi_tx_profile_valid_tc(struct cxi_tx_profile *tx_profile, unsigned int tc)
 }
 
 /**
+ * cxi_dev_set_tx_profile_attr() - Set the TX profile attributes
+ *
+ * @dev: Cassini Device
+ * @tx_profile: TX profile to update
+ * @tx_attr: Attributes of the TX Profile
+ *
+ * Return: 0 on success, or a negative errno value.
+ */
+int cxi_dev_set_tx_profile_attr(struct cxi_dev *dev,
+				struct cxi_tx_profile *tx_profile,
+				const struct cxi_tx_attr *tx_attr)
+{
+	struct cass_dev *hw = get_cass_dev(dev);
+
+	if (tx_profile->profile_common.state.enable)
+		return -EBUSY;
+
+	if (!vni_well_formed(&tx_attr->vni_attr)) {
+		pr_debug("VNI not well formed match:%d ignore:%d\n",
+			 tx_attr->vni_attr.match, tx_attr->vni_attr.ignore);
+		return -EINVAL;
+	}
+
+	if (!unique_vni_space(hw, &hw->tx_profile_list, &tx_attr->vni_attr)) {
+		pr_debug("VNI not unique match:%d ignore:%d\n",
+			 tx_attr->vni_attr.match, tx_attr->vni_attr.ignore);
+		return -EINVAL;
+	}
+
+	tx_profile->profile_common.vni_attr.match = tx_attr->vni_attr.match;
+	tx_profile->profile_common.vni_attr.ignore = tx_attr->vni_attr.ignore;
+
+	if (!tx_attr->vni_attr.name[0])
+		strscpy(tx_profile->profile_common.vni_attr.name,
+			tx_attr->vni_attr.name,
+			ARRAY_SIZE(tx_attr->vni_attr.name));
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_dev_set_tx_profile_attr);
+
+/**
  * cxi_tx_profile_enable() - Enable a Profile
  *
  * @dev: Cassini Device
@@ -271,6 +314,11 @@ bool cxi_tx_profile_valid_tc(struct cxi_tx_profile *tx_profile, unsigned int tc)
 int cxi_tx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile)
 {
+	if (zero_vni(&tx_profile->profile_common.vni_attr)) {
+		pr_debug("Cannot enable profile with invalid VNI\n");
+		return -EINVAL;
+	}
+
 	// TODO: more hw setup here?
 	tx_profile->profile_common.state.enable = true;
 
@@ -396,6 +444,7 @@ int cxi_tx_profile_get_info(struct cxi_dev *dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_tx_profile_get_info);
 
 /**
  * cxi_tx_profile_set_tc() - Set/clear a traffic class in the TX profile

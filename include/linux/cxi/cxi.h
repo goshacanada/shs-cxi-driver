@@ -252,6 +252,9 @@ void cxi_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
 int cxi_dev_set_rx_profile_attr(struct cxi_dev *dev,
 				struct cxi_rx_profile *rx_profile,
 				const struct cxi_rx_attr *rx_attr);
+int cxi_dev_set_tx_profile_attr(struct cxi_dev *dev,
+				struct cxi_tx_profile *tx_profile,
+				const struct cxi_tx_attr *tx_attr);
 int cxi_rx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_rx_profile *rx_profile);
 void cxi_rx_profile_disable(struct cxi_dev *dev,
@@ -267,6 +270,10 @@ int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
 int cxi_rx_profile_get_info(struct cxi_dev *dev,
 			    struct cxi_rx_profile *rx_profile,
 			    struct cxi_rx_attr *rx_attr,
+			    struct cxi_rxtx_profile_state *state);
+int cxi_tx_profile_get_info(struct cxi_dev *dev,
+			    struct cxi_tx_profile *tx_profile,
+			    struct cxi_tx_attr *tx_attr,
 			    struct cxi_rxtx_profile_state *state);
 
 /* Rgroup */
