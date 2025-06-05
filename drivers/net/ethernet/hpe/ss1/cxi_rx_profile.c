@@ -14,17 +14,6 @@ static struct cass_dev *get_cass_dev(struct cxi_dev *dev)
 	return container_of(dev, struct cass_dev, cdev);
 }
 
-static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
-			    void *user_arg)
-{
-	struct cxi_rxtx_profile  *profile2 = user_arg;
-
-	bool   overlap = vni_overlap(&profile1->vni_attr,
-				     &profile2->vni_attr);
-
-	return overlap ? -EEXIST : 0;
-}
-
 static void rx_profile_init(struct cxi_rx_profile *rx_profile,
 			    struct cass_dev *hw,
 			    const struct cxi_rx_attr *rx_attr)
@@ -43,36 +32,6 @@ static void cxi_rx_profile_update_pid_table_locked(
 		bitmap_set(rx_profile->config.pid_table, pid, nbits);
 	else
 		bitmap_clear(rx_profile->config.pid_table, pid, nbits);
-}
-
-/* Make sure the VNI space is unique */
-static bool unique_vni_space(struct cass_dev *hw,
-			     struct cxi_rxtx_profile_list *list,
-			     const struct cxi_rxtx_vni_attr *attr)
-			     // const struct cxi_rx_attr *rx_attr)
-{
-	int rc;
-	struct cxi_rxtx_profile rxtx_prof = {
-		.vni_attr.match = attr->match,
-		.vni_attr.ignore = attr->ignore,
-	};
-
-	cxi_rxtx_profile_list_lock(&hw->rx_profile_list);
-
-	rc = cxi_rxtx_profile_list_iterate(&hw->rx_profile_list,
-					   vni_overlap_test,
-					   &rxtx_prof);
-	if (rc)
-		goto unlock;
-
-	cxi_rxtx_profile_list_unlock(&hw->rx_profile_list);
-
-	return true;
-
-unlock:
-	cxi_rxtx_profile_list_unlock(&hw->rx_profile_list);
-
-	return false;
 }
 
 /**

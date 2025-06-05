@@ -308,6 +308,41 @@ struct valid_user_data {
 	struct valid_ac_data ac_data;
 };
 
+int vni_overlap_test(struct cxi_rxtx_profile *profile1,
+		     void *user_arg)
+{
+	struct cxi_rxtx_profile  *profile2 = user_arg;
+	bool overlap = vni_overlap(&profile1->vni_attr, &profile2->vni_attr);
+
+	/* ignore profiles with 0 VNI */
+	if (zero_vni(&profile1->vni_attr))
+		return 0;
+
+	return overlap ? -EEXIST : 0;
+}
+
+/* Make sure the VNI space is unique */
+bool unique_vni_space(struct cass_dev *hw,
+		      struct cxi_rxtx_profile_list *list,
+		      const struct cxi_rxtx_vni_attr *attr)
+{
+	int rc;
+	struct cxi_rxtx_profile rxtx_prof = {
+		.vni_attr.match = attr->match,
+		.vni_attr.ignore = attr->ignore,
+	};
+
+	cxi_rxtx_profile_list_lock(&hw->rx_profile_list);
+
+	rc = cxi_rxtx_profile_list_iterate(&hw->rx_profile_list,
+					   vni_overlap_test,
+					   &rxtx_prof);
+
+	cxi_rxtx_profile_list_unlock(&hw->rx_profile_list);
+
+	return !rc;
+}
+
 static int valid_vni_operator(struct cxi_rxtx_profile *rxtx_profile,
 			       void *user_data)
 {

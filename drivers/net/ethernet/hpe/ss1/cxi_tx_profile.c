@@ -14,17 +14,6 @@ static struct cass_dev *get_cass_dev(struct cxi_dev *dev)
 	return container_of(dev, struct cass_dev, cdev);
 }
 
-static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
-			    void *user_arg)
-{
-	struct cxi_rxtx_profile  *profile2 = user_arg;
-
-	bool   overlap = vni_overlap(&profile1->vni_attr,
-				     &profile2->vni_attr);
-
-	return overlap ? -EEXIST : 0;
-}
-
 /* initialize common profile and cassini config members */
 static void cass_dev_init_tx_profile(struct cass_dev *hw,
 				     struct cxi_tx_profile *tx_profile,

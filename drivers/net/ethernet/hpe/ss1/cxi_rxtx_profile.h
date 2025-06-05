@@ -64,6 +64,12 @@ int cxi_rxtx_profile_get_ac_entry_id_by_user(struct cxi_rxtx_profile *rxtx_profi
 
 void cxi_tx_profile_list_destroy(struct cass_dev *cdev);
 
+int vni_overlap_test(struct cxi_rxtx_profile *profile1,
+		     void *user_arg);
+bool unique_vni_space(struct cass_dev *hw,
+		      struct cxi_rxtx_profile_list *list,
+		      const struct cxi_rxtx_vni_attr *attr);
+
 __maybe_unused
 static struct cxi_rx_profile *co_rx_profile(struct cxi_rxtx_profile *profile)
 {
@@ -96,11 +102,11 @@ static inline bool vni_well_formed(const struct cxi_rxtx_vni_attr *attr)
  *
  * @attr: pointer to the VNI attributes
  *
- * Return: The set of attributes are the default value of 0.
+ * Return: The match value is the default (invalid) value of 0.
  */
 static inline bool zero_vni(const struct cxi_rxtx_vni_attr *attr)
 {
-	return !attr->match && !attr->ignore;
+	return !attr->match;
 }
 
 /**
