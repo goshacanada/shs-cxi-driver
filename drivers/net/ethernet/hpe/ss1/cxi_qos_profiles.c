@@ -430,6 +430,7 @@ struct qos_profile profiles[CXI_QOS_NUM_PROF] = {
 			},
 			[CXI_TC_ETH] = {
 				.oxe_settings = {
+					.spt_rsvd = 30,
 					.pbuf_rsvd = DIV_ROUND_UP(ETHERNET_MAX_FRAME_SIZE, 256),
 				},
 				.cq_settings = {
