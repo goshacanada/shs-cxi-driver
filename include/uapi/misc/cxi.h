@@ -82,6 +82,16 @@ enum cxi_command_opcode {
 		CXI_OP_SVC_SET_LPR,
 		CXI_OP_SVC_GET_LPR,
 
+		/* Ethernet operations */
+		CXI_OP_ETH_INIT,
+		CXI_OP_ETH_GET_CAPS,
+		CXI_OP_ETH_GET_MAC,
+		CXI_OP_ETH_SET_MAC,
+		CXI_OP_ETH_GET_LINK,
+		CXI_OP_ETH_SET_MTU,
+		CXI_OP_ETH_SET_PROMISC,
+		CXI_OP_ETH_SET_ALLMULTI,
+
 		CXI_OP_DEV_ALLOC_RX_PROFILE,
 		CXI_OP_DEV_GET_RX_PROFILE_IDS,
 
@@ -1238,5 +1248,71 @@ static inline bool cassini_version(const struct cxi_properties_info *prop,
 {
 	return (prop->cassini_version & version) == version;
 }
+
+/* Ethernet capability and link structures */
+struct cxi_eth_caps {
+	uint32_t max_mtu;
+	uint32_t min_mtu;
+	bool supports_checksum;
+	bool supports_tso;
+	bool supports_rss;
+	bool supports_vlan;
+	uint32_t max_queues;
+};
+
+struct cxi_link_info {
+	uint32_t speed;         /* Link speed in Mbps */
+	uint8_t duplex;         /* 0 = half, 1 = full */
+	uint8_t autoneg;        /* 0 = off, 1 = on */
+	uint8_t link_status;    /* 0 = down, 1 = up */
+};
+
+/* Ethernet operation command structures */
+struct cxi_eth_init_cmd {
+	enum cxi_command_opcode op;
+};
+
+struct cxi_eth_caps_cmd {
+	enum cxi_command_opcode op;
+	void __user *resp;
+};
+
+struct cxi_eth_caps_resp {
+	struct cxi_eth_caps caps;
+};
+
+struct cxi_eth_mac_cmd {
+	enum cxi_command_opcode op;
+	void __user *resp;
+	uint8_t mac_addr[6];
+};
+
+struct cxi_eth_mac_resp {
+	uint8_t mac_addr[6];
+};
+
+struct cxi_eth_link_cmd {
+	enum cxi_command_opcode op;
+	void __user *resp;
+};
+
+struct cxi_eth_link_resp {
+	struct cxi_link_info link_info;
+};
+
+struct cxi_eth_mtu_cmd {
+	enum cxi_command_opcode op;
+	uint16_t mtu;
+};
+
+struct cxi_eth_promisc_cmd {
+	enum cxi_command_opcode op;
+	bool enable;
+};
+
+struct cxi_eth_allmulti_cmd {
+	enum cxi_command_opcode op;
+	bool enable;
+};
 
 #endif	/* __UAPI_CXI_H */
