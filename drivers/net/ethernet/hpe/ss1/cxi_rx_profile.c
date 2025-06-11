@@ -219,6 +219,17 @@ void cxi_rx_profile_disable(struct cxi_dev *dev,
 }
 
 /**
+ * cxi_rx_profile_is_enabled() - Report RX profile is enabled
+ *
+ * @rx_profile: Profile object
+ */
+bool cxi_rx_profile_is_enabled(const struct cxi_rx_profile *rx_profile)
+{
+	return rx_profile->profile_common.state.enable;
+}
+EXPORT_SYMBOL(cxi_rx_profile_is_enabled);
+
+/**
  * cxi_dev_set_rx_profile_attr() - Set the RX profile attributes
  *
  * @dev: Cassini Device
