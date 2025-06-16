@@ -107,10 +107,15 @@ static int dump_rgroups(struct cass_dev *hw, struct seq_file *s)
 	seq_puts(s, "Rgroups:");
 	for_each_rgroup(index, rgroup) {
 		seq_printf(s, "\nID: %u%s\n", rgroup->id,
-			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
-
-		seq_printf(s, "  State:%s\n", rgroup->state.enabled ? "Enabled" : "Disabled");
-		seq_printf(s, "  LNIs/RGID:%d\n", rgroup->attr.lnis_per_rgid);
+			   cxi_rgroup_name(rgroup));
+		seq_printf(s, "  State:%s\n",
+			   cxi_rgroup_is_enabled(rgroup) ? "Enabled" : "Disabled");
+		seq_printf(s, "  LNIs/RGID:%d\n",
+			   cxi_rgroup_lnis_per_rgid(rgroup));
+		seq_printf(s, "  System service:%d\n",
+			   cxi_rgroup_system_service(rgroup));
+		seq_printf(s, "  Counter pool ID:%d\n",
+			   cxi_rgroup_cntr_pool_id(rgroup));
 		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
 			   rgroup->pools.le_pool_id[0],
 			   rgroup->pools.le_pool_id[1],

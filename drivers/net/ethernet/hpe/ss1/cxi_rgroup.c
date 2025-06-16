@@ -665,6 +665,18 @@ int cxi_rgroup_tle_pool_id(const struct cxi_rgroup *rgroup)
 }
 
 /**
+ * cxi_rgroup_cntr_pool_id() - Get the rgroup cntr_pool_id attribute
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: cntr_pool_id value
+ */
+unsigned int cxi_rgroup_cntr_pool_id(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->attr.cntr_pool_id;
+}
+
+/**
  * cxi_rgroup_system_service() - Get the rgroup system_service attribute
  *
  * @rgroup: resource group pointer
