@@ -63,7 +63,6 @@ struct cxi_resource_use r_save[CXI_RESOURCE_MAX];
 #define LIMIT_TGQ_MAX 22
 #define LIMIT_EQ_MAX 22
 #define LIMIT_CT_MAX 22
-#define LIMIT_TLE_MAX 22
 #define LIMIT_AC_MAX 22
 #define LIMIT_LE_RES 20
 #define LIMIT_PTLTE_RES 20
@@ -115,7 +114,7 @@ static int alloc_rgroup_rsrcs(struct cxi_dev *dev)
 	limits[CXI_RESOURCE_PE2_LE].reserved = LIMIT_LE_RES;
 	limits[CXI_RESOURCE_PE3_LE].max = LIMIT_LE_MAX;
 	limits[CXI_RESOURCE_PE3_LE].reserved = LIMIT_LE_RES;
-	limits[CXI_RESOURCE_TLE].max = LIMIT_TLE_MAX;
+	limits[CXI_RESOURCE_TLE].max = LIMIT_TLE_RES;
 	limits[CXI_RESOURCE_TLE].reserved = LIMIT_TLE_RES;
 	limits[CXI_RESOURCE_AC].max = LIMIT_AC_MAX;
 	limits[CXI_RESOURCE_AC].reserved = LIMIT_AC_RES;

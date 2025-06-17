@@ -113,7 +113,7 @@ static int alloc_rgroup_rsrcs(struct cxi_dev *dev)
 	limits[CXI_RESOURCE_PE2_LE].reserved = LIMIT_LE_RES;
 	limits[CXI_RESOURCE_PE3_LE].max = LIMIT_LE_MAX;
 	limits[CXI_RESOURCE_PE3_LE].reserved = LIMIT_LE_RES;
-	limits[CXI_RESOURCE_TLE].max = LIMIT_TLE_MAX;
+	limits[CXI_RESOURCE_TLE].max = LIMIT_TLE_RES;
 	limits[CXI_RESOURCE_TLE].reserved = LIMIT_TLE_RES;
 	limits[CXI_RESOURCE_AC].max = LIMIT_AC_MAX;
 	limits[CXI_RESOURCE_AC].reserved = LIMIT_AC_RES;
@@ -806,6 +806,47 @@ static int test_resources(struct cxi_dev *dev)
 	if (rc) {
 		pr_err("cxi_rgroup_delete_resource %s failed rc:%d\n",
 			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
+		rc = -1;
+		goto err;
+	}
+
+	rc = cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_TLE);
+	if (rc) {
+		pr_err("cxi_rgroup_delete_resource %s failed rc:%d\n",
+		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
+		rc = -1;
+		goto err;
+	}
+
+	/* Less than CASS_MIN_POOL_TLES should fail */
+	limits.max = CASS_MIN_POOL_TLES - 1;
+	limits.reserved = CASS_MIN_POOL_TLES - 1;
+	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
+	if (rc != -EINVAL) {
+		pr_err("cxi_rgroup_add_resource %s should fail rc:%d\n",
+		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
+		rc = -1;
+		goto err;
+	}
+
+	/* Reserved and max must be equal */
+	limits.max = LIMIT_TLE_MAX;
+	limits.reserved = CASS_MIN_POOL_TLES;
+	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
+	if (rc != -EINVAL) {
+		pr_err("cxi_rgroup_add_resource %s should fail rc:%d\n",
+		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
+		rc = -1;
+		goto err;
+	}
+
+	/* Now should work */
+	limits.max = LIMIT_TLE_RES;
+	limits.reserved = LIMIT_TLE_RES;
+	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
+	if (rc) {
+		pr_err("cxi_rgroup_add_resource %s failed rc:%d\n",
+		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
 		rc = -1;
 		goto err;
 	}
