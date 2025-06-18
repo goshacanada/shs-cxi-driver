@@ -773,6 +773,9 @@ int create_sysfs_properties(struct cass_dev *hw)
 {
 	int rc;
 
+	if (!hw->cdev.is_physfn)
+		return 0;
+
 	rc = kobject_init_and_add(&hw->properties_kobj, &properties_info,
 				  &hw->cdev.pdev->dev.kobj,
 				  "properties");
