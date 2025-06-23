@@ -106,8 +106,8 @@ static int dump_rgroups(struct cass_dev *hw, struct seq_file *s)
 
 	seq_puts(s, "Rgroups:");
 	for_each_rgroup(index, rgroup) {
-		seq_printf(s, "\nID: %u%s\n", rgroup->id,
-			   cxi_rgroup_name(rgroup));
+		seq_printf(s, "\nID: %u\n", rgroup->id);
+		seq_printf(s, "  Name:%s\n", cxi_rgroup_name(rgroup));
 		seq_printf(s, "  State:%s\n",
 			   cxi_rgroup_is_enabled(rgroup) ? "Enabled" : "Disabled");
 		seq_printf(s, "  LNIs/RGID:%d\n",
@@ -122,6 +122,8 @@ static int dump_rgroups(struct cass_dev *hw, struct seq_file *s)
 			   rgroup->pools.le_pool_id[2],
 			   rgroup->pools.le_pool_id[3],
 			   rgroup->pools.tle_pool_id);
+
+		cxi_rgroup_print_ac_entry_info(rgroup, s);
 
 		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
 		seq_puts(s, "  max   ");

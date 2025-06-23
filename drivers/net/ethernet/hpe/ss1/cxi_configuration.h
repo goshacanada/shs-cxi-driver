@@ -266,6 +266,9 @@ int cxi_rgroup_get_ac_entry_by_user(struct cxi_rgroup *rgroup,
 
 void cxi_rgroup_inc_refcount(struct cxi_rgroup *rgroup);
 
+void cxi_rgroup_print_ac_entry_info(struct cxi_rgroup *rgroup,
+				    struct seq_file *s);
+
 int cxi_dev_find_rgroup_inc_refcount(struct cxi_dev *dev,
 				     unsigned int id,
 				     struct cxi_rgroup **rgroup);
