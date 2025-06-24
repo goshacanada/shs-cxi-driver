@@ -551,7 +551,7 @@ static void print_rx_profile_ac_entry_info(struct cxi_rx_profile *rx_profile,
 		seq_printf(s, "ID:%d type:%s uid/gid:%d%s",
 			   ac_entry_ids[i], AC_TYPE(ac_type),
 			   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid,
-			   i < (num_ids - 1) ? "," : "");
+			   i < (num_ids - 1) ? ", " : "");
 	}
 	seq_puts(s, "\n");
 
