@@ -193,7 +193,7 @@ int cass_svc_init(struct cass_dev *hw)
 	/* Create default service. It will get the default ID of
 	 * CXI_DEFAULT_SVC_ID
 	 */
-	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL);
+	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL, "default");
 	if (svc_id < 0)
 		return svc_id;
 
@@ -614,11 +614,12 @@ release_profiles:
  *            and optionally identifies member processes, tcs, vnis, etc. see
  *            cxi_svc_desc.
  * @fail_info: extra information when a failure occurs
+ * @name: name for service
  *
  * Return: Service ID on success. Else, negative errno value.
  */
 int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
-		  struct cxi_svc_fail_info *fail_info)
+		  struct cxi_svc_fail_info *fail_info, char *name)
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
@@ -656,6 +657,8 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 			   hw->cdev.name, cxi_rgroup_id(rgroup), rc);
 		goto release_rgroup;
 	}
+
+	cxi_rgroup_set_name(rgroup, name);
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
 	if (rc)

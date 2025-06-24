@@ -407,7 +407,8 @@ static int cxi_user_svc_alloc(struct user_client *client,
 	int ret = 0;
 	int rc;
 
-	rc = cxi_svc_alloc(client->ucxi->dev, &cmd->svc_desc, &fail_info);
+	rc = cxi_svc_alloc(client->ucxi->dev, &cmd->svc_desc, &fail_info,
+			   "user");
 	if (rc < 0) {
 		resp.fail_info = fail_info;
 		ret = rc;

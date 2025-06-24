@@ -52,7 +52,7 @@ static int test_service_tle_in_use(struct cxi_dev *dev)
 	int i;
 	ktime_t timeout;
 
-	rc = cxi_svc_alloc(dev, &desc, &info);
+	rc = cxi_svc_alloc(dev, &desc, &info, "tle-in-use");
 	if (rc < 0) {
 		test_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;
@@ -212,7 +212,7 @@ static int test_service_modify(struct cxi_dev *dev)
 	struct cxi_svc_fail_info info;
 	struct cxi_lni *lni;
 
-	rc = cxi_svc_alloc(dev, &desc, &info);
+	rc = cxi_svc_alloc(dev, &desc, &info, "svc-modify");
 	if (rc < 0) {
 		test_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;
@@ -320,7 +320,7 @@ static int test_disabled_service(struct cxi_dev *dev)
 	struct cxi_svc_fail_info info;
 	struct cxi_lni *lni;
 
-	rc = cxi_svc_alloc(dev, &desc, &info);
+	rc = cxi_svc_alloc(dev, &desc, &info, "disabled-svc");
 	if (rc < 0) {
 		test_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;
@@ -414,7 +414,7 @@ static int test_service_busy(struct cxi_dev *dev)
 		.limits.type[CXI_RSRC_TYPE_AC].res = 4,
 	};
 
-	rc = cxi_svc_alloc(dev, &desc, &info);
+	rc = cxi_svc_alloc(dev, &desc, &info, "svc-busy");
 	if (rc < 0) {
 		test_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;
@@ -479,7 +479,7 @@ static int test_restricted_members_service(struct cxi_dev *dev)
 		.members[1].type = CXI_SVC_MEMBER_GID,
 	};
 
-	rc = cxi_svc_alloc(dev, &desc, &info);
+	rc = cxi_svc_alloc(dev, &desc, &info, "restricted-members");
 	if (rc < 0) {
 		test_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;

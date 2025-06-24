@@ -2025,7 +2025,7 @@ static int build_service(struct cxi_dev *dev, struct cxi_svc_desc *desc,
 	desc->resource_limits = false,
 	desc->restricted_members = false,
 
-	rc = cxi_svc_alloc(dev, desc, NULL);
+	rc = cxi_svc_alloc(dev, desc, NULL, "test-atu");
 	if (rc < 0) {
 		pr_err("cxi_svc_alloc failed: %d\n", rc);
 		goto err;
