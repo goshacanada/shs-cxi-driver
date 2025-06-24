@@ -182,6 +182,11 @@ static int dump_services(struct seq_file *s, void *unused)
 		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].reserved);
 	seq_puts(s, "\n");
 
+	seq_puts(s, "Alloc ");
+	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
+		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].in_use);
+	seq_puts(s, "\n");
+
 	seq_puts(s, "Avail ");
 	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++) {
 		value = rsrc_use[rsrc_dump_order[i]].shared -
