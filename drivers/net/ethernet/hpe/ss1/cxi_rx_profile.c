@@ -14,17 +14,6 @@ static struct cass_dev *get_cass_dev(struct cxi_dev *dev)
 	return container_of(dev, struct cass_dev, cdev);
 }
 
-static int vni_overlap_test(struct cxi_rxtx_profile *profile1,
-			    void *user_arg)
-{
-	struct cxi_rxtx_profile  *profile2 = user_arg;
-
-	bool   overlap = vni_overlap(&profile1->vni_attr,
-				     &profile2->vni_attr);
-
-	return overlap ? -EEXIST : 0;
-}
-
 static void rx_profile_init(struct cxi_rx_profile *rx_profile,
 			    struct cass_dev *hw,
 			    const struct cxi_rx_attr *rx_attr)
@@ -193,6 +182,11 @@ int cxi_rx_profile_enable(struct cxi_dev *dev,
 	struct cass_dev *hw = get_cass_dev(dev);
 	struct cxi_rxtx_vni_attr *attr = &rx_profile->profile_common.vni_attr;
 
+	if (zero_vni(attr)) {
+		pr_debug("Cannot enable profile with invalid VNI\n");
+		return -EINVAL;
+	}
+
 	index = ida_alloc_range(&hw->rmu_index_table, 0,
 				C_RMU_CFG_VNI_LIST_ENTRIES - 1, GFP_KERNEL);
 	if (index < 0)
@@ -225,6 +219,59 @@ void cxi_rx_profile_disable(struct cxi_dev *dev,
 }
 
 /**
+ * cxi_rx_profile_is_enabled() - Report RX profile is enabled
+ *
+ * @rx_profile: Profile object
+ */
+bool cxi_rx_profile_is_enabled(const struct cxi_rx_profile *rx_profile)
+{
+	return rx_profile->profile_common.state.enable;
+}
+EXPORT_SYMBOL(cxi_rx_profile_is_enabled);
+
+/**
+ * cxi_dev_set_rx_profile_attr() - Set the RX profile attributes
+ *
+ * @dev: Cassini Device
+ * @rx_profile: RX profile to update
+ * @rx_attr: Attributes of the RX Profile
+ *
+ * Return: 0 on success, or a negative errno value.
+ */
+int cxi_dev_set_rx_profile_attr(struct cxi_dev *dev,
+				struct cxi_rx_profile *rx_profile,
+				const struct cxi_rx_attr *rx_attr)
+{
+	struct cass_dev *hw = get_cass_dev(dev);
+
+	if (rx_profile->profile_common.state.enable)
+		return -EBUSY;
+
+	if (!vni_well_formed(&rx_attr->vni_attr)) {
+		pr_debug("VNI not well formed match:%d ignore:%d\n",
+			 rx_attr->vni_attr.match, rx_attr->vni_attr.ignore);
+		return -EINVAL;
+	}
+
+	if (!unique_vni_space(hw, &hw->rx_profile_list, &rx_attr->vni_attr)) {
+		pr_debug("VNI not unique match:%d ignore:%d\n",
+			 rx_attr->vni_attr.match, rx_attr->vni_attr.ignore);
+		return -EINVAL;
+	}
+
+	rx_profile->profile_common.vni_attr.match = rx_attr->vni_attr.match;
+	rx_profile->profile_common.vni_attr.ignore = rx_attr->vni_attr.ignore;
+
+	if (!rx_attr->vni_attr.name[0])
+		strscpy(rx_profile->profile_common.vni_attr.name,
+			rx_attr->vni_attr.name,
+			ARRAY_SIZE(rx_attr->vni_attr.name));
+
+	return 0;
+}
+EXPORT_SYMBOL(cxi_dev_set_rx_profile_attr);
+
+/**
  * cxi_dev_alloc_rx_profile() - Allocate a RX Profile
  *
  * @dev: Cassini Device
@@ -239,7 +286,8 @@ struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 	struct cass_dev        *hw = get_cass_dev(dev);
 	struct cxi_rx_profile  *rx_profile;
 
-	if (!vni_well_formed(&rx_attr->vni_attr))
+	if (!zero_vni(&rx_attr->vni_attr) &&
+	    !vni_well_formed(&rx_attr->vni_attr))
 		return ERR_PTR(-EDOM);
 
 	/* Allocate memory */
@@ -251,14 +299,18 @@ struct cxi_rx_profile *cxi_dev_alloc_rx_profile(struct cxi_dev *dev,
 	rx_profile_init(rx_profile, hw, rx_attr);
 	cass_rx_profile_init(hw, rx_profile);
 
-	/* make sure the VNI space is unique */
 	cxi_rxtx_profile_list_lock(&hw->rx_profile_list);
 
-	ret = cxi_rxtx_profile_list_iterate(&hw->rx_profile_list,
-					    vni_overlap_test,
-					    &rx_profile->profile_common);
-	if (ret)
-		goto unlock_free_return;
+	/* Configfs needs to allocate a profile without attributes which
+	 * will be updated later.
+	 */
+	if (!zero_vni(&rx_attr->vni_attr)) {
+		ret = cxi_rxtx_profile_list_iterate(&hw->rx_profile_list,
+						    vni_overlap_test,
+						    &rx_profile->profile_common);
+		if (ret)
+			goto unlock_free_return;
+	}
 
 	/* Insert into device list if unique */
 	ret = cxi_rxtx_profile_list_insert(&hw->rx_profile_list,
@@ -458,6 +510,7 @@ int cxi_rx_profile_get_info(struct cxi_dev *dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(cxi_rx_profile_get_info);
 
 static void print_rx_profile_ac_entry_info(struct cxi_rx_profile *rx_profile,
 					   struct seq_file *s)
@@ -498,7 +551,7 @@ static void print_rx_profile_ac_entry_info(struct cxi_rx_profile *rx_profile,
 		seq_printf(s, "ID:%d type:%s uid/gid:%d%s",
 			   ac_entry_ids[i], AC_TYPE(ac_type),
 			   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid,
-			   i < (num_ids - 1) ? "," : "");
+			   i < (num_ids - 1) ? ", " : "");
 	}
 	seq_puts(s, "\n");
 

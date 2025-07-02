@@ -73,7 +73,31 @@ int cass_rgroup_add_resource(struct cxi_rgroup *rgroup,
 	struct cass_dev *hw = rgroup->hw;
 	struct cxi_resource_use *r_use = &hw->resource_use[resource->type];
 
+	if (!resource->limits.max && !resource->limits.reserved)
+		return 0;
+
 	spin_lock(&hw->rgrp_lock);
+
+	if (resource->type == CXI_RESOURCE_TLE) {
+		/* Enforce minimum TLEs */
+		if (resource->limits.reserved) {
+			if (resource->limits.reserved < CASS_MIN_POOL_TLES) {
+				pr_debug("%s reserved minimum must be >= %d\n",
+					 cxi_resource_type_to_str(CXI_RESOURCE_TLE),
+					 CASS_MIN_POOL_TLES);
+				rc = -EINVAL;
+				goto unlock;
+			}
+		}
+
+		/* Enforce max and reserved TLEs equal */
+		if (resource->limits.max != resource->limits.reserved) {
+			pr_debug("%s max must equal reserved\n",
+				 cxi_resource_type_to_str(CXI_RESOURCE_TLE));
+			rc = -EINVAL;
+			goto unlock;
+		}
+	}
 
 	if (resource->limits.reserved > r_use->shared) {
 		pr_debug("Error - %s reserved requested (%lu) > shared available (%lu)\n",

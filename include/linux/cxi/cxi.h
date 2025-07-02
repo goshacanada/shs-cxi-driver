@@ -249,6 +249,12 @@ int cxi_tx_profile_add_ac_entry(struct cxi_tx_profile *tx_profile,
 				enum cxi_ac_type type, uid_t uid, gid_t gid,
 				unsigned int *ac_entry_id);
 void cxi_tx_profile_remove_ac_entries(struct cxi_tx_profile *tx_profile);
+int cxi_dev_set_rx_profile_attr(struct cxi_dev *dev,
+				struct cxi_rx_profile *rx_profile,
+				const struct cxi_rx_attr *rx_attr);
+int cxi_dev_set_tx_profile_attr(struct cxi_dev *dev,
+				struct cxi_tx_profile *tx_profile,
+				const struct cxi_tx_attr *tx_attr);
 int cxi_rx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_rx_profile *rx_profile);
 void cxi_rx_profile_disable(struct cxi_dev *dev,
@@ -257,10 +263,19 @@ int cxi_tx_profile_enable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
 void cxi_tx_profile_disable(struct cxi_dev *dev,
 			   struct cxi_tx_profile *tx_profile);
+bool cxi_rx_profile_is_enabled(const struct cxi_rx_profile *rx_profile);
 bool cxi_tx_profile_is_enabled(const struct cxi_tx_profile *tx_profile);
 bool cxi_tx_profile_exclusive_cp(struct cxi_tx_profile *tx_profile);
 int cxi_tx_profile_set_exclusive_cp(struct cxi_tx_profile *tx_profile,
 				    bool exclusive_cp);
+int cxi_rx_profile_get_info(struct cxi_dev *dev,
+			    struct cxi_rx_profile *rx_profile,
+			    struct cxi_rx_attr *rx_attr,
+			    struct cxi_rxtx_profile_state *state);
+int cxi_tx_profile_get_info(struct cxi_dev *dev,
+			    struct cxi_tx_profile *tx_profile,
+			    struct cxi_tx_attr *tx_attr,
+			    struct cxi_rxtx_profile_state *state);
 
 /* Rgroup */
 struct cxi_rgroup;
@@ -332,6 +347,8 @@ struct cxi_cp *cxi_cp_alloc(struct cxi_lni *lni, unsigned int vni,
 			    enum cxi_traffic_class_type tc_type);
 void cxi_cp_free(struct cxi_cp *cp);
 
+int cxi_cp_modify(struct cxi_cp *cp, unsigned int vni_pcp);
+
 int cxi_domain_reserve(struct cxi_lni *lni, unsigned int vni, unsigned int pid,
 		       unsigned int count);
 struct cxi_domain *cxi_domain_alloc(struct cxi_lni *lni, unsigned int vni,
@@ -389,7 +406,7 @@ int cxi_pte_transition_sm(struct cxi_pte *pt, unsigned int drop_count);
 int cxi_inbound_wait(struct cxi_dev *cdev);
 
 int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc,
-		  struct cxi_svc_fail_info *fail_info);
+		  struct cxi_svc_fail_info *fail_info, char *name);
 int cxi_svc_destroy(struct cxi_dev *dev, unsigned int svc_id);
 int cxi_svc_list_get(struct cxi_dev *dev, int count,
 		     struct cxi_svc_desc *svc_list);

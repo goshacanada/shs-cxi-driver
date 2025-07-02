@@ -193,7 +193,7 @@ int cass_svc_init(struct cass_dev *hw)
 	/* Create default service. It will get the default ID of
 	 * CXI_DEFAULT_SVC_ID
 	 */
-	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL);
+	svc_id = cxi_svc_alloc(&hw->cdev, &svc_desc, NULL, "default");
 	if (svc_id < 0)
 		return svc_id;
 
@@ -431,8 +431,12 @@ static int validate_descriptor(struct cass_dev *hw,
 	return 0;
 }
 
-static enum cxi_ac_type svc_mbr_to_ac_type(enum cxi_svc_member_type type)
+static enum cxi_ac_type svc_mbr_to_ac_type(enum cxi_svc_member_type type,
+					   bool restricted_members)
 {
+	if (!restricted_members)
+		return CXI_AC_OPEN;
+
 	switch (type) {
 	case CXI_SVC_MEMBER_UID:
 		return CXI_AC_UID;
@@ -486,7 +490,8 @@ static int alloc_ac_entries(struct cxi_dev *dev, struct cxi_svc_priv *svc_priv)
 
 	for (i = 0; i < CXI_SVC_MAX_MEMBERS; i++) {
 		/* Type members.type have been validated */
-		type = svc_mbr_to_ac_type(svc_desc->members[i].type);
+		type = svc_mbr_to_ac_type(svc_desc->members[i].type,
+					  svc_desc->restricted_members);
 
 		for (j = 0; j < svc_priv->num_vld_rx_profiles; j++) {
 			rc = cxi_tx_profile_add_ac_entry(
@@ -609,11 +614,12 @@ release_profiles:
  *            and optionally identifies member processes, tcs, vnis, etc. see
  *            cxi_svc_desc.
  * @fail_info: extra information when a failure occurs
+ * @name: name for service
  *
  * Return: Service ID on success. Else, negative errno value.
  */
 int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
-		  struct cxi_svc_fail_info *fail_info)
+		  struct cxi_svc_fail_info *fail_info, char *name)
 {
 	struct cass_dev *hw = container_of(dev, struct cass_dev, cdev);
 	struct cxi_svc_priv *svc_priv;
@@ -634,8 +640,6 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 		return -ENOMEM;
 	svc_priv->svc_desc = *svc_desc;
 
-	refcount_set(&svc_priv->refcount, 1);
-
 	rgroup = cxi_dev_alloc_rgroup(dev, &attr);
 	if (IS_ERR(rgroup)) {
 		rc = PTR_ERR(rgroup);
@@ -653,6 +657,8 @@ int cxi_svc_alloc(struct cxi_dev *dev, const struct cxi_svc_desc *svc_desc,
 			   hw->cdev.name, cxi_rgroup_id(rgroup), rc);
 		goto release_rgroup;
 	}
+
+	cxi_rgroup_set_name(rgroup, name);
 
 	rc = alloc_rxtx_profiles(dev, svc_priv);
 	if (rc)
@@ -740,7 +746,7 @@ int cxi_svc_destroy(struct cxi_dev *dev, u32 svc_id)
 	}
 
 	/* Don't delete if an LNI is still using this SVC */
-	if (refcount_read(&svc_priv->refcount) != 1) {
+	if (cxi_rgroup_refcount(svc_priv->rgroup) > 1) {
 		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}
@@ -1004,7 +1010,7 @@ int cxi_svc_set_lpr(struct cxi_dev *dev, unsigned int svc_id,
 	}
 
 	/* Service must be unused for it to be updated. */
-	if (refcount_read(&svc_priv->refcount) != 1) {
+	if (cxi_rgroup_refcount(svc_priv->rgroup) > 1) {
 		mutex_unlock(&hw->svc_lock);
 		return -EBUSY;
 	}

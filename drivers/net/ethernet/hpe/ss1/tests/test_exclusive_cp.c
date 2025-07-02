@@ -8,7 +8,9 @@
 #include "cxi_core.h"
 #include "cass_core.h"
 
-#define VNI 8U
+#define VNI 16U
+#define VNI_IGNORE 15U
+#define VNI_INVALID 32U
 #define TLE_COUNT 10U
 #define TIMEOUT 2U
 
@@ -61,7 +63,6 @@ struct cxi_resource_use r_save[CXI_RESOURCE_MAX];
 #define LIMIT_TGQ_MAX 22
 #define LIMIT_EQ_MAX 22
 #define LIMIT_CT_MAX 22
-#define LIMIT_TLE_MAX 22
 #define LIMIT_AC_MAX 22
 #define LIMIT_LE_RES 20
 #define LIMIT_PTLTE_RES 20
@@ -126,7 +127,7 @@ static int alloc_rgroup_rsrcs(struct cxi_dev *dev)
 	}
 
 	cxi_rgroup_set_system_service(rgroup, true);
-	cxi_rgroup_set_name(rgroup, "test-rgroup");
+	cxi_rgroup_set_name(rgroup, "test-exclusive-cp-rgroup");
 
 	for (i = CXI_RESOURCE_PTLTE; i < CXI_RESOURCE_MAX; i++) {
 		if (!limits[i].reserved && !limits[i].max)
@@ -135,7 +136,7 @@ static int alloc_rgroup_rsrcs(struct cxi_dev *dev)
 		rc = cxi_rgroup_add_resource(rgroup, i, &limits[i]);
 		if (rc) {
 			pr_err("Add %s resource failed:%d\n",
-				    cxi_resource_type_to_str(i), rc);
+			       cxi_resource_type_to_str(i), rc);
 			dump_resources(rgroup);
 			goto err;
 		}
@@ -169,8 +170,14 @@ static int alloc_profiles(void)
 {
 	int rc;
 	int ac_entry_id;
-	struct cxi_rx_attr rx_attr = {.vni_attr.match = VNI};
-	struct cxi_tx_attr tx_attr = {.vni_attr.match = VNI};
+	struct cxi_rx_attr rx_attr = {
+		.vni_attr.match = VNI,
+		.vni_attr.ignore = VNI_IGNORE,
+	};
+	struct cxi_tx_attr tx_attr = {
+		.vni_attr.match = VNI,
+		.vni_attr.ignore = VNI_IGNORE,
+	};
 
 	rx_profile = cxi_dev_alloc_rx_profile(dev, &rx_attr);
 	if (IS_ERR(rx_profile)) {
@@ -203,6 +210,10 @@ static int alloc_profiles(void)
 		goto remove_tx_profile;
 
 	cxi_tx_profile_set_tc(tx_profile, CXI_TC_BEST_EFFORT, true);
+
+	rc = cxi_tx_profile_set_exclusive_cp(tx_profile, true);
+	if (rc)
+		goto remove_tx_profile;
 
 	rc = cxi_tx_profile_enable(dev, tx_profile);
 	if (rc)
@@ -249,9 +260,9 @@ static int set_up_eq(void)
 		return -ENOMEM;
 
 	eq_buf_md = cxi_map(lni, (uintptr_t)eq_buf,
-				 eq_buf_len,
-				 CXI_MAP_WRITE | CXI_MAP_READ,
-				 NULL);
+			    eq_buf_len,
+			    CXI_MAP_WRITE | CXI_MAP_READ,
+			    NULL);
 	if (IS_ERR(eq_buf_md)) {
 		rc = PTR_ERR(eq_buf_md);
 		goto free_eq_buf;
@@ -262,7 +273,7 @@ static int set_up_eq(void)
 	eq_attr.flags = eq_flags;
 
 	eq = cxi_eq_alloc(lni, eq_buf_md, &eq_attr,
-				eq_cb, NULL, NULL, NULL);
+			  eq_cb, NULL, NULL, NULL);
 	if (IS_ERR(eq)) {
 		rc = PTR_ERR(eq);
 		goto unmap_eq_buf;
@@ -317,7 +328,7 @@ static int test_setup(struct cxi_dev *dev)
 	}
 
 	cp = cxi_cp_alloc(lni, vni, CXI_TC_BEST_EFFORT,
-				CXI_TC_TYPE_DEFAULT);
+			  CXI_TC_TYPE_DEFAULT);
 	if (IS_ERR(cp)) {
 		rc = PTR_ERR(cp);
 		goto free_dom;
@@ -331,7 +342,7 @@ static int test_setup(struct cxi_dev *dev)
 	cq_alloc_opts.flags = CXI_CQ_IS_TX;
 	cq_alloc_opts.lcid = cp->lcid;
 	cq_transmit = cxi_cq_alloc(lni, NULL, &cq_alloc_opts,
-					 0);
+				   0);
 	if (IS_ERR(cq_transmit)) {
 		rc = PTR_ERR(cq_transmit);
 		goto free_eq;
@@ -340,7 +351,7 @@ static int test_setup(struct cxi_dev *dev)
 	memset(&cq_alloc_opts, 0, sizeof(cq_alloc_opts));
 	cq_alloc_opts.count = 50;
 	cq_target = cxi_cq_alloc(lni, NULL, &cq_alloc_opts,
-				       0);
+				 0);
 	if (IS_ERR(cq_target)) {
 		rc = PTR_ERR(cq_target);
 		goto free_cq_transmit;
@@ -434,7 +445,6 @@ static void wait_for_event(enum c_event_type type)
 
 	if (retry > 0)
 		pr_debug("received event %d\n", type);
-
 }
 
 /* Do a DMA Put transaction. */
@@ -471,8 +481,7 @@ static int test_do_put(struct mem_window *mem_win,
 	return 0;
 }
 
-/*
- * Append a list entry to the priority list for the non-matching Portals table.
+/* Append a list entry to the priority list for the non-matching Portals table.
  * Enable the non-matching Portals table.
  */
 static void test_append_le(u64 len, struct cxi_md *md, size_t offset)
@@ -516,6 +525,7 @@ static int test_rma(struct cxi_dev *dev)
 {
 	int i;
 	int rc;
+	int ret;
 	int lac = 0;
 	int errors = 0;
 	struct cxi_md snd_md = {};
@@ -584,15 +594,55 @@ static int test_rma(struct cxi_dev *dev)
 			break;
 	}
 
-	if (!errors)
-		pr_info("%s success\n", __func__);
+	if (errors) {
+		pr_info("%s had errors before cp modify\n", __func__);
+		rc = -EFAULT;
+		goto unmap_rma;
+	}
+
+	rc = cxi_cp_modify(cp, VNI_INVALID);
+	if (!rc) {
+		pr_err("cxi_cp_modify was succeful with invalid vni. rc:%d\n", rc);
+		rc = -EINVAL;
+		goto unmap_rma;
+	}
+
+	rc = cxi_cp_modify(cp, VNI + VNI_IGNORE);
+	if (rc) {
+		pr_err("cxi_cp_modify failed. rc:%d\n", rc);
+		goto unmap_rma;
+	}
+
+	memset(rma_mem.buffer, 0, len);
+
+	rc = test_do_put(&snd_mem, len, 0, 0, index_ext);
+	if (rc < 0) {
+		pr_err("test_do_put failed %d\n", rc);
+		goto unmap_rma;
+	}
+
+	for (i = 0; i < len; i++) {
+		if (snd_mem.buffer[i] != rma_mem.buffer[i]) {
+			pr_info("Data mismatch: idx %2d - %02x != %02x\n",
+				i, snd_mem.buffer[i], rma_mem.buffer[i]);
+			errors++;
+		}
+
+		if (errors > 10)
+			break;
+	}
+
+	if (errors) {
+		pr_info("%s had errors after cp modify\n", __func__);
+		rc = -EFAULT;
+	}
 
 unmap_rma:
-	rc = test_unmap(&rma_mem);
-	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
+	ret = test_unmap(&rma_mem);
+	WARN(ret < 0, "cxi_unmap failed %d\n", ret);
 unmap_snd:
-	rc = test_unmap(&snd_mem);
-	WARN(rc < 0, "cxi_unmap failed %d\n", rc);
+	ret = test_unmap(&snd_mem);
+	WARN(ret < 0, "cxi_unmap failed %d\n", ret);
 free_snd:
 	kfree(snd_mem.buffer);
 free_rma:
@@ -603,487 +653,14 @@ free_lac:
 	return rc;
 }
 
-static int test_rgroup(struct cxi_dev *dev)
-{
-	int rc;
-	struct cxi_ct *ct;
-	struct c_ct_writeback *wb;
-	struct cxi_cp *cp;
-	struct cxi_cq *trig_cq;
-	struct cxi_cq_alloc_opts cq_opts = {};
-	struct c_ct_cmd ct_cmd = {};
-	struct cxi_resource_limits limits;
-	int i;
-	ktime_t timeout;
-
-	rc = alloc_rgroup_rsrcs(dev);
-	if (rc) {
-		pr_err("Can't allocate rgroup:%d\n", rc);
-		goto err;
-	}
-
-	rc = alloc_profiles();
-	if (rc)
-		goto err_free_rgroup;
-
-	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
-	if (IS_ERR(lni)) {
-		rc = PTR_ERR(lni);
-		pr_err("LNI alloc failed: %d\n", rc);
-		goto err_free_profiles;
-	}
-
-	wb = kzalloc(sizeof(*wb), GFP_KERNEL);
-	if (!wb) {
-		rc = -ENOMEM;
-		goto err_free_lni;
-	}
-
-	ct = cxi_ct_alloc(lni, wb, false);
-	if (IS_ERR(ct)) {
-		rc = PTR_ERR(ct);
-		pr_err("cxi_ct_alloc failed: %d\n", rc);
-		goto err_free_wb;
-	}
-
-	cp = cxi_cp_alloc(lni, VNI, CXI_TC_BEST_EFFORT, CXI_TC_TYPE_DEFAULT);
-	if (IS_ERR(cp)) {
-		rc = PTR_ERR(cp);
-		pr_err("cxi_cp_alloc failed: %d\n", rc);
-		goto err_free_ct;
-	}
-
-	cq_opts.count = 4096;
-	cq_opts.lcid = cp->lcid;
-	cq_opts.flags = CXI_CQ_IS_TX | CXI_CQ_TX_WITH_TRIG_CMDS;
-
-	trig_cq = cxi_cq_alloc(lni, NULL, &cq_opts, 0);
-	if (IS_ERR(trig_cq)) {
-		rc = PTR_ERR(trig_cq);
-		pr_err("cxi_cq_alloc failed: %d\n", rc);
-		goto err_free_cp;
-	}
-
-	rc = cxi_rgroup_get_resource(rgroup, CXI_RESOURCE_TLE, &limits);
-	if (rc) {
-		pr_err("cxi_rgroup_get_resource failed: %d\n", rc);
-		goto err_free_cq;
-	}
-
-	if (limits.in_use != 0) {
-		rc = -EINVAL;
-		pr_err("Incorrect TLE in use: expected=0 got=%ld\n",
-			 limits.in_use);
-		goto err_free_cq;
-	}
-
-	ct_cmd.trig_ct = ct->ctn;
-	ct_cmd.ct = ct->ctn;
-	ct_cmd.ct_success = 1;
-	ct_cmd.set_ct_success = 1;
-
-	for (i = 0; i < TLE_COUNT; i++) {
-		ct_cmd.threshold = i + 1;
-
-		rc = cxi_cq_emit_ct(trig_cq, C_CMD_CT_TRIG_INC, &ct_cmd);
-		if (rc) {
-			pr_err("cxi_cq_emit_ct failed: %d\n", rc);
-			goto err_free_cq;
-		}
-
-		cxi_cq_ring(trig_cq);
-	}
-
-	rc = cxi_rgroup_get_resource(rgroup, CXI_RESOURCE_TLE, &limits);
-	if (rc) {
-		pr_err("cxi_rgroup_get_resource failed: %d\n", rc);
-		goto err_free_cq;
-	}
-
-	if (limits.in_use != TLE_COUNT) {
-		rc = -EINVAL;
-		pr_err("Incorrect TLE in use: expected=%u got=%ld\n",
-			 TLE_COUNT, limits.in_use);
-		goto err_free_cq;
-	}
-
-	rc = cxi_cq_emit_ct(trig_cq, C_CMD_CT_INC, &ct_cmd);
-	if (rc) {
-		pr_err("cxi_cq_emit_ct failed: %d\n", rc);
-		goto err_free_cq;
-	}
-
-	cxi_cq_ring(trig_cq);
-
-	timeout = ktime_add(ktime_get(), ktime_set(TIMEOUT, 0));
-
-	do {
-		rc = cxi_rgroup_get_resource(rgroup, CXI_RESOURCE_TLE,
-						   &limits);
-		if (rc) {
-			pr_err("cxi_rgroup_get_resource failed: %d\n", rc);
-			goto err_free_cq;
-		}
-
-		if (ktime_compare(ktime_get(), timeout) > 1) {
-			rc = -ETIMEDOUT;
-			pr_err("timeout reaching TLE count\n");
-			goto err_free_cq;
-		}
-	} while (limits.in_use != 0);
-
-	rc = 0;
-
-err_free_cq:
-	cxi_cq_free(trig_cq);
-err_free_cp:
-	cxi_cp_free(cp);
-err_free_ct:
-	cxi_ct_free(ct);
-err_free_wb:
-	kfree(wb);
-err_free_lni:
-	cxi_lni_free(lni);
-err_free_profiles:
-	free_profiles();
-err_free_rgroup:
-	cxi_rgroup_dec_refcount(rgroup);
-err:
-	return rc;
-}
-
-static int check_resource_use(enum cxi_resource_type type, int expected)
-{
-	int rc;
-	struct cxi_resource_limits limits;
-
-	rc = cxi_rgroup_get_resource(rgroup, type, &limits);
-	if (rc) {
-		pr_err("cxi_rgroup_get_resource failed: %d\n", rc);
-		return rc;
-	}
-
-	if (limits.in_use != expected) {
-		rc = -EINVAL;
-		pr_err("Incorrect %s in use: expected=%d got=%ld\n",
-		       cxi_resource_type_to_str(type), expected,
-		       limits.in_use);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int test_resources(struct cxi_dev *dev)
-{
-	int rc;
-	struct cxi_ct *ct;
-	struct c_ct_writeback *wb;
-	struct cxi_cq *trig_cq;
-	struct cxi_cq_alloc_opts cq_opts = {};
-	struct c_ct_cmd ct_cmd = {};
-	struct cxi_resource_limits limits;
-	int i;
-	ktime_t timeout;
-
-	rc = alloc_rgroup_rsrcs(dev);
-	if (rc) {
-		pr_err("Can't allocate rgroup:%d\n", rc);
-
-		goto err;
-	}
-
-	rc = cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_PTLTE);
-	if (!rc) {
-		pr_err("cxi_rgroup_delete_resource %s should fail rc:%d\n",
-			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
-
-		goto err;
-	}
-
-	cxi_rgroup_disable(rgroup);
-	rc = cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_PTLTE);
-	if (rc) {
-		pr_err("cxi_rgroup_delete_resource %s failed rc:%d\n",
-			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
-		rc = -1;
-		goto err;
-	}
-
-	rc = cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_TLE);
-	if (rc) {
-		pr_err("cxi_rgroup_delete_resource %s failed rc:%d\n",
-		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
-		rc = -1;
-		goto err;
-	}
-
-	/* Less than CASS_MIN_POOL_TLES should fail */
-	limits.max = CASS_MIN_POOL_TLES - 1;
-	limits.reserved = CASS_MIN_POOL_TLES - 1;
-	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
-	if (rc != -EINVAL) {
-		pr_err("cxi_rgroup_add_resource %s should fail rc:%d\n",
-		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
-		rc = -1;
-		goto err;
-	}
-
-	/* Reserved and max must be equal */
-	limits.max = LIMIT_TLE_MAX;
-	limits.reserved = CASS_MIN_POOL_TLES;
-	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
-	if (rc != -EINVAL) {
-		pr_err("cxi_rgroup_add_resource %s should fail rc:%d\n",
-		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
-		rc = -1;
-		goto err;
-	}
-
-	/* Now should work */
-	limits.max = LIMIT_TLE_RES;
-	limits.reserved = LIMIT_TLE_RES;
-	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_TLE, &limits);
-	if (rc) {
-		pr_err("cxi_rgroup_add_resource %s failed rc:%d\n",
-		       cxi_resource_type_to_str(CXI_RESOURCE_TLE), rc);
-		rc = -1;
-		goto err;
-	}
-
-	rc = alloc_profiles();
-	if (rc)
-		goto err_free_rgroup;
-
-	limits.max = C_NUM_PTLTES + 1;
-	limits.reserved = C_NUM_PTLTES;
-	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_PTLTE, &limits);
-	if (rc != -ENOSPC) {
-		pr_err("Add %s resource should fail rc:%d\n",
-			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
-
-		goto err_free_profiles;
-	}
-
-	cxi_rgroup_delete_resource(rgroup, CXI_RESOURCE_PTLTE);
-
-	limits.max = C_NUM_PTLTES;
-	limits.reserved = C_NUM_PTLTES + 1;
-	rc = cxi_rgroup_add_resource(rgroup, CXI_RESOURCE_PTLTE, &limits);
-	if (rc != -ENOSPC) {
-		pr_err("Add %s resource should fail rc:%d\n",
-			    cxi_resource_type_to_str(CXI_RESOURCE_PTLTE), rc);
-
-		goto err_free_profiles;
-	}
-
-	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
-	if (!IS_ERR(lni)) {
-		rc = PTR_ERR(lni);
-		pr_err("LNI alloc should fail:%d\n", rc);
-		goto err_free_lni;
-	}
-
-	cxi_rgroup_enable(rgroup);
-
-	lni = cxi_lni_alloc(dev, cxi_rgroup_id(rgroup));
-	if (IS_ERR(lni)) {
-		rc = PTR_ERR(lni);
-		pr_err("LNI alloc failed: %d\n", rc);
-		goto err_free_profiles;
-	}
-
-	wb = kzalloc(sizeof(*wb), GFP_KERNEL);
-	if (!wb) {
-		rc = -ENOMEM;
-		goto err_free_lni;
-	}
-
-	ct = cxi_ct_alloc(lni, wb, false);
-	if (IS_ERR(ct)) {
-		rc = PTR_ERR(ct);
-		pr_err("cxi_ct_alloc failed: %d\n", rc);
-		goto err_free_wb;
-	}
-
-	rc = check_resource_use(CXI_RESOURCE_CT, 1);
-	if (rc)
-		goto err_free_ct;
-
-	cp = cxi_cp_alloc(lni, VNI, CXI_TC_BEST_EFFORT, CXI_TC_TYPE_DEFAULT);
-	if (IS_ERR(cp)) {
-		rc = PTR_ERR(cp);
-		pr_err("cxi_cp_alloc failed: %d\n", rc);
-		goto err_free_ct;
-	}
-
-	cq_opts.count = 4096;
-	cq_opts.lcid = cp->lcid;
-	cq_opts.flags = CXI_CQ_IS_TX | CXI_CQ_TX_WITH_TRIG_CMDS;
-
-	trig_cq = cxi_cq_alloc(lni, NULL, &cq_opts, 0);
-	if (IS_ERR(trig_cq)) {
-		rc = PTR_ERR(trig_cq);
-		pr_err("cxi_cq_alloc failed: %d\n", rc);
-		goto err_free_cp;
-	}
-
-	rc = check_resource_use(CXI_RESOURCE_TXQ, 1);
-	if (rc)
-		goto err_free_cq;
-
-	rc = check_resource_use(CXI_RESOURCE_TLE, 0);
-	if (rc)
-		goto err_free_cq;
-
-	ct_cmd.trig_ct = ct->ctn;
-	ct_cmd.ct = ct->ctn;
-	ct_cmd.ct_success = 1;
-	ct_cmd.set_ct_success = 1;
-
-	for (i = 0; i < TLE_COUNT; i++) {
-		ct_cmd.threshold = i + 1;
-
-		rc = cxi_cq_emit_ct(trig_cq, C_CMD_CT_TRIG_INC, &ct_cmd);
-		if (rc) {
-			pr_err("cxi_cq_emit_ct failed: %d\n", rc);
-			goto err_free_cq;
-		}
-
-		cxi_cq_ring(trig_cq);
-	}
-
-	rc = check_resource_use(CXI_RESOURCE_TLE, TLE_COUNT);
-	if (rc)
-		goto err_free_cq;
-
-	rc = cxi_cq_emit_ct(trig_cq, C_CMD_CT_INC, &ct_cmd);
-	if (rc) {
-		pr_err("cxi_cq_emit_ct failed: %d\n", rc);
-		goto err_free_cq;
-	}
-
-	cxi_cq_ring(trig_cq);
-
-	timeout = ktime_add(ktime_get(), ktime_set(TIMEOUT, 0));
-
-	do {
-		rc = cxi_rgroup_get_resource(rgroup, CXI_RESOURCE_TLE,
-						   &limits);
-		if (rc) {
-			pr_err("cxi_rgroup_get_resource failed: %d\n", rc);
-			goto err_free_cq;
-		}
-
-		if (ktime_compare(ktime_get(), timeout) > 1) {
-			rc = -ETIMEDOUT;
-			pr_err("timeout reaching TLE count\n");
-			goto err_free_cq;
-		}
-	} while (limits.in_use != 0);
-
-	rc = set_up_eq();
-	if (rc) {
-		pr_err("EQ setup failed:%d\n", rc);
-		goto err_free_cq;
-	}
-
-	rc = check_resource_use(CXI_RESOURCE_EQ, 1);
-	if (rc)
-		goto err_free_eq;
-
-	rc = 0;
-
-err_free_eq:
-	tear_down_eq();
-err_free_cq:
-	cxi_cq_free(trig_cq);
-err_free_cp:
-	cxi_cp_free(cp);
-err_free_ct:
-	cxi_ct_free(ct);
-err_free_wb:
-	kfree(wb);
-err_free_lni:
-	cxi_lni_free(lni);
-err_free_profiles:
-	free_profiles();
-err_free_rgroup:
-	cxi_rgroup_dec_refcount(rgroup);
-err:
-	return rc;
-}
-
-static void save_resource_use(struct cxi_dev *dev)
-{
-	int i;
-
-	struct cass_dev *hw = cxi_to_cass_dev(dev);
-
-	spin_lock(&hw->rgrp_lock);
-
-	for (i = CXI_RESOURCE_PTLTE; i < CXI_RESOURCE_MAX; i++)
-		r_save[i].in_use = hw->resource_use[i].in_use;
-
-	spin_unlock(&hw->rgrp_lock);
-}
-
-static int verify_resource_use(struct cxi_dev *dev)
-{
-	int i;
-	bool fail = false;
-	struct cass_dev *hw = cxi_to_cass_dev(dev);
-
-	spin_lock(&hw->rgrp_lock);
-
-	for (i = CXI_RESOURCE_PTLTE; i < CXI_RESOURCE_MAX; i++) {
-		if (r_save[i].in_use != hw->resource_use[i].in_use) {
-			pr_err("%s saved in_use:%ld final in_use:%ld\n",
-			       cxi_resource_type_to_str(i),
-			       r_save[i].in_use, hw->resource_use[i].in_use);
-			fail = true;
-		}
-	}
-
-	spin_unlock(&hw->rgrp_lock);
-
-	if (fail)
-		return -1;
-
-	return 0;
-}
-
 static int run_tests(struct cxi_dev *dev)
 {
 	int rc;
-
-	save_resource_use(dev);
-
-	rc = test_rgroup(dev);
-	if (rc) {
-		test_pass = false;
-		pr_err("test_rgroup failed: %d\n", rc);
-		goto done;
-	}
 
 	rc = test_rma(dev);
 	if (rc) {
 		test_pass = false;
 		pr_err("test_rma failed: %d\n", rc);
-		goto done;
-	}
-
-	rc = test_resources(dev);
-	if (rc) {
-		test_pass = false;
-		pr_err("test_resources failed: %d\n", rc);
-		goto done;
-	}
-
-	rc = verify_resource_use(dev);
-	if (rc) {
-		test_pass = false;
-		pr_err("verify_resource_use failed: %d\n", rc);
 		goto done;
 	}
 
@@ -1097,7 +674,6 @@ static int add_device(struct cxi_dev *cdev)
 {
 	dev = cdev;
 	return 0;
-
 }
 
 static void remove_device(struct cxi_dev *cdev)
@@ -1141,5 +717,5 @@ module_init(init);
 module_exit(cleanup);
 
 MODULE_LICENSE("GPL v2");
-MODULE_DESCRIPTION("CXI rgroup profile test suite");
+MODULE_DESCRIPTION("CXI exclusive cp API test suite");
 MODULE_AUTHOR("HPE");

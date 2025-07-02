@@ -632,8 +632,6 @@ EXPORT_SYMBOL(cxi_rgroup_id);
  * cxi_rgroup_name() - Get the rgroup name
  *
  * @rgroup: resource group pointer
- * @dest: Where to copy name string to
- * @count: Size of destination buffer
  */
 char *cxi_rgroup_name(struct cxi_rgroup *rgroup)
 {
@@ -664,6 +662,18 @@ int cxi_rgroup_le_pool_id(const struct cxi_rgroup *rgroup, int index)
 int cxi_rgroup_tle_pool_id(const struct cxi_rgroup *rgroup)
 {
 	return rgroup->pools.tle_pool_id;
+}
+
+/**
+ * cxi_rgroup_cntr_pool_id() - Get the rgroup cntr_pool_id attribute
+ *
+ * @rgroup: resource group pointer
+ *
+ * Return: cntr_pool_id value
+ */
+unsigned int cxi_rgroup_cntr_pool_id(const struct cxi_rgroup *rgroup)
+{
+	return rgroup->attr.cntr_pool_id;
 }
 
 /**
@@ -1683,3 +1693,51 @@ int cxi_dev_rgroup_get_ac_entry_id_by_user(struct cxi_dev *dev,
 	return ret;
 }
 EXPORT_SYMBOL(cxi_dev_rgroup_get_ac_entry_id_by_user);
+
+void cxi_rgroup_print_ac_entry_info(struct cxi_rgroup *rgroup,
+				    struct seq_file *s)
+{
+	int i;
+	int rc;
+	size_t num_ids;
+	size_t max_ids;
+	unsigned int *ac_entry_ids = NULL;
+	enum cxi_ac_type ac_type;
+	union cxi_ac_data ac_data;
+
+	rc = cxi_rgroup_get_ac_entry_ids(rgroup, 0, ac_entry_ids, &num_ids);
+	if (rc && rc != -ENOSPC)
+		goto done;
+
+	ac_entry_ids = kmalloc_array(num_ids, sizeof(*ac_entry_ids),
+				     GFP_ATOMIC);
+	if (!ac_entry_ids) {
+		rc = -ENOMEM;
+		goto done;
+	}
+
+	rc = cxi_rgroup_get_ac_entry_ids(rgroup, num_ids, ac_entry_ids,
+					 &max_ids);
+	if (rc)
+		goto freemem;
+
+	seq_puts(s, "  AC-entries: ");
+	for (i = 0; i < num_ids; i++) {
+		rc = cxi_rgroup_get_ac_entry_data(rgroup, ac_entry_ids[i],
+						  &ac_type, &ac_data);
+		if (rc)
+			break;
+
+		seq_printf(s, "ID:%d type:%s uid/gid:%d%s",
+			   ac_entry_ids[i], AC_TYPE(ac_type),
+			   ac_type == CXI_AC_OPEN ? 0 : ac_data.uid,
+			   i < (num_ids - 1) ? ", " : "");
+	}
+	seq_puts(s, "\n");
+
+freemem:
+	kfree(ac_entry_ids);
+done:
+	if (rc)
+		seq_puts(s, "\n");
+}

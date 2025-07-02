@@ -1329,6 +1329,36 @@ static void cass_tc_hni_cfg(struct cass_dev *hw, enum cxi_traffic_class tc,
 		cass_tc_enable_pauses(hw, rsp_pcp);
 }
 
+#define C1_RESTRICTED_BC_SPT_RSVD 1500U
+#define RESTRICTED_BC_SMT_RSVD 0U
+#define RESTRICTED_BC_SCT_RSVD 0U
+#define RESTRICTED_BC_SRB_RSVD 39U
+#define RESTRICTED_BC_PBUF_RSVD 39U
+
+/**
+ * cass_tc_init_res_req_oxe_bc() - Initialize global OXE buffer class to be
+ * used for restricted request MCUs.
+ *
+ * @hw: Cassini device
+ *
+ * This buffer class is to be used by all CXI_TC_TYPE_HRP and
+ * CXI_TC_TYPE_RESTRICTED traffic class types.
+ *
+ * This only applies for C1.
+ */
+static int cass_tc_init_res_req_oxe_bc(struct cass_dev *hw)
+{
+	int bc;
+
+	bc = cass_tc_req_oxe_bc_cfg(hw, C1_RESTRICTED_BC_SPT_RSVD,
+				    RESTRICTED_BC_SMT_RSVD,
+				    RESTRICTED_BC_SCT_RSVD,
+				    RESTRICTED_BC_SRB_RSVD,
+				    RESTRICTED_BC_PBUF_RSVD);
+
+	return bc;
+}
+
 /* Set the DSCP DFA mask. */
 static void set_dscp_dfa_mask(struct cass_dev *hw,
 			      int dscp, unsigned int new_mask)
@@ -1593,6 +1623,17 @@ static int cass_tc_cfg(struct cass_dev *hw, unsigned int tc,
 		tc_cfg->rsp_pcp = rsp_pcp;
 		tc_cfg->ocuset = ocuset;
 		tc_cfg->cq_tc = cq_tc;
+
+		/* For C1 Restricted and HRP Labels, use the global restricted
+		 * buffer class.
+		 * For all other labels, or C2, use the parent TC req_bc
+		 */
+		if (!cass_version(hw, CASSINI_2) &&
+		    (tc_type == CXI_TC_TYPE_RESTRICTED ||
+		     tc_type == CXI_TC_TYPE_HRP))
+			tc_cfg->req_bc = hw->qos.tc_restricted_oxe_req_bc;
+		else
+			tc_cfg->req_bc = cxi_tc->req_bc;
 	}
 
 	/* Configure IXE to not generate responses to requests from HRP DSCPs */
@@ -1695,6 +1736,7 @@ static int cass_tc_restricted_cfg(struct cass_dev *hw,
 	unsigned int cq_mcu_count;
 	unsigned int cq_tc;
 	unsigned int tou_mcu;
+	unsigned int restricted_bc;
 
 	/* If PCT control traffic needs to be remapped to a different traffic
 	 * class, reuse the response PCP of the remapped traffic class.
@@ -1716,16 +1758,23 @@ static int cass_tc_restricted_cfg(struct cass_dev *hw,
 
 	tou_mcu = cq_tc + C_OXE_TOU_MCU_START;
 
+	/* For Restricted TC "Type" use the same BC as the parent TC for C2.
+	 * For C1 use the global restricted buffer class.
+	 */
+	restricted_bc = cass_version(hw, CASSINI_2) ?
+			hw->qos.tcs[tc].req_bc :
+			hw->qos.tc_restricted_oxe_req_bc;
+
 	ret = cass_tc_oxe_mcu_cfg(hw, cq_mcu_base, cq_mcu_count, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
-				  hw->qos.tcs[tc].req_bc,
+				  restricted_bc,
 				  oxe_settings->mfs_index);
 	if (ret)
 		return ret;
 
 	ret = cass_tc_oxe_mcu_cfg(hw, tou_mcu, 1, mcu_pcp,
 				  hw->qos.tcs[tc].leaf[0],
-				  hw->qos.tcs[tc].req_bc,
+				  restricted_bc,
 				  oxe_settings->mfs_index);
 	if (ret)
 		return ret;
@@ -1936,6 +1985,8 @@ static int cass_tc_eth_init(struct cass_dev *hw)
 			continue;
 		cxi_tc = &hw->qos.tcs[tc];
 
+		cxi_tc->req_bc = req_bc;
+
 		cxi_tc->default_ocuset = cass_tc_cq_cfg(hw, CXI_TC_ETH,
 							&cq_mcu_base,
 							&cq_mcu_count,
@@ -2015,6 +2066,9 @@ int cass_tc_init(struct cass_dev *hw)
 		hw->qos.tcs[tc].tc = tc;
 	}
 
+	/* Update QoS Profile Based on Device Generation */
+	cxi_qos_calculate_limits(&hw->qos, (cass_version(hw, CASSINI_2)));
+
 	/* Use user provided Untagged Eth PCP if applicable */
 	if (untagged_eth_pcp > -1)
 		hw->qos.untagged_eth_pcp = untagged_eth_pcp;
@@ -2055,6 +2109,13 @@ int cass_tc_init(struct cass_dev *hw)
 	rx_ctrl_cfg.pfc_rec_enable = 1;
 	rx_ctrl_cfg.pause_rec_enable = 0;
 	cass_write(hw, C_HNI_CFG_PAUSE_RX_CTRL, &rx_ctrl_cfg, sizeof(rx_ctrl_cfg));
+
+	/* Setup Global OXE BC for restricted request MCUs for C1 */
+	if (!cass_version(hw, CASSINI_2)) {
+		ret = cass_tc_init_res_req_oxe_bc(hw);
+		if (ret)
+			return ret;
+	}
 
 	for (tc = 0; tc < CXI_MAX_RDMA_TCS; tc++) {
 		/* Don't configure inactive TCs */
@@ -2566,24 +2627,25 @@ int tc_cfg_show(struct seq_file *s, void *unused)
 
 	seq_printf(s, "Active QoS Profile: %s\n\n",
 		   cxi_qos_strs[active_qos_profile]);
-	seq_printf(s, "%18s%18s%15s%15s%15s%15s%8s%8s%7s\n", "LABEL", "TYPE",
+	seq_printf(s, "%18s%18s%15s%15s%15s%15s%8s%8s%7s%7s\n", "LABEL", "TYPE",
 		   "RES_REQ_DSCP", "UNRES_REQ_DSCP", "RES_RSP_DSCP",
-		   "UNRES_RSP_DSCP", "REQ_PCP", "RSP_PCP", "OCUSET");
+		   "UNRES_RSP_DSCP", "REQ_PCP", "RSP_PCP", "OCUSET", "BC");
 
 	list_for_each_entry(tc_cfg, &hw->tc_list, tc_entry) {
 		if (tc_cfg->tc < 0 || tc_cfg->tc > CXI_ETH_TC_MAX)
 			label = "(invalid)";
 		else
 			label = cxi_tc_strs_uc[tc_cfg->tc];
-		seq_printf(s, "%18s%18s%15d%15d%15d%15d%8d%8d%7d\n",
+		seq_printf(s, "%18s%18s%15d%15d%15d%15d%8d%8d%7d%7d\n",
 			   label, cxi_tc_type_to_str(tc_cfg->tc_type),
 			   tc_cfg->res_req_dscp, tc_cfg->unres_req_dscp,
 			   tc_cfg->res_rsp_dscp, tc_cfg->unres_rsp_dscp,
-			   tc_cfg->req_pcp, tc_cfg->rsp_pcp, tc_cfg->ocuset);
+			   tc_cfg->req_pcp, tc_cfg->rsp_pcp, tc_cfg->ocuset,
+			   tc_cfg->req_bc);
 	}
-	seq_printf(s, "%18s%18s%15d%15d%15d%15d%8d%8d%7d\n",
+	seq_printf(s, "%18s%18s%15d%15d%15d%15d%8d%8d%7d%7d\n",
 		   "PCT", "N/A", -1, -1, -1, -1,
-		   hw->qos.pct_control_pcp, hw->qos.pct_control_pcp, -1);
+		   hw->qos.pct_control_pcp, hw->qos.pct_control_pcp, -1, -1);
 
 	return 0;
 }

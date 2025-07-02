@@ -106,16 +106,24 @@ static int dump_rgroups(struct cass_dev *hw, struct seq_file *s)
 
 	seq_puts(s, "Rgroups:");
 	for_each_rgroup(index, rgroup) {
-		seq_printf(s, "\nID: %u%s\n", rgroup->id,
-			(rgroup->id == CXI_DEFAULT_SVC_ID) ? " (default)" : "");
-
-		seq_printf(s, "  LNIs/RGID:%d\n", rgroup->attr.lnis_per_rgid);
+		seq_printf(s, "\nID: %u\n", rgroup->id);
+		seq_printf(s, "  Name:%s\n", cxi_rgroup_name(rgroup));
+		seq_printf(s, "  State:%s\n",
+			   cxi_rgroup_is_enabled(rgroup) ? "Enabled" : "Disabled");
+		seq_printf(s, "  LNIs/RGID:%d\n",
+			   cxi_rgroup_lnis_per_rgid(rgroup));
+		seq_printf(s, "  System service:%d\n",
+			   cxi_rgroup_system_service(rgroup));
+		seq_printf(s, "  Counter pool ID:%d\n",
+			   cxi_rgroup_cntr_pool_id(rgroup));
 		seq_printf(s, "  LE pool IDs: %d %d %d %d  TLE pool ID: %d\n",
 			   rgroup->pools.le_pool_id[0],
 			   rgroup->pools.le_pool_id[1],
 			   rgroup->pools.le_pool_id[2],
 			   rgroup->pools.le_pool_id[3],
 			   rgroup->pools.tle_pool_id);
+
+		cxi_rgroup_print_ac_entry_info(rgroup, s);
 
 		seq_puts(s, "           ACs     CTs     EQs    PTEs    TGQs    TXQs    LE0s    LE1s    LE2s    LE3s    TLEs\n");
 		seq_puts(s, "  max   ");
@@ -172,6 +180,11 @@ static int dump_services(struct seq_file *s, void *unused)
 	seq_puts(s, "  Res ");
 	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
 		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].reserved);
+	seq_puts(s, "\n");
+
+	seq_puts(s, "Alloc ");
+	for (i = 0; i < ARRAY_SIZE(rsrc_dump_order); i++)
+		seq_printf(s, "  %6lu", rsrc_use[rsrc_dump_order[i]].in_use);
 	seq_puts(s, "\n");
 
 	seq_puts(s, "Avail ");

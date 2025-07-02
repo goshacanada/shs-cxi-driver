@@ -709,6 +709,7 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 
 #define CASS_SL_CALLBACKS (SL_LGRP_NOTIF_MEDIA_PRESENT     | \
 			   SL_LGRP_NOTIF_MEDIA_NOT_PRESENT | \
+			   SL_LGRP_NOTIF_LANE_DEGRADE      | \
 			   SL_LGRP_NOTIF_LINK_UP           | \
 			   SL_LGRP_NOTIF_LINK_UP_FAIL      | \
 			   SL_LGRP_NOTIF_LINK_ASYNC_DOWN   | \
@@ -720,12 +721,22 @@ static void cass_sl_ops_init(struct cass_dev *cass_dev)
 			   SL_LGRP_NOTIF_LLR_START_TIMEOUT | \
 			   SL_LGRP_NOTIF_LLR_ERROR)
 
+static void cass_sl_uc_led_set(void *uc_accessor, u8 led_state)
+{
+	struct cass_dev *hw = uc_accessor;
+
+	cxidev_dbg(&hw->cdev, "sl uc led set (state = %u)\n", led_state);
+
+	uc_cmd_set_link_leds(hw, (enum casuc_led_states) led_state);
+}
+
 static void cass_sl_uc_ops_init(struct cass_dev *cass_dev)
 {
-	cass_dev->sl.uc_ops.uc_read8  = cass_sl_uc_read8;
-	cass_dev->sl.uc_ops.uc_write8 = cass_sl_uc_write8;
+	cass_dev->sl.uc_ops.uc_read8   = cass_sl_uc_read8;
+	cass_dev->sl.uc_ops.uc_write8  = cass_sl_uc_write8;
+	cass_dev->sl.uc_ops.uc_led_set = cass_sl_uc_led_set;
 
-	cass_dev->sl.uc_accessor.uc  = cass_dev;
+	cass_dev->sl.uc_accessor.uc = cass_dev;
 }
 
 static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
@@ -750,6 +761,10 @@ static void cass_sl_callback(void *tag, struct sl_lgrp_notif_msg *msg)
 		memset(&cass_dev->sl.media_attr, 0, sizeof(cass_dev->sl.media_attr));
 		cass_dev->sl.has_cable = false;
 		break;
+	case SL_LGRP_NOTIF_LANE_DEGRADE:
+                cxidev_info(&cass_dev->cdev, "lane degrade occurred (rx_lane_map = 0x%X, tx_lane_map = 0x%X)\n",
+                msg->info.degrade_info.rx_lane_map, msg->info.degrade_info.tx_lane_map);
+                break;
 	case SL_LGRP_NOTIF_LINK_UP:
 		cass_dev->sl.link_state = SL_LINK_STATE_UP;
 		complete(&(cass_dev->sl.step_complete));

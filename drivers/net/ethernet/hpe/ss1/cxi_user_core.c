@@ -407,7 +407,8 @@ static int cxi_user_svc_alloc(struct user_client *client,
 	int ret = 0;
 	int rc;
 
-	rc = cxi_svc_alloc(client->ucxi->dev, &cmd->svc_desc, &fail_info);
+	rc = cxi_svc_alloc(client->ucxi->dev, &cmd->svc_desc, &fail_info,
+			   "user");
 	if (rc < 0) {
 		resp.fail_info = fail_info;
 		ret = rc;
@@ -576,6 +577,25 @@ static int cxi_user_cp_free(struct user_client *client,
 	free_cp_obj(0, cp_obj, client);
 
 	return 0;
+}
+
+static int cxi_user_cp_modify(struct user_client *client,
+			      const void *cmd_in, void *resp_out,
+			      size_t *resp_out_len)
+{
+	const struct cxi_cp_modify_cmd *cmd = cmd_in;
+	struct ucxi_obj *cp_obj;
+	int ret = -EINVAL;
+
+	read_lock(&client->res_lock);
+
+	cp_obj = idr_find(&client->cp_idr, cmd->cp_hndl);
+	if (cp_obj)
+		ret = cxi_cp_modify(cp_obj->cp, cmd->vni);
+
+	read_unlock(&client->res_lock);
+
+	return ret;
 }
 
 /* Atomically reserve a contiguous range of VNI PIDs. */
@@ -2174,6 +2194,10 @@ static const struct cmd_info cmds_info[CXI_OP_MAX] = {
 		.req_size   = sizeof(struct cxi_cp_free_cmd),
 		.name       = "CP_FREE",
 		.handler    = cxi_user_cp_free, },
+	[CXI_OP_CP_MODIFY] = {
+		.req_size   = sizeof(struct cxi_cp_modify_cmd),
+		.name       = "CP_MODIFY",
+		.handler    = cxi_user_cp_modify, },
 	[CXI_OP_CQ_ALLOC] = {
 		.req_size   = sizeof(struct cxi_cq_alloc_cmd),
 		.name       = "CQ_ALLOC",

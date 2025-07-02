@@ -120,6 +120,8 @@ enum cxi_command_opcode {
 		CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_DATA,
 		CXI_OP_TX_PROFILE_GET_AC_ENTRY_ID_BY_USER,
 
+		CXI_OP_CP_MODIFY,
+
 		CXI_OP_MAX,
 };
 
@@ -349,6 +351,14 @@ struct cxi_cp_alloc_resp {
 struct cxi_cp_free_cmd {
 	enum cxi_command_opcode op;
 	unsigned int cp_hndl;
+};
+
+struct cxi_cp_modify_cmd {
+	enum cxi_command_opcode op;
+	unsigned int cp_hndl;
+
+	/* VNI to associate with the CP. */
+	unsigned int vni;
 };
 
 #define CXI_MAX_CQ_COUNT (1 << 16)

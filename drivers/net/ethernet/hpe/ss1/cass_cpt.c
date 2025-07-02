@@ -55,7 +55,9 @@ static void cass_cp_free(struct cass_cp *cp)
 
 	cass_set_cp_table(hw, cp->id, &cp_cfg);
 
-	idr_remove(&cp->tx_profile->config.cass_cp_table, cp->list_id);
+	if (!cp->tx_profile->config.exclusive_cp)
+		idr_remove(&cp->tx_profile->config.cass_cp_table, cp->list_id);
+
 	ida_simple_remove(&hw->cp_table, cp->id);
 
 	kfree(cp);
@@ -112,9 +114,11 @@ static struct cass_cp *cass_cp_alloc(struct cxi_tx_profile *tx_profile,
 
 	cp_id = rc;
 
-	rc = idr_alloc(&tx_profile->config.cass_cp_table, cp, 1, 0, GFP_KERNEL);
-	if (rc < 0)
-		goto error_remove_ida;
+	if (!tx_profile->config.exclusive_cp) {
+		rc = idr_alloc(&tx_profile->config.cass_cp_table, cp, 1, 0, GFP_KERNEL);
+		if (rc < 0)
+			goto error_remove_ida;
+	}
 
 	refcount_set(&cp->ref, 1);
 
@@ -144,10 +148,10 @@ static struct cass_cp *cass_cp_alloc(struct cxi_tx_profile *tx_profile,
 	cass_set_cp_fl_table(hw, cp_id, &flow_cfg);
 
 	cxidev_dbg(&hw->cdev,
-		   "%s cp allocated: tc=%s tc_type=%s cp=%u vni_pcp=%u label=%u tc=%u pfq=%u\n",
+		   "%s cp allocated: tc=%s tc_type=%s cp=%u vni_pcp=%u label=%u tc=%u pfq=%u exclusive=%u\n",
 		   hw->cdev.name, cxi_tc_to_str(tc),
 		   cxi_tc_type_to_str(tc_type), cp->id, cp->vni_pcp, cp->tc,
-		   flow_cfg.tc, flow_cfg.pfq);
+		   flow_cfg.tc, flow_cfg.pfq, cp->tx_profile->config.exclusive_cp);
 
 	return cp;
 
@@ -397,3 +401,58 @@ void cxi_cp_free(struct cxi_cp *cp)
 	cass_flush_pci(hw);
 }
 EXPORT_SYMBOL(cxi_cp_free);
+
+int cxi_cp_modify(struct cxi_cp *cp, unsigned int vni_pcp)
+{
+	struct cxi_cp_priv *cp_priv = container_of(cp, struct cxi_cp_priv, cp);
+	struct cass_cp *cass_cp = cp_priv->cass_cp;
+	struct cass_dev *hw = cp_priv->cass_cp->hw;
+	int rc = 0;
+	struct cass_tc_cfg tc_cfg;
+	union c_cq_cfg_cp_table cp_cfg = {
+	      .valid = 1,
+	      .hrp_vld = cp->tc_type == CXI_TC_TYPE_HRP,
+	};
+
+	if (!cass_cp->tx_profile->config.exclusive_cp)
+		return -EINVAL;
+
+	if (is_eth_tc(cp->tc)) {
+		pr_debug("eth tc:%s for cp:%u is invalid for cp modify\n",
+			 cxi_tc_to_str(cp->tc), cass_cp->id);
+		return -EINVAL;
+	}
+
+	if (!cxi_valid_vni(&hw->cdev, CXI_PROF_TX, vni_pcp)) {
+		pr_debug("cp modify received invalid vni: %d for cp:%u\n",
+			 vni_pcp, cass_cp->id);
+		return -EINVAL;
+	}
+
+	rc = cass_tc_find(hw, cp->tc, cp->tc_type, vni_pcp, &tc_cfg);
+	if (rc) {
+		cxidev_dbg(&hw->cdev,
+			   "%s tc mapping does not exist for cp:%u vni_pcp:%u tc:%s tc_type:%s",
+			   hw->cdev.name, cass_cp->id, vni_pcp,
+			   cxi_tc_to_str(cp->tc),
+			   cxi_tc_type_to_str(cp->tc_type));
+		return -EINVAL;
+	}
+
+	cp->vni_pcp = vni_pcp;
+	cp_cfg.vni = vni_pcp;
+	cp_cfg.dscp_unrsto = tc_cfg.unres_req_dscp;
+	cp_cfg.dscp_rstuno = tc_cfg.res_req_dscp;
+
+	cass_set_cp_table(hw, cass_cp->id, &cp_cfg);
+
+	cxidev_dbg(&hw->cdev,
+		   "%s cp modified: tc=%s tc_type=%s cp=%u vni_pcp=%u\n",
+		   hw->cdev.name, cxi_tc_to_str(cp->tc),
+		   cxi_tc_type_to_str(cp->tc_type), cass_cp->id, cp->vni_pcp);
+
+	cass_flush_pci(hw);
+
+	return rc;
+}
+EXPORT_SYMBOL(cxi_cp_modify);
